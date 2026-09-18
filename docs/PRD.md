@@ -4,8 +4,8 @@
 |---|---|
 | **작성자** | 오지환 |
 | **클라이언트** | <https://www.instagram.com/trend__portal/> |
-| **버전** | v0.7 |
-| **최종 수정** | 2026-09-17 |
+| **버전** | v0.7.1 |
+| **최종 수정** | 2026-09-18 |
 
 ---
 
@@ -266,7 +266,7 @@
 | 리스크 | 영향 | 대응 방안 |
 |---|---|---|
 | 웹사이트 발행과 뉴스레터 발송이 두 동작으로 나뉜다 | 운영자가 발송을 빠뜨리거나 늦게 보낼 수 있다 | |
-| WordPress.com Personal 저장 공간은 6GB다 | 주 1회 발행 기준 약 2년이면 찬다. 과거 게시물을 옮기면 더 빨리 찬다 (Q-26) | |
+| 저장 공간이 요금제로 묶여 있다 — Personal 6GB / Premium 13GB | 실측 평균 58MB/건(부록 D) 기준 주 1회 발행이면 Personal은 약 106건(약 2년), Premium은 약 229건(약 4년)이면 찬다. 과거 게시물을 옮기면 그만큼 앞당겨진다 (Q-26). **WordPress가 생성하는 썸네일 용량은 계산에 넣지 않았다** | 이미지 최적화(F-07)로 늘릴 수 있다. 한계에 가까워지면 상위 요금제나 자체 호스팅으로 이전 |
 | 영상이 콘텐츠의 약 1/3이고 최대 45MB다 | 모바일 독자에게 부담이 크다. 영상만으로 이루어진 게시글도 있어 생략할 수 없다 | |
 | 카드뉴스의 핵심 내용이 이미지 안에 있다 | 검색 유입(2장 목표)과 사이트 내 검색에 불리하다 (7.2) | |
 | 스티비 무료 플랜은 월 2회 발송 한도가 있다 | 매주 금요일 발행(월 4~5회)과 맞지 않아 유료 플랜이 필요하다 | |
@@ -294,7 +294,7 @@
 | Q-28 | 업무 메일을 Google Workspace로 올릴 것인가, 비용은 누가 부담하는가 | 클라이언트 | **답변 대기** (2026-09-17 설명 전달) |
 | Q-29 | AI 검색·에이전트·학습 봇의 사이트 수집을 허용할 것인가 (Cloudflare 현재 설정은 모두 허용) | 클라이언트 | 대기 중 |
 | Q-30 | 운영자에게 본문 텍스트(인스타그램 캡션)와 이미지 alt 텍스트를 어디까지 요구할 것인가 | 작성자 + 클라이언트 | 대기 중 |
-| Q-31 | 영상 때문에 WordPress.com **Premium**으로 갈 것인가, Personal을 유지하고 영상을 유튜브·인스타 삽입으로 처리할 것인가. 결제 전에 Premium의 영상 업로드 가능 여부를 한 번 더 확인 (공식 문서끼리 서술이 어긋남) | 클라이언트 + 작성자 | 대기 중 |
+| Q-31 | 영상 때문에 WordPress.com **Premium**으로 갈 것인가, Personal을 유지하고 영상을 유튜브·인스타 삽입으로 처리할 것인가 | 클라이언트 + 작성자 | 대기 중 |
 
 **해결됨**
 
@@ -345,9 +345,10 @@
 - **WordPress.com 도메인**: 자체 도메인 연결은 유료 플랜에서만 가능하다. — <https://wordpress.com/support/domains/>
 - **WordPress.com 플러그인**: Personal, Premium, Business, Commerce 등 모든 유료 플랜에서 설치 가능하다. — <https://wordpress.com/support/plugins/>
 - **WordPress.com 코드 삽입**: 자바스크립트·iframe·HTML 폼은 플러그인이 가능한 플랜에서 호스팅 기능을 활성화해야 쓸 수 있다. — <https://wordpress.com/support/code/>
-- **WordPress.com 요금제**: Free 1GB / Personal 6GB, 월 $4(연 결제)·$9(월 결제) / Premium 13GB, 월 $8(연 결제) / Business 50GB, 월 $25(연 결제). 유료 플랜은 방문자에게 광고를 노출하지 않는다. — <https://wordpress.com/pricing/>
+- **WordPress.com 요금제** (2026-09-18 재확인): Free 1GB / Personal 6GB, 월 $4(연 결제)·$9(월 결제) / Premium 13GB, 월 $8(연 결제)·$18(월 결제) / Business 50GB, 월 $25(연 결제)·$40(월 결제). 유료 플랜은 방문자에게 광고를 노출하지 않는다. — <https://wordpress.com/pricing/>
 - **WordPress.com 업로드**: 파일 하나당 최대 2GB까지 안정적으로 업로드된다. — <https://wordpress.com/support/accepted-filetypes/>
-- **WordPress.com 영상 업로드**: 요금제 페이지 기준 Free·Personal 불가, **Premium부터 "Upload videos" + VideoPress(전용 저장소 250GB)**. 파일 형식 도움말도 영상 항목은 Premium·Business·Commerce에 적용된다고 적는다. 단 VideoPress 도움말은 Business·Commerce부터라고 적어 **서술이 어긋난다.** — <https://wordpress.com/pricing/>, <https://wordpress.com/support/accepted-filetypes/>, <https://wordpress.com/support/videopress/>
+- **WordPress.com 영상 업로드**: Free·Personal 불가. **Premium부터 "Upload videos"** — 다만 영상도 요금제의 13GB 공용 저장 공간을 쓴다. **VideoPress(전용 저장소 250GB)는 Business·Commerce부터**이며, VideoPress 도움말도 *"available on sites with the WordPress.com Business and Commerce plans"*로 같게 적는다. — <https://wordpress.com/pricing/>, <https://wordpress.com/support/videopress/>
+  - 2026-09-17에 이 문서는 "Premium에 VideoPress 250GB가 포함되고 공식 문서끼리 어긋난다"고 적었는데 **둘 다 틀렸다.** 요금제 페이지를 잘못 읽은 것이고, 두 문서는 어긋나지 않는다. 2026-09-18에 재확인해 바로잡았다
 - **Ghost(Pro) 파일 업로드 한도**: 체험·Starter 5MB, Publisher 100MB, Business 250MB. Starter는 커스텀 테마·자체 도메인 발신 불가. Publisher 월 $29(연 결제). — <https://ghost.org/help/media-file-size-limits/>, <https://ghost.org/pricing/>
 - **구글 이미지 SEO 가이드**: 제목·메뉴 같은 중요한 글자를 이미지 안에 넣지 말고 HTML 텍스트로 두며, 이미지에는 alt 텍스트를 제공하라고 권한다. — <https://developers.google.com/search/docs/appearance/google-images>
 - **Google Workspace**: 14일 무료 체험. Flexible 요금제는 언제든 위약금 없이 해지 가능. 사용자 1명당 별칭 주소 30개까지 추가 비용 없음. 유료 계정 발송 한도 하루 2,000통(체험 계정 500통). — <https://knowledge.workspace.google.com/admin/getting-started/about-your-google-workspace-free-trial>, <https://support.google.com/a/answer/1247362>, <https://support.google.com/a/answer/33327>, <https://knowledge.workspace.google.com/admin/gmail/gmail-sending-limits-in-google-workspace>
@@ -447,4 +448,5 @@ v0.7에서 WordPress로 전환하면서 폐기했다. 속성 목록, 슬러그 �
 | 2026-09-16 | v0.4 | 작성자·클라이언트 정보 기입. 범위 축소 — 사이트 내 검색, 조회수 집계, 광고주 사용자 그룹(3.3)을 제외 |
 | 2026-09-16 | v0.5 | 2.1 성공 기준 기입 (조회수 1,000 / 광고 문의 10% 증가). **사이트 내 검색과 조회수 집계를 다시 포함으로 이동** — 4.3 메모, F-04·F-09, 관련 리스크·미확정 사항 복원. 기능 번호를 F-01~F-13으로 재정리. 도메인 비용 부담을 작성자로, 스티비 비용 부담을 미정으로 변경. Q-16(목표치 기준), Q-17(스티비 비용 부담) 추가 |
 | 2026-09-16 | v0.6 | **실제 콘텐츠 14건을 실측(부록 D)하고 그 결과로 미디어 처리 방식을 새로 정함(4.4).** 영상이 콘텐츠의 1/3이라는 사실 반영 — F-02에 영상 재생 추가. 노션 무료 5MB 한도에 콘텐츠 43%가 걸려, 1단계는 미디어를 구글 드라이브에 두고 2단계에서 노션 유료로 통합하기로 결정. 이미지 최적화를 범위에 추가(F-07), 영상 재인코딩은 제외. 기능 번호를 F-01~F-14로 재정리. 부록 C에 드라이브 폴더 속성 추가. Q-21~Q-25 추가 |
+| 2026-09-18 | v0.7.1 | **WordPress.com 영상 업로드 서술을 바로잡았다** — VideoPress(전용 저장소 250GB)는 Premium이 아니라 Business부터이고, 어제 적은 "공식 문서끼리 어긋난다"는 오독이었다. Premium 13GB는 영상까지 공용으로 쓴다. 요금제 월 결제가 누락돼 보완. 10장 저장 공간 리스크를 Personal·Premium 양쪽 계산으로 다시 씀. 부록 C·8장의 "v0.6에 남아 있다"를 커밋 `6959fac`(v0.5) 참조로 정정 |
 | 2026-09-17 | v0.7 | **직접 개발(Next.js + 노션 + 구글 드라이브)에서 WordPress.com + 스티비로 전환.** 클라이언트의 실사용 편의를 우선함. 뉴스레터는 스티비 수동 발송. F-05·F-06 삭제, 나머지 기능의 구현 방식 갱신. 8장 재작성(근거 칸은 작성자 작성 예정). 스티비 이메일 API 요금제 서술 오류 수정. 도메인 구매·업무 메일 설정 현황 반영. 카카오톡 공유 미리보기 언급 삭제. 부록 C 폐기, 부록 E(매체 CMS 조사) 추가. Q-03·Q-04·Q-05 해결, 노션·드라이브 관련 Q 7건 폐기, Q-26~Q-30 추가 |
