@@ -1,23 +1,25 @@
 # Trend Portal Newsletter
 
-Newsletter website for Trend Portal, an Instagram trend magazine.
+Website and newsletter for Trend Portal, an Instagram trend magazine.
 
 ## Status
 
-🚧 **Planning** — requirements are still being confirmed with the client.
+🚧 **In progress** — requirements are settled (see the PRD); the site design is being built.
 
 ## Planned Features
 
 - Card news list (thumbnail + title) with a detail page for each post
-- Weekly publishing, 1–2 posts per week
+- Card news published weekly, on Fridays
+- A newsletter sent 1–2 times per week, written separately from the card news
 - Mobile-first responsive layout, since most readers come from Instagram
 - SEO and Open Graph tags for link previews on KakaoTalk and Instagram
 
-## Open Questions
-
-- **Format**: email newsletter or blog-style website
-- **Content workflow**: Notion integration, custom CMS, or Markdown files
-
 ## Tech Stack
 
-To be decided.
+- **Site** — WordPress.com (Premium plan), Spiel theme
+- **Newsletter** — Stibee, sent manually (planned; not set up yet)
+- **Domain / DNS** — `trendportal.kr`, nameservers on WordPress.com
+
+## Documentation
+
+Requirements, decisions, and open questions live in [docs/PRD.md](docs/PRD.md).
