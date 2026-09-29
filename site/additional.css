@@ -126,28 +126,21 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   opacity: 0.35;
   pointer-events: none;
 }
-/* watermark: outlined wordmark behind the text */
-.tp-intro::after {
-  content: "TREND\A PORTAL";
-  white-space: pre;
-  position: absolute;
-  right: -8px;
-  bottom: -14px;
-  z-index: 0;
-  font-size: clamp(84px, 6.25vw, 96px);
-  font-weight: 900;
-  line-height: 0.9;
-  letter-spacing: -0.04em;
-  text-align: right;
-  color: transparent;
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.14);
-  pointer-events: none;
-}
 .tp-intro > * { position: relative; z-index: 1; }
 .tp-intro .tp-intro-title { margin: 0; font-size: clamp(1.625rem, 1.2rem + 1.8vw, 2.5rem); line-height: 1.3; font-weight: 800; letter-spacing: -0.03em; color: #fff; word-break: keep-all; }
 .tp-intro .tp-intro-desc { margin: 10px 0 0; font-size: 0.875rem; line-height: 1.55; color: #a8a8a8; word-break: keep-all; text-wrap: balance; }
 @media (min-width: 782px) {
   .tp-intro .tp-intro-desc { font-size: 1rem; }
+}
+/* Keyword flow: slow marquee under a thin rule, decoration only.
+   Words are repeated in the template so one set is wider than the 1000px column. */
+.tp-intro .tp-intro-tags { margin: 28px 0 0; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.28); overflow: hidden; }
+.tp-intro-tags-track { display: flex; width: max-content; animation: tp-mq 120s linear infinite; }
+.tp-intro .tp-intro-tags-set { display: flex; gap: 24px; margin: 0; padding-right: 24px; }
+.tp-intro-tags-set span { font-size: 0.8125rem; font-weight: 800; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; color: #fff; }
+.tp-intro-tags-set span:nth-child(even) { color: #8a8a8a; }
+@media (prefers-reduced-motion: reduce) {
+  .tp-intro-tags-track { animation: none; }
 }
 
 /* ---------- List top: search + category chips ---------- */
@@ -182,7 +175,7 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .tp-chips .wp-block-categories li.current-cat,
 .home .tp-chips .tp-chip-all a { background: #111; color: #fff; }
 
-/* ---------- Post lists: hover zoom, scroll rise, 2 columns on mobile ---------- */
+/* ---------- Post lists: hover zoom, scroll rise, rows on mobile ---------- */
 .wp-block-post-template .wp-block-post-featured-image { overflow: hidden; }
 .wp-block-post-template .wp-block-post-featured-image img { transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .wp-block-post-template > li:hover .wp-block-post-featured-image img,
@@ -201,10 +194,12 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   .wp-block-post-template > li { animation: none !important; }
 }
 
+/* Mobile: list rows (B) — small 4:5 photo left, category + title right. Desktop keeps the grid */
 @media (max-width: 781px) {
-  .wp-block-post-template.is-layout-grid { grid-template-columns: 1fr 1fr !important; gap: 20px 12px !important; }
-  .wp-block-post-template.is-layout-grid > li { margin: 0 !important; }
-  .wp-block-post-template.is-layout-grid .wp-block-post-title { font-size: 0.95rem !important; line-height: 1.35 !important; }
+  .wp-block-post-template.is-layout-grid { grid-template-columns: 1fr !important; gap: 0 !important; }
+  .wp-block-post-template.is-layout-grid > li { margin: 0 !important; display: grid; grid-template-columns: 104px 1fr; gap: 0 16px; align-items: start; padding: 14px 0; border-bottom: 1px solid #e5e5e5; }
+  .wp-block-post-template.is-layout-grid > li > * { margin: 0 !important; }
+  .wp-block-post-template.is-layout-grid .wp-block-post-title { font-size: 1rem !important; line-height: 1.4 !important; }
   .wp-block-post-template.is-layout-grid .wp-block-post-terms { font-size: 0.75rem !important; }
 }
 
