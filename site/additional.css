@@ -203,6 +203,32 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   .wp-block-post-template.is-layout-grid .wp-block-post-terms { font-size: 0.75rem !important; }
 }
 
+/* ---------- Home: series sections (weekly, tp1000) — 4 across on PC, swipe row on mobile ---------- */
+/* Post template uses the default (flow) layout on purpose, so the mobile "rows" rule above does not turn it into a list */
+.tp-series-head { align-items: flex-end !important; }
+.tp-series-head h2 { margin: 0; }
+.tp-series-more { margin: 0 0 0.5rem; }
+.tp-series-more a { color: #111; font-size: 0.875rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.tp-series .tp-series-desc { margin: 12px 0 20px; font-size: 0.9375rem; color: #757575; }
+.tp-series .wp-block-query { margin-top: 0; }
+.tp-series .wp-block-post-template { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--wp--preset--spacing--50); margin: 0; padding: 0; list-style: none; }
+/* The scroll-rise animation would leave cards off to the right invisible inside the mobile swipe row */
+.tp-series .wp-block-post-template > li { margin: 0 !important; animation: none !important; }
+.tp-series .wp-block-post-featured-image { margin: 0 0 12px; }
+.tp-series .wp-block-post-title { margin: 0; font-size: 1.25rem !important; font-weight: 800; line-height: 1.4; text-wrap: balance; }
+.tp-series .wp-block-post-title a { color: #111; text-decoration: none; }
+.tp-series .tp-series-empty { margin: 0; font-size: 0.9375rem; color: #757575; }
+@media (max-width: 781px) {
+  .tp-series .wp-block-post-template { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin-right: calc(-1 * var(--wp--style--root--padding-right, 24px)); padding-right: var(--wp--style--root--padding-right, 24px); scrollbar-width: none; }
+  .tp-series .wp-block-post-template > li { flex: 0 0 42%; scroll-snap-align: start; }
+  .tp-series .wp-block-post-title { font-size: 0.9375rem !important; }
+}
+
+/* ---------- Tag (series) archive: tag name as heading + description ---------- */
+.tp-tag-top h1 { margin: 0; }
+.tp-tag-top .tp-tag-desc { margin: 12px 0 0; font-size: 0.9375rem; color: #757575; }
+.tp-tag-top .tp-tag-desc p { margin: 0; }
+
 /* ---------- Home: latest reports ---------- */
 .tp-reports-head { align-items: flex-end !important; }
 .tp-reports-head h2 { margin: 0; }
