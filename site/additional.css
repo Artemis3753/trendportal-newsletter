@@ -363,7 +363,7 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   line-height: 1.35;
   letter-spacing: -0.02em;
 }
-.wp-block-post-content p { text-align: center; }
+.wp-block-post-content p { text-align: center; text-wrap: balance; }
 .wp-block-post-content [id^="kboard"] p { text-align: left; }
 .wp-block-post-content p.tp-source {
   width: fit-content;
@@ -386,6 +386,9 @@ body { word-break: keep-all; overflow-wrap: break-word; }
     margin-right: auto !important;
   }
   .wp-block-post-content figure.wp-block-image img { width: 100%; height: auto; }
+  /* Video card: link line sits right under the thumbnail */
+  .wp-block-post-content > .wp-block-image + p { margin-top: 14px !important; }
+  .wp-block-post-content > .wp-block-image + p + h2 { margin-top: 32px !important; }
 }
 @media (max-width: 781px) {
   .wp-block-post-content > .wp-block-image,
@@ -400,6 +403,9 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   .wp-block-post-content > .wp-block-video video { display: block; width: 100%; }
   .wp-block-post-content > .wp-block-image + h2,
   .wp-block-post-content > .wp-block-video + h2 { margin-top: 20px !important; }
+  /* Video card: link line sits right under the thumbnail, heading follows as usual */
+  .wp-block-post-content > .wp-block-image + p { margin-top: 12px !important; }
+  .wp-block-post-content > .wp-block-image + p + h2 { margin-top: 20px !important; }
   .wp-block-post-content > .tp-source { margin-top: 8px !important; }
   .wp-block-post-content > :first-child { margin-top: 0 !important; }
   .tp-cover + .wp-block-group { margin-top: 24px !important; }
@@ -423,6 +429,9 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   cursor: pointer;
 }
 .tp-kakao-share img { display: block; width: 20px; height: 20px; }
+
+/* Jetpack share buttons (X, Facebook) turn on for every new post; the Kakao button above replaces them */
+.sharedaddy { display: none !important; }
 
 /* ---------- Newsletter ---------- */
 .tp-nl-wrap { background: #f4f4f4; padding: 3.5rem 1.5rem !important; margin-top: 0 !important; }
