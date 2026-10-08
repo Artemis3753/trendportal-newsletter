@@ -30,6 +30,10 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 @media (max-width: 380px) {
   .tp-header-left { gap: 0.75rem !important; }
 }
+/* Phones: slimmer header side padding (inline 32px -> 20px) so logo and menu sit closer to the edges */
+@media (max-width: 781px) {
+  .tp-header { padding-left: 20px !important; padding-right: 20px !important; }
+}
 @media (max-width: 359px) {
   .tp-header .wp-block-site-title a { font-size: 1.25rem; }
 }
