@@ -435,6 +435,74 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 }
 .tp-ad-profile:hover .tp-ad-btn { background: #444; }
 
+/* Weekly roundup posts: same layout as the newsletter (left aligned, 600px column).
+   Scoped to the .tp-wk wrapper group, so other posts keep the centered card style.
+   Card numbers, the table of contents and the subscriber lock are added by the TP Weekly Lock plugin */
+.wp-block-post-content .tp-wk { max-width: 600px; margin: 0 auto !important; text-align: left; color: #111; }
+.wp-block-post-content .tp-wk * { margin-top: 0; margin-bottom: 0; }
+.wp-block-post-content .tp-wk p { text-align: left; text-wrap: pretty; font-size: 15px; line-height: 1.8; }
+.wp-block-post-content .tp-wk p.tp-wk-issue { margin-bottom: 20px; font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #888; }
+.wp-block-post-content .tp-wk p.tp-wk-label { margin-bottom: 10px; font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #888; }
+.wp-block-post-content .tp-wk-letter p { margin-bottom: 14px; }
+.wp-block-post-content .tp-wk p.tp-wk-sig { font-size: 13px; color: #888; }
+.wp-block-post-content .tp-wk .tp-wk-pick { margin-top: 8px; padding: 18px 20px; background: #f1f1f1; border-radius: 12px; }
+.wp-block-post-content .tp-wk-pick ol { padding-left: 18px; font-size: 14px; line-height: 1.8; font-weight: 700; }
+/* Table of contents: each row jumps to its card (#wk-01 ...) */
+.wp-block-post-content .tp-wk .tp-wk-tocbox { margin-top: 36px; padding-top: 36px; border-top: 1px solid #111; }
+.tp-wk-toc { list-style: none; padding: 0; }
+.tp-wk-toc li { border-bottom: 1px solid #eee; }
+.tp-wk-toc li:last-child { border-bottom: 0; }
+.tp-wk-toc a { display: flex; gap: 12px; padding: 9px 0; color: #111; font-size: 14px; line-height: 1.5; text-decoration: none; }
+.tp-wk-toc a span { flex: none; width: 22px; font-weight: 800; color: #aaa; }
+html:has(.tp-wk) { scroll-behavior: smooth; }
+/* Cards: number -> title -> photo -> source -> what happened -> point */
+.wp-block-post-content .tp-wk .tp-wk-item { margin-top: 36px; padding-top: 36px; border-top: 1px solid #111; scroll-margin-top: 16px; }
+.wp-block-post-content .tp-wk p.tp-wk-num { margin-bottom: 6px; font-size: 13px; font-weight: 800; letter-spacing: 1px; color: #aaa; }
+.wp-block-post-content .tp-wk h2 { max-width: none; margin: 0 0 16px !important; text-align: left !important; font-size: 21px; font-weight: 800; line-height: 1.4; letter-spacing: -0.6px; }
+.wp-block-post-content .tp-wk figure.wp-block-image { max-width: none; margin: 0 !important; }
+.tp-wk figure.wp-block-image img { display: block; width: 100%; height: auto; border-radius: 12px; }
+/* Video card: portrait thumbnail, then the "watch on Instagram" line */
+.tp-wk figure.wp-block-image:has(+ .tp-wk-video) img { width: 240px; max-width: 70%; margin: 0 auto; }
+.wp-block-post-content .tp-wk p.tp-wk-video { margin-top: 10px; text-align: center; font-size: 13px; font-weight: 700; }
+.tp-wk-video a { color: #111; }
+/* The gap above "what happened" belongs to the h4, so cards without a source line get the same spacing */
+.wp-block-post-content .tp-wk p.tp-wk-src { margin-top: 6px; font-size: 11px; line-height: 1.5; color: #999; }
+.wp-block-post-content .tp-wk h4 { margin: 24px 0 6px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; color: #888; }
+.wp-block-post-content .tp-wk-item > p:not(.tp-wk-num):not(.tp-wk-src):not(.tp-wk-video) { margin-bottom: 18px; }
+.wp-block-post-content .tp-wk .tp-wk-insight { padding: 18px 20px; background: #f1f1f1; border-radius: 12px; }
+.wp-block-post-content .tp-wk .tp-wk-insight h4 { margin-top: 0; color: #111; }
+/* Highlighter under the point text, same as the newsletter. Inline so the marker follows each line instead of filling the box */
+.wp-block-post-content .tp-wk .tp-wk-insight p {
+  display: inline;
+  background: linear-gradient(transparent 55%, #fff1a8 55%);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.wp-block-post-content .tp-wk .tp-wk-insight p + p::before { content: "\A\A"; white-space: pre; }
+/* Closing: comments + report button (no mail footer on the site) */
+.wp-block-post-content .tp-wk .tp-wk-end { margin-top: 36px; padding-top: 36px; border-top: 1px solid #111; }
+.wp-block-post-content .tp-wk-end h2 { font-size: 19px; margin-bottom: 14px !important; }
+.wp-block-post-content .tp-wk-end p { margin-bottom: 12px; }
+.wp-block-post-content .tp-wk p.tp-wk-btn { margin: 18px 0 22px; }
+.tp-wk-btn a { display: inline-block; padding: 10px 18px; background: #111; color: #fff !important; border-radius: 999px; font-size: 14px; font-weight: 700; line-height: 1.5; text-decoration: none; }
+/* Subscriber lock: cards after 01 stay in the HTML but are blurred until this device is marked subscribed */
+.tp-wk-locked { max-height: 460px; overflow: hidden; filter: blur(4px); -webkit-mask-image: linear-gradient(#000, transparent 85%); mask-image: linear-gradient(#000, transparent 85%); pointer-events: none; user-select: none; }
+.tp-wk-lock.is-open .tp-wk-locked { max-height: none; overflow: visible; filter: none; -webkit-mask-image: none; mask-image: none; pointer-events: auto; user-select: auto; }
+.tp-wk-lock.is-open .tp-wk-gate { display: none; }
+.wp-block-post-content .tp-wk .tp-wk-gate { position: relative; margin-top: -200px; padding: 26px 22px 22px; background: #fff; border: 1px solid #111; border-radius: 16px; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); }
+.wp-block-post-content .tp-wk .tp-wk-gate p { text-align: center; }
+.wp-block-post-content .tp-wk p.tp-wk-gate-label { margin-bottom: 8px; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #888; }
+.wp-block-post-content .tp-wk p.tp-wk-gate-title { margin-bottom: 8px; font-size: 19px; font-weight: 800; line-height: 1.4; letter-spacing: -0.4px; }
+.wp-block-post-content .tp-wk p.tp-wk-gate-desc { margin-bottom: 18px; font-size: 14px; line-height: 1.7; color: #555; }
+.wp-block-post-content .tp-wk p.tp-wk-gate-btn { margin-bottom: 14px; }
+.tp-wk-gate-btn a { display: inline-block; padding: 12px 22px; border-radius: 999px; background: #111; color: #fff !important; font-size: 15px; font-weight: 800; text-decoration: none; }
+.tp-wk-gate-have summary { list-style: none; cursor: pointer; font-size: 13px; color: #555; text-decoration: underline; text-underline-offset: 3px; }
+.tp-wk-gate-have summary::-webkit-details-marker { display: none; }
+.wp-block-post-content .tp-wk .tp-wk-gate-form { display: flex; gap: 6px; margin: 14px 0 8px; }
+.tp-wk-gate-form input { flex: 1; width: 0; min-width: 0; padding: 10px 12px; border: 1.5px solid #111; border-radius: 0; font-size: 15px; }
+.tp-wk-gate-form button { flex: none; padding: 0 16px; border: 0; background: #111; color: #fff; font-size: 14px; font-weight: 800; }
+.wp-block-post-content .tp-wk p.tp-wk-gate-note { font-size: 12px; line-height: 1.5; color: #888; }
+
 /* Body media: rounded; 480px on desktop, near full width on mobile */
 .wp-block-post-content > .wp-block-image,
 .wp-block-post-content > .wp-block-video { border-radius: 14px; overflow: hidden; }
