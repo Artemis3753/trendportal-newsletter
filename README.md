@@ -13,6 +13,7 @@ Website and newsletter for Trend Portal (트렌드포털), an Instagram trend ma
 
 - Posts adapted from the Instagram card news: a cover, image cards, and a source credit under each card
 - Two series sections on the home page: weekly roundups (주간 총정리) and TP 1,000
+- Weekly roundups use the newsletter's layout; everything after the first card opens for newsletter subscribers
 - A reader tip board, built on KBoard
 - A KakaoTalk share button and Open Graph tags for link previews
 - A mobile-first layout, since most readers come from Instagram
@@ -42,6 +43,7 @@ Block templates (home, single post, tag archive) are edited in the WordPress.com
 | TP Naver Verification | Prints Naver's ownership tag, related-channel markup, and a bilingual site name. Keep it active: Naver re-checks the tag |
 | TP Video Preview | Shows a video's first frame before playback on iOS and mobile Chrome |
 | TP Weekly Links | Fixed links that always point to the latest weekly roundups, for the welcome email |
+| TP Weekly Lock | Numbers the cards, builds the table of contents, and adds the subscriber lock on weekly roundups. Also registers the "weekly roundup" block pattern |
 
 ## Tech Stack
 
