@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Weekly Links
  * Description: 고정 주소(?tp_weekly=1~3)를 최근 주간 총정리 글이나 그 대표 이미지로 넘겨준다. 웰컴메일의 "최근 글 3개"용.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Trendportal
  */
 
@@ -58,7 +58,8 @@ function tp_weekly_links_redirect() {
 				$target = $cover;
 			}
 		} else {
-			$target = get_permalink( $post );
+			// 웰컴메일을 받은 사람은 이미 구독자라, 글의 구독자 잠금(TP Weekly Lock)을 바로 열어 준다
+			$target = add_query_arg( 'tp_sub', '1', get_permalink( $post ) );
 		}
 	}
 
