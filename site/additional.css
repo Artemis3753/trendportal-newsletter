@@ -5,6 +5,8 @@
    ========================================================= */
 
 /* ---------- Base ---------- */
+/* Light-only site: ask browsers (e.g. Samsung Internet) not to force-darken it */
+:root { color-scheme: only light; }
 body { word-break: keep-all; overflow-wrap: break-word; }
 .wp-block-post-title { word-break: keep-all; }
 .mini-search button { padding: 0.5rem; }
