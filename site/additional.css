@@ -433,6 +433,13 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 /* Weekly roundup posts: same layout as the newsletter (left aligned, 600px column).
    Scoped to the .tp-wk wrapper group, so other posts keep the centered card style.
    Card numbers, the table of contents and the subscriber lock are added by the TP Weekly Lock plugin */
+/* Weekly post template (tp-weekly): newsletter head instead of the grey cover.
+   The plugin moves the issue line from the body to just above the title */
+.tp-wk-top { padding-top: 40px; }
+.tp-wk-top p.tp-wk-issue { margin: 0 0 10px; font-size: 12px; font-weight: 800; letter-spacing: 1px; line-height: 1.5; color: #888; }
+/* Two-line title like the newsletter. It sits in an inner default-layout group,
+   because the outer constrained group would center a narrowed title */
+.tp-wk-top .wp-block-post-title { margin: 0; max-width: 11em; font-size: 30px; font-weight: 800; line-height: 1.3; letter-spacing: -1.1px; text-wrap: balance; }
 .wp-block-post-content .tp-wk { max-width: 600px; margin: 0 auto !important; text-align: left; color: #111; }
 .wp-block-post-content .tp-wk * { margin-top: 0; margin-bottom: 0; }
 .wp-block-post-content .tp-wk p { text-align: left; text-wrap: pretty; font-size: 15px; line-height: 1.8; }

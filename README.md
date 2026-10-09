@@ -43,7 +43,7 @@ Block templates (home, single post, tag archive) are edited in the WordPress.com
 | TP Naver Verification | Prints Naver's ownership tag, related-channel markup, and a bilingual site name. Keep it active: Naver re-checks the tag |
 | TP Video Preview | Shows a video's first frame before playback on iOS and mobile Chrome |
 | TP Weekly Links | Fixed links that always point to the latest weekly roundups, for the welcome email |
-| TP Weekly Lock | Numbers the cards, builds the table of contents, and adds the subscriber lock on weekly roundups. Also registers the "weekly roundup" block pattern |
+| TP Weekly Lock | Numbers the cards, builds the table of contents, and adds the subscriber lock on weekly roundups. Shows them with the `tp-weekly` template (made in the Site Editor) for a newsletter-style head. Also registers the "weekly roundup" block pattern |
 
 ## Tech Stack
 

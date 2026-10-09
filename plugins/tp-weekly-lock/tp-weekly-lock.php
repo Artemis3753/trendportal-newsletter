@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Weekly Lock
- * Description: 주간 총정리 글(뉴스레터와 같은 포맷)에 카드 번호·목차·구독자 잠금을 자동으로 붙이고, 편집기에 "주간 총정리 틀"을 등록한다.
- * Version: 1.0.1
+ * Description: 주간 총정리 글(뉴스레터와 같은 포맷)에 카드 번호·목차·구독자 잠금을 자동으로 붙이고, 전용 글 템플릿(tp-weekly)으로 보여 주며, 편집기에 "주간 총정리 틀"을 등록한다.
+ * Version: 1.0.2
  * Author: Trendportal
  */
 
@@ -34,6 +34,10 @@ function tp_wk_render_block( $block_content, $block ) {
 	if ( 'core/group' !== $block['blockName'] || empty( $block['attrs']['className'] ) ) {
 		return $block_content;
 	}
+	// 전용 템플릿의 제목 묶음. 템플릿에서 본문보다 위에 있어서 본문(.tp-wk)보다 먼저 그려진다
+	if ( tp_wk_has_class( $block['attrs']['className'], 'tp-wk-top' ) ) {
+		return tp_wk_transform_top( $block_content );
+	}
 	if ( ! tp_wk_has_class( $block['attrs']['className'], 'tp-wk' ) ) {
 		return $block_content;
 	}
@@ -41,7 +45,38 @@ function tp_wk_render_block( $block_content, $block ) {
 }
 add_filter( 'render_block', 'tp_wk_render_block', 10, 2 );
 
+/**
+ * 주간 총정리 글은 전용 글 템플릿(사이트 편집기의 tp-weekly)으로 보여 준다.
+ * 회색 커버 대신 뉴스레터처럼 [호수 줄 → 제목 → 본문] 순서. 템플릿이 없으면 WordPress가 원래 단일 글 템플릿을 쓴다.
+ */
+function tp_wk_template_hierarchy( $templates ) {
+	if ( tp_wk_is_weekly_post() ) {
+		array_unshift( $templates, 'tp-weekly' );
+	}
+	return $templates;
+}
+add_filter( 'single_template_hierarchy', 'tp_wk_template_hierarchy' );
+
+/**
+ * 호수 줄은 본문 첫 줄에 있어서 템플릿만으로는 제목 위에 둘 수 없다. 그래서 제목 묶음을 그릴 때 본문에서 꺼내 와
+ * 제목 앞에 붙이고, 본문을 그릴 때는 같은 줄을 뺀다(두 번 나오지 않게).
+ * 제목 끝의 "(26.10 1주차)"는 호수 줄과 겹쳐서 화면에서만 뺀다. 탭 제목·검색 결과의 제목은 그대로다.
+ */
+function tp_wk_transform_top( $html ) {
+	$post = get_post();
+	if ( ! $post || ! preg_match( '/<p class="tp-wk-issue">(.*?)<\/p>/s', $post->post_content, $m ) ) {
+		return $html;
+	}
+	$GLOBALS['tp_wk_issue_moved'] = true;
+	$html = preg_replace( '/\s*\([^()]*\)\s*(<\/h1>)/', '$1', $html, 1 );
+	return preg_replace( '/<h1\b/', '<p class="tp-wk-issue">' . esc_html( wp_strip_all_tags( $m[1] ) ) . '</p><h1', $html, 1 );
+}
+
 function tp_wk_transform( $html ) {
+	if ( ! empty( $GLOBALS['tp_wk_issue_moved'] ) ) {
+		$html = preg_replace( '/<p\b[^>]*\bclass="[^"]*\btp-wk-issue\b[^"]*"[^>]*>.*?<\/p>/s', '', $html, 1 );
+	}
+
 	// 카드 묶음의 여는 태그 위치를 모두 찾는다
 	preg_match_all( '/<div\b[^>]*\bclass="[^"]*\btp-wk-item\b[^"]*"[^>]*>/', $html, $m, PREG_OFFSET_CAPTURE );
 	$opens = $m[0];
