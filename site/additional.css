@@ -187,6 +187,8 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .wp-block-post-template .wp-block-post-featured-image img { transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .wp-block-post-template > li:hover .wp-block-post-featured-image img,
 .wp-block-post-template > li:focus-within .wp-block-post-featured-image img { transform: scale(1.05); }
+/* Grid titles: theme line-height 1.2 felt cramped; balance keeps a lone word off the last line */
+.wp-block-post-template.is-layout-grid .wp-block-post-title { line-height: 1.42; text-wrap: balance; }
 
 @keyframes tp-rise { from { opacity: 0; transform: translateY(32px); } to { opacity: 1; transform: none; } }
 @supports (animation-timeline: view()) {
