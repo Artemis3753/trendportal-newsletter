@@ -537,12 +537,34 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-.wp-block-post-content .tp-wk .tp-wk-pick { margin-top: 8px; padding: 18px 20px; background: #f1f1f1; border-radius: 12px; }
+/* Glass stage: the editor pick and the contents sit on a soft wash of two colours from the week's cover photo.
+   TP Weekly Lock wraps both in .tp-wk-stage and passes the colours as --tp-wk-t1 / --tp-wk-t2 */
+.wp-block-post-content .tp-wk .tp-wk-stage { position: relative; isolation: isolate; margin-top: 8px; padding: 16px; border-radius: 24px; overflow: hidden; }
+.tp-wk-stage::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  z-index: -1;
+  background:
+    radial-gradient(60% 70% at 20% 20%, var(--tp-wk-t1, rgba(190, 190, 190, 0.5)) 0%, transparent 70%),
+    radial-gradient(60% 70% at 85% 75%, var(--tp-wk-t2, rgba(160, 160, 160, 0.5)) 0%, transparent 70%),
+    #f6f6f6;
+}
+.wp-block-post-content .tp-wk .tp-wk-pick,
+.wp-block-post-content .tp-wk .tp-wk-tocbox {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.wp-block-post-content .tp-wk .tp-wk-pick { padding: 18px 20px; }
 .wp-block-post-content .tp-wk-pick ol { padding-left: 18px; font-size: 14px; line-height: 1.8; font-weight: 700; }
 /* Table of contents: each row jumps to its card (#wk-01 ...) */
-.wp-block-post-content .tp-wk .tp-wk-tocbox { margin-top: 36px; padding-top: 36px; border-top: 1px solid #111; }
+.wp-block-post-content .tp-wk .tp-wk-tocbox { margin-top: 20px; padding: 22px 20px 12px; }
 .tp-wk-toc { list-style: none; padding: 0; }
-.tp-wk-toc li { border-bottom: 1px solid #eee; }
+.tp-wk-toc li { border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
 .tp-wk-toc li:last-child { border-bottom: 0; }
 .tp-wk-toc a { display: flex; gap: 12px; padding: 9px 0; color: #111; font-size: 14px; line-height: 1.5; text-decoration: none; }
 .tp-wk-toc a span { flex: none; width: 22px; font-weight: 800; color: #aaa; }
@@ -586,7 +608,13 @@ html:has(.tp-wk) { scroll-behavior: smooth; }
 .tp-wk-locked { max-height: 460px; overflow: hidden; filter: blur(4px); -webkit-mask-image: linear-gradient(#000, transparent 85%); mask-image: linear-gradient(#000, transparent 85%); pointer-events: none; user-select: none; }
 .tp-wk-lock.is-open .tp-wk-locked { max-height: none; overflow: visible; filter: none; -webkit-mask-image: none; mask-image: none; pointer-events: auto; user-select: auto; }
 .tp-wk-lock.is-open .tp-wk-gate { display: none; }
-.wp-block-post-content .tp-wk .tp-wk-gate { position: relative; margin-top: -200px; padding: 26px 22px 22px; background: #fff; border: 1px solid #111; border-radius: 16px; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); }
+/* The lock box floats over the blurred cards as frosted glass */
+.wp-block-post-content .tp-wk .tp-wk-gate {
+  position: relative; margin-top: -200px; padding: 26px 22px 22px; text-align: center;
+  background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 16px;
+  -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
 .wp-block-post-content .tp-wk .tp-wk-gate p { text-align: center; }
 .wp-block-post-content .tp-wk p.tp-wk-gate-label { margin-bottom: 8px; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #888; }
 .wp-block-post-content .tp-wk p.tp-wk-gate-title { margin-bottom: 8px; font-size: 19px; font-weight: 800; line-height: 1.4; letter-spacing: -0.4px; }
