@@ -314,23 +314,27 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   color: #333 !important;
   text-decoration: none;
 }
-/* Photo cover (.has-photo): black band, the text-free photo on the right fading in from the left.
-   The TP Cover Photo plugin moves that photo out of the post body into .tp-cover-bg; covers without one stay grey */
-.tp-cover.has-photo { min-height: 300px !important; background: #111 !important; border-bottom-color: #111; }
+/* Photo cover (.has-photo): a band in the photo's own tone, the text-free photo on the right melting into it.
+   The TP Cover Photo plugin moves that photo out of the post body into .tp-cover-bg and sets --tp-tone
+   (the photo's average colour, darkened); covers without a photo stay grey */
+.tp-cover.has-photo { min-height: 300px !important; background: var(--tp-tone, #111) !important; border-bottom-color: var(--tp-tone, #111); }
 @media (min-width: 782px) { .tp-cover.has-photo { min-height: 380px !important; } }
 .tp-cover.has-photo::before { z-index: 1; opacity: 0.3; }
 .tp-cover.has-photo > .alignwide { z-index: 2; }
 .tp-cover.has-photo h1,
 .tp-cover.has-photo .tp-byline-name { color: #fff !important; }
 .tp-cover.has-photo .tp-byline .wp-block-post-date time { color: #aaa !important; }
-.tp-cover-bg { position: absolute; top: 0; right: 0; bottom: 0; z-index: 0; width: 60%; margin: 0 !important; }
+/* The photo itself turns transparent toward the title (a mask, not a dark layer), so the tone and its grain show through */
+.tp-cover-bg {
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 0; width: 58%; margin: 0 !important;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
+}
 .tp-cover-bg img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
-.tp-cover-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #111 0%, rgba(17, 17, 17, 0.85) 20%, rgba(17, 17, 17, 0) 70%); }
-@media (max-width: 781px) { .tp-cover-bg { width: 75%; } }
-/* Wide screens: a shorter fade so the photo takes about the right half and the title stays on solid black */
-@media (min-width: 782px) {
-  .tp-cover-bg { width: 58%; }
-  .tp-cover-bg::after { background: linear-gradient(90deg, #111 0%, rgba(17, 17, 17, 0.55) 18%, rgba(17, 17, 17, 0) 40%); }
+/* Phones: the title runs over the photo, so a longer fade plus a shade in the same tone under the title */
+@media (max-width: 781px) {
+  .tp-cover-bg { width: 75%; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 60%); mask-image: linear-gradient(90deg, transparent 0%, #000 60%); }
+  .tp-cover-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, var(--tp-tone, #111) 0%, transparent 60%); }
 }
 /* Category pill about a third smaller on photo covers */
 .tp-cover.has-photo .wp-block-post-terms { font-size: 10px; }
