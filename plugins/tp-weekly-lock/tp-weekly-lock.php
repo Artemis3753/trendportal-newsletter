@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Weekly Lock
  * Description: 주간 총정리 글(뉴스레터와 같은 포맷)에 카드 번호·목차·구독자 잠금을 자동으로 붙이고, 전용 글 템플릿(tp-weekly)으로 보여 주며, 편집기에 "주간 총정리 틀"을 등록한다.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Trendportal
  */
 
@@ -294,7 +294,7 @@ function tp_wk_pattern_content() {
 		. '<!-- wp:group {"className":"tp-wk-letter","layout":{"type":"default"}} --><div class="wp-block-group tp-wk-letter">'
 		. '<!-- wp:paragraph --><p>에디터 레터 첫 문단.</p><!-- /wp:paragraph -->'
 		. '<!-- wp:paragraph --><p>이번 주를 한마디로 정리하는 문단.</p><!-- /wp:paragraph -->'
-		. '<!-- wp:paragraph {"className":"tp-wk-sig"} --><p class="tp-wk-sig">트렌드포털 주인장</p><!-- /wp:paragraph -->'
+		. '<!-- wp:paragraph {"className":"tp-wk-sig"} --><p class="tp-wk-sig">트렌드포털</p><!-- /wp:paragraph -->'
 		. '</div><!-- /wp:group -->'
 		. '<!-- wp:group {"className":"tp-wk-pick","layout":{"type":"default"}} --><div class="wp-block-group tp-wk-pick">'
 		. '<!-- wp:paragraph {"className":"tp-wk-label"} --><p class="tp-wk-label">이번 주 에디터 픽</p><!-- /wp:paragraph -->'
