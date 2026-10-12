@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Weekly Lock
  * Description: 주간 총정리 글(뉴스레터와 같은 포맷)에 카드 번호·목차·구독자 잠금을 자동으로 붙이고, 전용 글 템플릿(tp-weekly)으로 보여 주며, 편집기에 "주간 총정리 틀"을 등록한다.
- * Version: 1.0.3
+ * Version: 1.1.0
  * Author: Trendportal
  */
 
@@ -130,7 +130,68 @@ function tp_wk_transform( $html ) {
 	$toc_html = '<p class="tp-wk-label">이번 주 ' . $count . '가지</p><ol class="tp-wk-toc">' . $toc . '</ol>';
 	$html     = preg_replace( '/(<nav\b[^>]*\bclass="[^"]*\btp-wk-tocbox\b[^"]*"[^>]*>).*?(<\/nav>)/s', '$1' . str_replace( '$', '\$', $toc_html ) . '$2', $html, 1 );
 
-	return $html;
+	return tp_wk_stage( $html );
+}
+
+/**
+ * 1.1.0(10/12 C안): 에디터 픽과 목차를 한 무대(.tp-wk-stage)로 묶고, 그 주 대표 사진에서 뽑은 두 색을 넘긴다.
+ * 무대 뒤에 두 색이 은은하게 번지고, 그 위의 두 상자가 유리 카드로 비친다(모양은 추가 CSS).
+ * 묶음은 에디터 픽이 시작하는 곳부터 목차가 끝나는 곳까지다. 둘 중 하나가 없으면 묶지 않는다.
+ */
+function tp_wk_stage( $html ) {
+	if ( ! preg_match( '/<div\b[^>]*\bclass="[^"]*\btp-wk-pick\b[^"]*"[^>]*>/', $html, $p, PREG_OFFSET_CAPTURE )
+		|| ! preg_match( '/<nav\b[^>]*\bclass="[^"]*\btp-wk-tocbox\b/', $html, $n, PREG_OFFSET_CAPTURE, $p[0][1] ) ) {
+		return $html;
+	}
+	$start = $p[0][1];
+	$close = strpos( $html, '</nav>', $n[0][1] );
+	if ( false === $close ) {
+		return $html;
+	}
+	$end   = $close + strlen( '</nav>' );
+	$tones = tp_wk_tones( get_post_thumbnail_id() );
+	$style = $tones ? ' style="--tp-wk-t1:' . $tones[0] . ';--tp-wk-t2:' . $tones[1] . '"' : '';
+	return substr( $html, 0, $start ) . '<div class="tp-wk-stage"' . $style . '>' . substr( $html, $start, $end - $start ) . '</div>' . substr( $html, $end );
+}
+
+/**
+ * 대표 사진을 2×2로 줄여 왼쪽 위·오른쪽 아래 두 점의 색을 반투명으로 돌려준다. 사진마다 한 번만 계산해 저장한다.
+ * 계산할 수 없으면 빈 배열 → CSS가 회색 기본값으로 그린다.
+ */
+function tp_wk_tones( $id ) {
+	if ( ! $id ) {
+		return array();
+	}
+	$saved = get_post_meta( $id, '_tp_wk_tones', true );
+	if ( is_array( $saved ) && 2 === count( $saved ) ) {
+		return $saved;
+	}
+	if ( ! function_exists( 'imagecreatefromstring' ) ) {
+		return array();
+	}
+	$src = wp_get_attachment_image_src( $id, 'medium' );
+	if ( ! $src ) {
+		return array();
+	}
+	$res = wp_remote_get( $src[0], array( 'timeout' => 5 ) );
+	if ( is_wp_error( $res ) ) {
+		return array();
+	}
+	$im = @imagecreatefromstring( wp_remote_retrieve_body( $res ) ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+	if ( ! $im ) {
+		return array();
+	}
+	$px = imagecreatetruecolor( 2, 2 );
+	imagecopyresampled( $px, $im, 0, 0, 0, 0, 2, 2, imagesx( $im ), imagesy( $im ) );
+	$tones = array();
+	foreach ( array( array( 0, 0 ), array( 1, 1 ) ) as $xy ) {
+		$c       = imagecolorat( $px, $xy[0], $xy[1] );
+		$tones[] = sprintf( 'rgba(%d,%d,%d,.55)', ( $c >> 16 ) & 255, ( $c >> 8 ) & 255, $c & 255 );
+	}
+	imagedestroy( $im );
+	imagedestroy( $px );
+	update_post_meta( $id, '_tp_wk_tones', $tones );
+	return $tones;
 }
 
 /**
