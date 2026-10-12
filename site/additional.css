@@ -271,6 +271,41 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   .wp-block-post-template.is-layout-grid .wp-block-post-terms { font-size: 0.75rem !important; }
 }
 
+/* Tone cards: each post is a frosted glass card over its own photo, blurred big, so every card carries its photo's colour.
+   TP Card Tone passes the photo as --tp-card-img; without it the card is plain white */
+.wp-block-post-template.is-layout-grid > li {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.07);
+}
+.wp-block-post-template.is-layout-grid > li::before {
+  content: "";
+  position: absolute;
+  inset: -30px;
+  z-index: -2;
+  background: var(--tp-card-img) center / cover;
+  filter: blur(30px) saturate(170%);
+  opacity: 0.6;
+}
+.wp-block-post-template.is-layout-grid > li::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
+}
+.wp-block-post-template.is-layout-grid .wp-block-post-featured-image { border-radius: 10px; }
+/* Phones: cards replace the divider lines of the row list */
+@media (max-width: 781px) {
+  .wp-block-post-template.is-layout-grid { gap: 12px !important; }
+  .wp-block-post-template.is-layout-grid > li { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.9); }
+}
+
 /* ---------- Home: series sections (weekly, tp1000) — 4 across on PC, swipe row on mobile ---------- */
 /* Post template uses the default (flow) layout on purpose, so the mobile "rows" rule above does not turn it into a list */
 .tp-series-head { align-items: flex-end !important; }
