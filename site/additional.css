@@ -272,9 +272,8 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 }
 
 /* Tone cards: each post is a frosted glass card over its own photo, blurred big, so every card carries its photo's colour.
-   Post lists and the home series rows share the look. TP Card Tone passes the photo as --tp-card-img; without it the card is plain white */
-.wp-block-post-template.is-layout-grid > li,
-.tp-series .wp-block-post-template > li {
+   TP Card Tone passes the photo as --tp-card-img; without it the card is plain white */
+.wp-block-post-template.is-layout-grid > li {
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -284,8 +283,7 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   background: #fff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.07);
 }
-.wp-block-post-template.is-layout-grid > li::before,
-.tp-series .wp-block-post-template > li::before {
+.wp-block-post-template.is-layout-grid > li::before {
   content: "";
   position: absolute;
   inset: -30px;
@@ -294,24 +292,23 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   filter: blur(30px) saturate(170%);
   opacity: 0.6;
 }
-.wp-block-post-template.is-layout-grid > li::after,
-.tp-series .wp-block-post-template > li::after {
+.wp-block-post-template.is-layout-grid > li::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
 }
-.wp-block-post-template.is-layout-grid .wp-block-post-featured-image,
-.tp-series .wp-block-post-featured-image { border-radius: 10px; }
+.wp-block-post-template.is-layout-grid .wp-block-post-featured-image { border-radius: 10px; }
 /* Phones: cards replace the divider lines of the row list */
 @media (max-width: 781px) {
   .wp-block-post-template.is-layout-grid { gap: 12px !important; }
   .wp-block-post-template.is-layout-grid > li { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.9); }
 }
 
-/* ---------- Home: series sections (weekly, tp1000) — 4 across on PC, the same rows as the post lists on mobile ---------- */
-/* Post template uses the default (flow) layout, so the rows are spelled out here rather than inherited from the grid rule above */
+/* ---------- Home: series sections (weekly, tp1000) ---------- */
+/* The weekly titles all start "이번 주 일어난 마케팅 이슈 총정리 (…)", so TP Card Tone splits them:
+   the week in bold (.tp-sr-week, NEW on the latest) and the shared name in grey (.tp-sr-name). Titles without "(…)" stay as they are */
 .tp-series-head { align-items: flex-end !important; }
 .tp-series-head h2 { margin: 0; }
 .tp-series-more { margin: 0 0 0.5rem; }
@@ -321,16 +318,27 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .tp-series .wp-block-query { margin-top: 16px; }
 .tp-series .wp-block-post-template { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--wp--preset--spacing--50); margin: 0; padding: 0; list-style: none; }
 .tp-series .wp-block-post-template > li { margin: 0 !important; animation: none !important; }
-.tp-series .wp-block-post-featured-image { margin: 0 0 12px; }
+.tp-series .wp-block-post-featured-image { margin: 0 0 12px; border-radius: 12px; }
 .tp-series .wp-block-post-title { margin: 0; font-size: 1.25rem !important; font-weight: 800; line-height: 1.4; text-wrap: balance; }
 .tp-series .wp-block-post-title a { color: #111; text-decoration: none; }
+.tp-series .tp-sr-week { display: block; }
+.tp-series .tp-sr-name { display: block; margin-top: 2px; font-size: 0.8125rem; font-weight: 400; line-height: 1.45; color: #888; }
+.tp-series .tp-sr-new { display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 999px; background: #fff1a8; color: #111; font-size: 11px; font-weight: 800; line-height: 1.5; vertical-align: 3px; }
 .tp-series .tp-series-empty { margin: 0; font-size: 0.9375rem; color: #757575; }
-/* Phones: rows going down, like the post lists (10/13) — small 4:5 photo left, title right */
+/* Phones (10/13, mockup 3): the latest as a big square photo, the rest as slim rows with a small photo */
 @media (max-width: 781px) {
-  .tp-series .wp-block-post-template { grid-template-columns: 1fr; gap: 12px; }
-  .tp-series .wp-block-post-template > li { display: grid; grid-template-columns: 104px 1fr; gap: 0 16px; align-items: start; }
+  .tp-series .wp-block-post-template { grid-template-columns: 1fr; gap: 0; }
+  .tp-series .wp-block-post-template > li { display: grid; grid-template-columns: 52px 1fr; gap: 0 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
   .tp-series .wp-block-post-template > li > * { margin: 0 !important; }
-  .tp-series .wp-block-post-title { font-size: 1rem !important; line-height: 1.4; }
+  .tp-series .wp-block-post-featured-image { border-radius: 8px; }
+  .tp-series .wp-block-post-featured-image img { aspect-ratio: 4 / 5 !important; object-fit: cover; }
+  .tp-series .wp-block-post-title { font-size: 0.9375rem !important; }
+  .tp-series .tp-sr-name { font-size: 0.75rem; }
+  .tp-series .wp-block-post-template > li:first-child { display: block; padding: 0 0 16px; }
+  .tp-series .wp-block-post-template > li:first-child .wp-block-post-featured-image { margin-bottom: 12px !important; border-radius: 14px; }
+  .tp-series .wp-block-post-template > li:first-child .wp-block-post-featured-image img { aspect-ratio: 1 !important; object-position: 50% 45%; }
+  .tp-series .wp-block-post-template > li:first-child .wp-block-post-title { font-size: 1.25rem !important; }
+  .tp-series .wp-block-post-template > li:first-child .tp-sr-name { font-size: 0.8125rem; }
 }
 
 /* ---------- Tag (series) archive: tag name as heading + description ---------- */
