@@ -447,9 +447,9 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .wp-block-post-content .tp-wk p.tp-wk-label { margin-bottom: 10px; font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #888; }
 .wp-block-post-content .tp-wk-letter p { margin-bottom: 14px; }
 .wp-block-post-content .tp-wk p.tp-wk-sig { font-size: 13px; color: #888; }
-/* Letter signature: a thin drawn line instead of a typed dash (the closing line reuses .tp-wk-sig, so scope to the letter) */
-.wp-block-post-content .tp-wk-letter p.tp-wk-sig { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
-.tp-wk-letter p.tp-wk-sig::before { content: ""; flex: none; width: 20px; height: 1px; background: #bbb; }
+/* Letter signature: a hairline closes the letter, then the name in the same small caps style as the issue line
+   (the closing line reuses .tp-wk-sig, so scope to the letter) */
+.wp-block-post-content .tp-wk-letter p.tp-wk-sig { margin-top: 24px; padding-top: 14px; border-top: 1px solid #e5e5e5; font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #888; }
 /* The letter paragraph right before the signature gets the same highlighter as the point boxes.
    Inline so the marker follows each line; the signature's top margin keeps the gap */
 .wp-block-post-content .tp-wk-letter p:has(+ .tp-wk-sig) {
