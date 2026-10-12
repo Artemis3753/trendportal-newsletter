@@ -7,15 +7,33 @@
 /* ---------- Base ---------- */
 /* Light-only site: ask browsers (e.g. Samsung Internet) not to force-darken it */
 :root { color-scheme: only light; }
+/* Header height follows the fluid logo size (44px on phones, 54px on wide screens).
+   Anchor jumps (weekly table of contents, #newsletter) stop below the sticky header */
+:root { --tp-hdr: clamp(44px, 40px + 0.95vw, 54px); }
+html { scroll-padding-top: calc(var(--tp-hdr) + 12px); }
 body { word-break: keep-all; overflow-wrap: break-word; }
 .wp-block-post-title { word-break: keep-all; }
 .mini-search button { padding: 0.5rem; }
 
-/* ---------- Header (M1 white, N1 menu, report link beside the menu) ---------- */
+/* ---------- Header (glass, N1 menu, report link beside the menu) ---------- */
+/* The header stays on top while scrolling, as frosted glass (iOS-like).
+   The glass sits on a ::before layer: a backdrop-filter on the header itself would trap the fixed mobile menu inside it */
+.wp-site-blocks > header.wp-block-template-part { position: sticky; top: var(--wp-admin--admin-bar--height, 0px); z-index: 100; }
 .tp-header {
-  background: #fff !important;
+  position: relative;
+  isolation: isolate;
+  background: transparent !important;
   color: #111 !important;
-  border-bottom: 1px solid #ececec;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+.tp-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
 }
 .tp-header .alignwide { max-width: 1600px !important; align-items: center; }
 .tp-header-right { align-items: center; gap: 28px !important; }
@@ -65,9 +83,11 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   }
 }
 
-/* Mobile menu overlay */
+/* Mobile menu overlay: dark frosted glass, the page stays faintly visible behind it */
 .tp-header .wp-block-navigation__responsive-container.is-menu-open {
-  background-color: #111 !important;
+  background-color: rgba(17, 17, 17, 0.5) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(160%);
   color: #fff !important;
   padding: 1.25rem 1.5rem 2rem !important;
 }
@@ -317,8 +337,15 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 /* Photo cover (.has-photo): a band in the photo's own tone, the text-free photo on the right melting into it.
    The TP Cover Photo plugin moves that photo out of the post body into .tp-cover-bg and sets --tp-tone
    (the photo's average colour, darkened); covers without a photo stay grey */
-.tp-cover.has-photo { min-height: 300px !important; background: var(--tp-tone, #111) !important; border-bottom-color: var(--tp-tone, #111); }
-@media (min-width: 782px) { .tp-cover.has-photo { min-height: 380px !important; } }
+/* It also slides up under the glass header, so the header shows the photo's colour through the glass */
+.tp-cover.has-photo {
+  min-height: calc(300px + var(--tp-hdr)) !important;
+  margin-top: calc(-1 * var(--tp-hdr)) !important;
+  padding-top: calc(1.75rem + var(--tp-hdr)) !important;
+  background: var(--tp-tone, #111) !important;
+  border-bottom-color: var(--tp-tone, #111);
+}
+@media (min-width: 782px) { .tp-cover.has-photo { min-height: calc(380px + var(--tp-hdr)) !important; } }
 .tp-cover.has-photo::before { z-index: 1; opacity: 0.3; }
 .tp-cover.has-photo > .alignwide { z-index: 2; }
 .tp-cover.has-photo h1,
@@ -505,6 +532,11 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .tp-wk-toc li:last-child { border-bottom: 0; }
 .tp-wk-toc a { display: flex; gap: 12px; padding: 9px 0; color: #111; font-size: 14px; line-height: 1.5; text-decoration: none; }
 .tp-wk-toc a span { flex: none; width: 22px; font-weight: 800; color: #aaa; }
+/* Tell readers the rows jump to the cards: a down arrow on each row and "눌러서 바로 보기" beside the label.
+   A CSS escape swallows the one space after it, hence the double spaces */
+.tp-wk-toc a { align-items: center; }
+.tp-wk-toc a::after { content: "\2193"; margin-left: auto; padding-left: 12px; color: #bbb; font-weight: 700; }
+.wp-block-post-content .tp-wk-tocbox .tp-wk-label::after { content: "\B20C\B7EC\C11C  \BC14\B85C  \BCF4\AE30"; margin-left: 8px; font-weight: 500; letter-spacing: 0; color: #aaa; }
 html:has(.tp-wk) { scroll-behavior: smooth; }
 /* Cards: number -> title -> photo -> source -> what happened -> point */
 .wp-block-post-content .tp-wk .tp-wk-item { margin-top: 36px; padding-top: 36px; border-top: 1px solid #111; scroll-margin-top: 16px; }
