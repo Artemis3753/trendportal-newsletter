@@ -304,16 +304,14 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 }
 .wp-block-post-template.is-layout-grid .wp-block-post-featured-image,
 .tp-series .wp-block-post-featured-image { border-radius: 10px; }
-/* Series rows scroll sideways on phones, which clips anything outside the row: leave room for the card shadows */
-.tp-series .wp-block-post-template { padding-top: 4px; padding-bottom: 24px; }
 /* Phones: cards replace the divider lines of the row list */
 @media (max-width: 781px) {
   .wp-block-post-template.is-layout-grid { gap: 12px !important; }
   .wp-block-post-template.is-layout-grid > li { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.9); }
 }
 
-/* ---------- Home: series sections (weekly, tp1000) — 4 across on PC, swipe row on mobile ---------- */
-/* Post template uses the default (flow) layout on purpose, so the mobile "rows" rule above does not turn it into a list */
+/* ---------- Home: series sections (weekly, tp1000) — 4 across on PC, the same rows as the post lists on mobile ---------- */
+/* Post template uses the default (flow) layout, so the rows are spelled out here rather than inherited from the grid rule above */
 .tp-series-head { align-items: flex-end !important; }
 .tp-series-head h2 { margin: 0; }
 .tp-series-more { margin: 0 0 0.5rem; }
@@ -322,16 +320,17 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .tp-series .tp-series-desc { display: none; }
 .tp-series .wp-block-query { margin-top: 16px; }
 .tp-series .wp-block-post-template { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--wp--preset--spacing--50); margin: 0; padding: 0; list-style: none; }
-/* The scroll-rise animation would leave cards off to the right invisible inside the mobile swipe row */
 .tp-series .wp-block-post-template > li { margin: 0 !important; animation: none !important; }
 .tp-series .wp-block-post-featured-image { margin: 0 0 12px; }
 .tp-series .wp-block-post-title { margin: 0; font-size: 1.25rem !important; font-weight: 800; line-height: 1.4; text-wrap: balance; }
 .tp-series .wp-block-post-title a { color: #111; text-decoration: none; }
 .tp-series .tp-series-empty { margin: 0; font-size: 0.9375rem; color: #757575; }
+/* Phones: rows going down, like the post lists (10/13) — small 4:5 photo left, title right */
 @media (max-width: 781px) {
-  .tp-series .wp-block-post-template { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; max-width: none; margin-right: calc(-1 * var(--wp--style--root--padding-right, 24px)); padding-right: var(--wp--style--root--padding-right, 24px); scrollbar-width: none; }
-  .tp-series .wp-block-post-template > li { flex: 0 0 42%; scroll-snap-align: start; }
-  .tp-series .wp-block-post-title { font-size: 0.9375rem !important; }
+  .tp-series .wp-block-post-template { grid-template-columns: 1fr; gap: 12px; }
+  .tp-series .wp-block-post-template > li { display: grid; grid-template-columns: 104px 1fr; gap: 0 16px; align-items: start; }
+  .tp-series .wp-block-post-template > li > * { margin: 0 !important; }
+  .tp-series .wp-block-post-title { font-size: 1rem !important; line-height: 1.4; }
 }
 
 /* ---------- Tag (series) archive: tag name as heading + description ---------- */
