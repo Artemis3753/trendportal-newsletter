@@ -318,8 +318,9 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .tp-series-head h2 { margin: 0; }
 .tp-series-more { margin: 0 0 0.5rem; }
 .tp-series-more a { color: #111; font-size: 0.875rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
-.tp-series .tp-series-desc { margin: 12px 0 20px; font-size: 0.9375rem; color: #757575; }
-.tp-series .wp-block-query { margin-top: 0; }
+/* The one-line description under each series heading is hidden (10/13): the heading and the cards say enough */
+.tp-series .tp-series-desc { display: none; }
+.tp-series .wp-block-query { margin-top: 16px; }
 .tp-series .wp-block-post-template { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--wp--preset--spacing--50); margin: 0; padding: 0; list-style: none; }
 /* The scroll-rise animation would leave cards off to the right invisible inside the mobile swipe row */
 .tp-series .wp-block-post-template > li { margin: 0 !important; animation: none !important; }
