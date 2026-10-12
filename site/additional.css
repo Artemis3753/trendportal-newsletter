@@ -314,6 +314,22 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   color: #333 !important;
   text-decoration: none;
 }
+/* Photo cover (.has-photo): black band, the text-free photo on the right fading in from the left.
+   The TP Cover Photo plugin moves that photo out of the post body into .tp-cover-bg; covers without one stay grey */
+.tp-cover.has-photo { min-height: 300px !important; background: #111 !important; border-bottom-color: #111; }
+@media (min-width: 782px) { .tp-cover.has-photo { min-height: 380px !important; } }
+.tp-cover.has-photo::before { z-index: 1; opacity: 0.3; }
+.tp-cover.has-photo > .alignwide { z-index: 2; }
+.tp-cover.has-photo h1,
+.tp-cover.has-photo .tp-byline-name { color: #fff !important; }
+.tp-cover.has-photo .tp-byline .wp-block-post-date time { color: #aaa !important; }
+.tp-cover-bg { position: absolute; top: 0; right: 0; bottom: 0; z-index: 0; width: 60%; margin: 0 !important; }
+.tp-cover-bg img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.tp-cover-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #111 0%, rgba(17, 17, 17, 0.85) 20%, rgba(17, 17, 17, 0) 70%); }
+@media (max-width: 781px) { .tp-cover-bg { width: 75%; } }
+/* Category pill about a third smaller on photo covers */
+.tp-cover.has-photo .wp-block-post-terms { font-size: 10px; }
+.tp-cover.has-photo .wp-block-post-terms a { padding: 0.2em 0.65em; }
 
 /* Byline: profile photo + name + date */
 .tp-byline {
@@ -429,6 +445,19 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   font-weight: 700;
 }
 .tp-ad-profile:hover .tp-ad-btn { background: #444; }
+
+/* Interview posts: each question sits between two rules in a serif, like a magazine Q&A.
+   The heading blocks carry .tp-iv-q; the "QUESTION 01" label is a span typed into the heading */
+.wp-block-post-content h2.tp-iv-q {
+  padding: 18px 8px 20px;
+  border-top: 1px solid #111;
+  border-bottom: 1px solid #e0e0e0;
+  font-family: "Gowun Batang", serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+}
+.tp-iv-q .tp-q { display: block; margin-bottom: 8px; font-family: var(--wp--preset--font-family--pretendard); font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #888; }
 
 /* Weekly roundup posts: same layout as the newsletter (left aligned, 600px column).
    Scoped to the .tp-wk wrapper group, so other posts keep the centered card style.
