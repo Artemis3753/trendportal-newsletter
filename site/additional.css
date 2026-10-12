@@ -262,7 +262,7 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .tp-series .wp-block-post-title a { color: #111; text-decoration: none; }
 .tp-series .tp-series-empty { margin: 0; font-size: 0.9375rem; color: #757575; }
 @media (max-width: 781px) {
-  .tp-series .wp-block-post-template { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin-right: calc(-1 * var(--wp--style--root--padding-right, 24px)); padding-right: var(--wp--style--root--padding-right, 24px); scrollbar-width: none; }
+  .tp-series .wp-block-post-template { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; max-width: none; margin-right: calc(-1 * var(--wp--style--root--padding-right, 24px)); padding-right: var(--wp--style--root--padding-right, 24px); scrollbar-width: none; }
   .tp-series .wp-block-post-template > li { flex: 0 0 42%; scroll-snap-align: start; }
   .tp-series .wp-block-post-title { font-size: 0.9375rem !important; }
 }
