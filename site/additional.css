@@ -19,6 +19,10 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 /* The header stays on top while scrolling, as frosted glass (iOS-like).
    The glass sits on a ::before layer: a backdrop-filter on the header itself would trap the fixed mobile menu inside it */
 .wp-site-blocks > header.wp-block-template-part { position: sticky; top: var(--wp-admin--admin-bar--height, 0px); z-index: 100; }
+/* At 600px and below the logged-in admin bar scrolls away, so the header sticks to the very top instead of leaving a gap */
+@media (max-width: 600px) {
+  .wp-site-blocks > header.wp-block-template-part { top: 0; }
+}
 .tp-header {
   position: relative;
   isolation: isolate;
