@@ -23,6 +23,16 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 @media (max-width: 600px) {
   .wp-site-blocks > header.wp-block-template-part { top: 0; }
 }
+/* Hide on scroll down, show on scroll up (the TP Header Scroll plugin toggles .tp-hdr-hidden).
+   The transform exists only while hidden: a transform on the header would otherwise trap the fixed mobile menu */
+.wp-site-blocks > header.wp-block-template-part { transition: transform 0.3s ease; }
+.wp-site-blocks > header.wp-block-template-part.tp-hdr-hidden { transform: translateY(calc(-100% - var(--wp-admin--admin-bar--height, 0px))); }
+@media (max-width: 600px) {
+  .wp-site-blocks > header.wp-block-template-part.tp-hdr-hidden { transform: translateY(-100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wp-site-blocks > header.wp-block-template-part { transition: none; }
+}
 .tp-header {
   position: relative;
   isolation: isolate;
