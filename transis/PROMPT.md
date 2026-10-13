@@ -55,6 +55,7 @@ The routine prompt tells you the **MODE**:
    - Payment rules relative to another date (for example 업로드한 달의 익월 23일) become a date once that other date is known; until then the payment item has `date` `""`.
    - **When unsure, include it in `unclear` rather than leave it out.** For example: an invitation to an event where we have not said whether we attend, an upload date that is still being negotiated, a payment that was promised without a date. A long `unclear` list is acceptable; a missing schedule is not.
    - A proposed date that one side has not confirmed yet (we proposed and they have not replied, or they proposed and we have not answered) still becomes an item with that date (so it is on the calendar and still gets its reminder), with `tentative` `true`, and the thread also goes to `unclear` with the reason `상대 확답 전` or `우리 확답 전`. Once the date is agreed, send the item again with `tentative` `false`.
+   - **Skip work that is already over.** Do not create a new `upload`, `draft` or `shoot` item whose date is before today (Asia/Seoul): it has already happened. If the sheet already has that key, you may still send it to update it. A `pay` item is different: create it even when its date has passed, because 성현 must check the bank; skip it only when the thread says the money arrived (입금 완료, 입금 확인).
    - Never mark anything done. Only 성현 marks items done on the schedule page.
 
    Fields for each item:
