@@ -315,8 +315,8 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   inset: -30px;
   z-index: -2;
   background: var(--tp-card-img) center / cover;
-  filter: blur(30px) saturate(170%);
-  opacity: 0.6;
+  /* Blurred far enough to read as one pastel colour per card, pushed brighter and more saturated (E, 10/13) */
+  filter: blur(70px) saturate(300%) brightness(1.15);
   /* iOS Safari does not clip a blurred layer to its parent's overflow + border-radius, so square corners showed (10/13).
      The layer clips itself instead: back to the card's box (30px in) and its corners (18px minus the 1px border) */
   -webkit-clip-path: inset(30px round 17px);
@@ -328,9 +328,12 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
+  background: rgba(255, 255, 255, 0.32);
 }
 .wp-block-post-template.is-layout-grid .wp-block-post-featured-image { border-radius: 10px; }
+/* The theme's #888 date faded into the coloured cards: translucent black takes on each card's colour, bold keeps it readable */
+.wp-block-post-template.is-layout-grid > li .wp-block-post-date,
+.wp-block-post-template.is-layout-grid > li .wp-block-post-date time { color: rgba(17, 17, 17, 0.6) !important; font-weight: 600; }
 /* Phones: cards replace the divider lines of the row list */
 @media (max-width: 781px) {
   .wp-block-post-template.is-layout-grid { gap: 12px !important; }
