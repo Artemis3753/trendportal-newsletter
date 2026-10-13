@@ -616,34 +616,14 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-/* Glass stage: the editor pick and the contents sit on a soft wash of two colours from the week's cover photo.
-   TP Weekly Lock wraps both in .tp-wk-stage and passes the colours as --tp-wk-t1 / --tp-wk-t2 */
-.wp-block-post-content .tp-wk .tp-wk-stage { position: relative; isolation: isolate; margin-top: 8px; padding: 16px; border-radius: 24px; overflow: hidden; }
-.tp-wk-stage::before {
-  content: "";
-  position: absolute;
-  inset: -40px;
-  z-index: -1;
-  background:
-    radial-gradient(60% 70% at 20% 20%, var(--tp-wk-t1, rgba(190, 190, 190, 0.5)) 0%, transparent 70%),
-    radial-gradient(60% 70% at 85% 75%, var(--tp-wk-t2, rgba(160, 160, 160, 0.5)) 0%, transparent 70%),
-    #f6f6f6;
-}
-.wp-block-post-content .tp-wk .tp-wk-pick,
-.wp-block-post-content .tp-wk .tp-wk-tocbox {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  border-radius: 18px;
-  -webkit-backdrop-filter: blur(20px) saturate(170%);
-  backdrop-filter: blur(20px) saturate(170%);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-}
-.wp-block-post-content .tp-wk .tp-wk-pick { padding: 18px 20px; }
+/* The editor pick and the contents went back to plain boxes (10/13); only the lock box stays glass.
+   TP Weekly Lock still wraps both in .tp-wk-stage, which now has no style of its own */
+.wp-block-post-content .tp-wk .tp-wk-pick { margin-top: 8px; padding: 18px 20px; background: #f1f1f1; border-radius: 12px; }
 .wp-block-post-content .tp-wk-pick ol { padding-left: 18px; font-size: 14px; line-height: 1.8; font-weight: 700; }
 /* Table of contents: each row jumps to its card (#wk-01 ...) */
-.wp-block-post-content .tp-wk .tp-wk-tocbox { margin-top: 20px; padding: 22px 20px 12px; }
+.wp-block-post-content .tp-wk .tp-wk-tocbox { margin-top: 36px; padding-top: 36px; border-top: 1px solid #111; }
 .tp-wk-toc { list-style: none; padding: 0; }
-.tp-wk-toc li { border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.tp-wk-toc li { border-bottom: 1px solid #eee; }
 .tp-wk-toc li:last-child { border-bottom: 0; }
 .tp-wk-toc a { display: flex; gap: 12px; padding: 9px 0; color: #111; font-size: 14px; line-height: 1.5; text-decoration: none; }
 .tp-wk-toc a span { flex: none; width: 22px; font-weight: 800; color: #aaa; }
