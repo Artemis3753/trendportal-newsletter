@@ -86,6 +86,14 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .body b .bn { font-size: inherit; color: var(--bn); }
 .dday { font-family: var(--font-display); font-size: 17px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .dday.late { color: var(--late); }
+/* 오늘 할 일은 D-DAY를 종류 색으로 채운 알약으로 (줄 색 = 종류 색이라 currentColor) */
+.dday.now { padding: 3px 10px; border-radius: 999px; background: currentColor; }
+.dday.now i { font-style: normal; color: #fff; }
+/* 다가오는 일의 날짜 묶음 제목: 지났어요 / 오늘 / 내일 / 일주일 안 / 그 뒤 */
+.group-h { list-style: none; display: flex; align-items: baseline; gap: 6px; margin: 10px 2px 0; font-size: 13px; font-weight: 700; color: var(--ink); }
+.group-h:first-child { margin-top: 0; }
+.group-h small { font-size: 12px; font-weight: 500; color: var(--muted); }
+.group-h.late { color: var(--late); }
 .reply { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--bg); color: var(--muted); font-size: 12.5px; }
 .reply b { color: var(--ink); }
 .empty { color: var(--muted); font-size: 14px; padding: 6px 2px; }
@@ -314,7 +322,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       <button type="button" class="tick${it.done ? ' on' : ''}" data-no="${it.no}" aria-label="${label}" aria-pressed="${it.done}"><span>✓</span></button>
       <span class="no b-${it.type}" aria-hidden="true">${it.no}</span>
       <span class="body"><b>${brandOf(it) ? `<span class="bn" style="--bn: var(--${it.type})">${esc(brandOf(it))}</span> ` : ''}${esc(titleRest(it))}</b><span>${NAME[it.type]} · ${when(it)}${it.tentative && !it.done ? ' · <mark class="tbd-date">확답 전</mark>' : ''}</span>${it.done && doneWhen(it) ? `<span class="done-at">✓ ${doneWhen(it)} 완료</span>` : ''}</span>
-      <span class="dday${late ? ' late' : ''}">${it.done ? '완료' : ddayText(it)}</span>${it.done && it.no ? `
+      ${!it.done && n === 0 ? `<span class="dday now"><i>${ddayText(it)}</i></span>` : `<span class="dday${late ? ' late' : ''}">${it.done ? '완료' : ddayText(it)}</span>`}${it.done && it.no ? `
       <button type="button" class="del" data-del="${it.no}" aria-label="${it.no}번 지우기">${TRASH}</button>` : ''}</li>`;
   };
 
@@ -333,8 +341,21 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     // 날짜가 아직 안 정해진 일정은 '날짜 확인 필요' 칸으로 따로 뺀다 (날짜 없는 메모는 다가오는 일 맨 위에 그대로)
     const tbd = open.filter(i => !i.date && i.type !== 'memo');
     const rest = open.filter(i => i.date || i.type === 'memo');
+    // 날짜 순 목록을 며칠 남았는지로 끊어서 묶음 제목을 단다
+    const shortMd = ymd => { const [, m, d] = ymd.split('-').map(Number); return `${m}/${d} (${DOW[new Date(toUTC(ymd)).getUTCDay()]})`; };
+    const groups = [
+      ['메모', '', i => !i.date],
+      ['지났어요', '', i => i.date && diff(i.date) < 0, 'late'],
+      ['오늘', shortMd(today), i => i.date && diff(i.date) === 0],
+      ['내일', shortMd(seoulYMD(new Date(Date.now() + 86400000))), i => i.date && diff(i.date) === 1],
+      ['일주일 안', '', i => i.date && diff(i.date) >= 2 && diff(i.date) <= 7],
+      ['그 뒤', '', i => i.date && diff(i.date) > 7],
+    ];
     $('todo').innerHTML = rest.length
-      ? rest.map(row).join('')
+      ? groups.map(([name, sub, test, cls]) => {
+          const list = rest.filter(test);
+          return list.length ? `<li class="group-h${cls ? ' ' + cls : ''}">${name}<small>${sub ? sub + ' · ' : ''}${list.length}건</small></li>` + list.map(row).join('') : '';
+        }).join('')
       : '<li class="empty">남은 일이 없어요. 오늘은 스토리만 올리면 끝!</li>';
     $('todo-count').textContent = `${rest.length}건`;
     $('tbd-panel').hidden = !tbd.length;
