@@ -131,9 +131,18 @@ def e(s):
 
 # ---------- 메일 HTML (Gmail은 <style>을 제대로 안 읽어서 전부 인라인 스타일, 표 구조) ----------
 
+def title_html(it):
+    """제목 맨 앞에 브랜드를 종류 색으로 (일정표와 같은 모양). 제목이 이미 브랜드로 시작하면 한 번만"""
+    b = it.get('brand') if it['type'] != 'memo' else ''
+    t = str(it.get('title') or '')
+    if not b:
+        return e(t)
+    rest = t[len(b):].strip() if t.startswith(b) else t
+    return f'<span style="color:{COLOR[it["type"]][0]};">{e(b)}</span> {e(rest)}'
+
+
 def card(it, t):
     c, soft = COLOR[it['type']]
-    brand = f"{e(it['brand'])} · " if it.get('brand') and it['type'] != 'memo' else ''
     late = bool(it.get('date')) and (d_of(it['date']) - t).days < 0
     pay = ''
     if it['type'] == 'pay' and (it.get('payer') or it.get('amount')):
@@ -153,8 +162,8 @@ def card(it, t):
         f'line-height:32px;border-radius:10px;background:{c};color:#ffffff;font-weight:800;font-size:16px;'
         f'text-align:center;">{it["no"]}</div></td>'
         f'<td style="padding:12px 8px;vertical-align:top;">'
-        f'<div style="font-size:15px;font-weight:700;line-height:1.4;">{e(it["title"])}</div>'
-        f'<div style="font-size:12.5px;color:#7b7e8c;">{brand}{NAME[it["type"]]} · {when_html(it)}</div>{pay}{src}</td>'
+        f'<div style="font-size:15px;font-weight:700;line-height:1.4;">{title_html(it)}</div>'
+        f'<div style="font-size:12.5px;color:#7b7e8c;">{NAME[it["type"]]} · {when_html(it)}</div>{pay}{src}</td>'
         f'<td width="72" style="padding:12px 12px 12px 0;vertical-align:top;text-align:right;font-size:16px;'
         f'font-weight:800;color:{"#e5484d" if late else c};white-space:nowrap;">{dday(it, t)}</td>'
         f'</tr></table>'

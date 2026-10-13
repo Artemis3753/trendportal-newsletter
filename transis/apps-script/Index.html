@@ -82,6 +82,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .body { min-width: 0; color: var(--ink); }
 .body b { display: block; font-size: 15px; line-height: 1.4; }
 .body span { font-size: 12.5px; color: var(--muted); }
+/* 제목 맨 앞 브랜드: 종류 색으로 (업로드 초록, 초안 빨강 …) */
+.body b .bn { font-size: inherit; color: var(--bn); }
 .dday { font-family: var(--font-display); font-size: 17px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .dday.late { color: var(--late); }
 .reply { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--bg); color: var(--muted); font-size: 12.5px; }
@@ -300,6 +302,9 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     return `${m}/${dd} (${DOW[new Date(toUTC(d)).getUTCDay()]}) ${it.doneAt.slice(11, 16)}${it.doneBy ? ' · ' + esc(it.doneBy) : ''}`;
   };
   const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+  // 제목이 이미 브랜드명으로 시작하면 한 번만 보이게 떼어 낸다 ("집반찬연구소 집반찬연구소 …" 방지)
+  const brandOf = it => it.type !== 'memo' && it.brand ? it.brand : '';
+  const titleRest = it => { const b = brandOf(it), t = String(it.title); return b && t.indexOf(b) === 0 ? t.slice(b.length).trim() : t; };
   const row = it => {
     const n = it.date ? diff(it.date) : Infinity;
     const alert = !it.done && n <= LEAD[it.type];
@@ -308,7 +313,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     return `<li class="item${alert ? ' alert' : ''}${it.done ? ' is-done' : ''}${saving.has(it.no) ? ' saving' : ''}"${alert ? ` style="color: var(--${it.type})"` : ''}>
       <button type="button" class="tick${it.done ? ' on' : ''}" data-no="${it.no}" aria-label="${label}" aria-pressed="${it.done}"><span>✓</span></button>
       <span class="no b-${it.type}" aria-hidden="true">${it.no}</span>
-      <span class="body"><b>${esc(it.title)}</b><span>${it.type !== 'memo' && it.brand ? esc(it.brand) + ' · ' : ''}${NAME[it.type]} · ${when(it)}${it.tentative && !it.done ? ' · <mark class="tbd-date">확답 전</mark>' : ''}</span>${it.done && doneWhen(it) ? `<span class="done-at">✓ ${doneWhen(it)} 완료</span>` : ''}</span>
+      <span class="body"><b>${brandOf(it) ? `<span class="bn" style="--bn: var(--${it.type})">${esc(brandOf(it))}</span> ` : ''}${esc(titleRest(it))}</b><span>${NAME[it.type]} · ${when(it)}${it.tentative && !it.done ? ' · <mark class="tbd-date">확답 전</mark>' : ''}</span>${it.done && doneWhen(it) ? `<span class="done-at">✓ ${doneWhen(it)} 완료</span>` : ''}</span>
       <span class="dday${late ? ' late' : ''}">${it.done ? '완료' : ddayText(it)}</span>${it.done && it.no ? `
       <button type="button" class="del" data-del="${it.no}" aria-label="${it.no}번 지우기">${TRASH}</button>` : ''}</li>`;
   };
