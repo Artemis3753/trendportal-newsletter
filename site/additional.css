@@ -297,47 +297,41 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   .wp-block-post-template.is-layout-grid .wp-block-post-terms { font-size: 0.75rem !important; }
 }
 
-/* Tone cards: each post is a frosted glass card over its own photo, blurred big, so every card carries its photo's colour.
-   TP Card Tone passes the photo as --tp-card-img; without it the card is plain white */
+/* Glass cards: every post card is the same clear frosted glass (B, 10/13). The photo-tone colours were dropped:
+   cards with similar colours read as the same category. TP Card Tone still sets --tp-card-img, now unused here.
+   Glass needs something behind it, so the list sits on a light grey stage with soft greyscale blobs.
+   The stage reaches 14px past the column on each side, so its padding does not narrow the cards */
+.wp-block-post-template.is-layout-grid {
+  width: calc(100% + 28px);
+  max-width: none !important;
+  margin-left: -14px !important;
+  margin-right: -14px !important;
+  padding: 14px !important;
+  border-radius: 26px;
+  background:
+    radial-gradient(40% 30% at 15% 12%, #c9c9cf 0%, transparent 70%),
+    radial-gradient(45% 28% at 90% 45%, #d6d6db 0%, transparent 70%),
+    radial-gradient(40% 30% at 20% 85%, #cfcfd4 0%, transparent 70%),
+    #f2f2f4;
+}
 .wp-block-post-template.is-layout-grid > li {
   position: relative;
-  isolation: isolate;
-  overflow: hidden;
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: 18px;
-  background: #fff;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.34));
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.07);
 }
-.wp-block-post-template.is-layout-grid > li::before {
-  content: "";
-  position: absolute;
-  inset: -30px;
-  z-index: -2;
-  background: var(--tp-card-img) center / cover;
-  /* Blurred far enough to read as one pastel colour per card, pushed brighter and more saturated (E, 10/13) */
-  filter: blur(70px) saturate(300%) brightness(1.15);
-  /* iOS Safari does not clip a blurred layer to its parent's overflow + border-radius, so square corners showed (10/13).
-     The layer clips itself instead: back to the card's box (30px in) and its corners (18px minus the 1px border) */
-  -webkit-clip-path: inset(30px round 17px);
-  clip-path: inset(30px round 17px);
-}
-.wp-block-post-template.is-layout-grid > li::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: rgba(255, 255, 255, 0.32);
-}
 .wp-block-post-template.is-layout-grid .wp-block-post-featured-image { border-radius: 10px; }
-/* The theme's #888 date faded into the coloured cards: translucent black takes on each card's colour, bold keeps it readable */
+/* The date reads darker than the theme's #888: translucent black, bold */
 .wp-block-post-template.is-layout-grid > li .wp-block-post-date,
 .wp-block-post-template.is-layout-grid > li .wp-block-post-date time { color: rgba(17, 17, 17, 0.6) !important; font-weight: 600; }
 /* Phones: cards replace the divider lines of the row list */
 @media (max-width: 781px) {
   .wp-block-post-template.is-layout-grid { gap: 12px !important; }
-  .wp-block-post-template.is-layout-grid > li { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.9); }
+  .wp-block-post-template.is-layout-grid > li { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.85); }
 }
 
 /* ---------- Home: series sections (weekly, tp1000) ---------- */
