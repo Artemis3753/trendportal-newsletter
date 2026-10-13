@@ -291,12 +291,17 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   background: var(--tp-card-img) center / cover;
   filter: blur(30px) saturate(170%);
   opacity: 0.6;
+  /* iOS Safari does not clip a blurred layer to its parent's overflow + border-radius, so square corners showed (10/13).
+     The layer clips itself instead: back to the card's box (30px in) and its corners (18px minus the 1px border) */
+  -webkit-clip-path: inset(30px round 17px);
+  clip-path: inset(30px round 17px);
 }
 .wp-block-post-template.is-layout-grid > li::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
+  border-radius: inherit;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
 }
 .wp-block-post-template.is-layout-grid .wp-block-post-featured-image { border-radius: 10px; }
