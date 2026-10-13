@@ -83,6 +83,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .reply { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--bg); color: var(--muted); font-size: 12.5px; }
 .reply b { color: var(--ink); }
 .empty { color: var(--muted); font-size: 14px; padding: 6px 2px; }
+/* '시간 미정'은 노란 형광펜으로: 시간을 아직 확인해야 한다는 표시 */
+.tbd { padding: 0 4px; border-radius: 4px; background: var(--today); color: var(--ink); font-weight: 700; }
 
 /* 달력: 7칸, 날마다 그날 일의 색 점, 누르면 아래에 그날 목록 */
 .cal-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -232,7 +234,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
   const diff = ymd => Math.round((toUTC(ymd) - toUTC(today)) / 86400000);
   const md = ymd => { const [, m, d] = ymd.split('-').map(Number); return `${m}월 ${d}일 (${DOW[new Date(toUTC(ymd)).getUTCDay()]})`; };
   // 날짜 없는 메모는 '날짜 없음'으로, 메모는 시각이 없으면 그냥 날짜만
-  const when = it => !it.date ? '날짜 없음' : `${md(it.date)} ${it.type === 'pay' ? '입금 예정' : (it.time || (it.type === 'memo' ? '' : '시간 미정'))}`.trim();
+  const when = it => !it.date ? '날짜 없음' : `${md(it.date)} ${it.type === 'pay' ? '입금 예정' : (it.time || (it.type === 'memo' ? '' : '<mark class="tbd">시간 미정</mark>'))}`.trim();
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const byTime = (a, b) => (a.time || '99').localeCompare(b.time || '99');
 

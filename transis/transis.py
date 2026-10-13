@@ -103,6 +103,11 @@ def sort_key(it):
     return (it.get('date') or '0000', it.get('time') or '99', it['no'])
 
 
+# '시간 미정'은 노란 형광펜으로 (시간을 아직 확인해야 한다는 표시)
+TBD = ('<span style="background:#fff1a8;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
+       '시간 미정</span>')
+
+
 def e(s):
     return html.escape(str(s or ''))
 
@@ -131,7 +136,7 @@ def card(it, t):
         f'text-align:center;">{it["no"]}</div></td>'
         f'<td style="padding:12px 8px;vertical-align:top;">'
         f'<div style="font-size:15px;font-weight:700;line-height:1.4;">{e(it["title"])}</div>'
-        f'<div style="font-size:12.5px;color:#7b7e8c;">{NAME[it["type"]]} · {when(it)}</div>{pay}{src}</td>'
+        f'<div style="font-size:12.5px;color:#7b7e8c;">{NAME[it["type"]]} · {when(it).replace("시간 미정", TBD)}</div>{pay}{src}</td>'
         f'<td width="72" style="padding:12px 12px 12px 0;vertical-align:top;text-align:right;font-size:16px;'
         f'font-weight:800;color:{"#e5484d" if late else c};white-space:nowrap;">{dday(it, t)}</td>'
         f'</tr></table>'
