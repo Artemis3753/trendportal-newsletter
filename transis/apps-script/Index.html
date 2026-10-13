@@ -15,6 +15,8 @@
   --muted: #7b7e8c;
   --line: #e6e8ef;
   --today: #fff1a8;
+  /* 형광펜 두 가지: 시간 미정 = 노랑(--today), 일정(날짜) 미정 = 라벤더 */
+  --tbd-date: #e4d9ff;
   /* 종류별 색 (10/13 성현 님 지정): 초안·기획안 빨강 · 촬영 파랑 · 업로드 초록 · 입금 금색 */
   --upload: #1fa971;  --upload-soft: #d9f3e7;
   --draft: #ec4a5a;   --draft-soft: #ffe2e5;
@@ -27,14 +29,14 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #15161b; --card: #1f2027; --ink: #eceef4; --muted: #9a9dab; --line: #2e3039; --today: #5a4d12;
+    --bg: #15161b; --card: #1f2027; --ink: #eceef4; --muted: #9a9dab; --line: #2e3039; --today: #5a4d12; --tbd-date: #3d3166;
     --upload: #3cc98f; --upload-soft: #173a2c; --draft: #ff6b79; --draft-soft: #3d2126;
     --shoot: #6aa4ff; --shoot-soft: #1c2b45; --pay: #e2bd4f; --pay-soft: #3a3217; --memo: #a3a7b6; --memo-soft: #2b2d36; --late: #ff6b6f;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #15161b; --card: #1f2027; --ink: #eceef4; --muted: #9a9dab; --line: #2e3039; --today: #5a4d12;
+  --bg: #15161b; --card: #1f2027; --ink: #eceef4; --muted: #9a9dab; --line: #2e3039; --today: #5a4d12; --tbd-date: #3d3166;
   --upload: #3cc98f; --upload-soft: #173a2c; --draft: #ff6b79; --draft-soft: #3d2126;
   --shoot: #6aa4ff; --shoot-soft: #1c2b45; --pay: #e2bd4f; --pay-soft: #3a3217; --memo: #a3a7b6; --memo-soft: #2b2d36; --late: #ff6b6f;
   color-scheme: dark;
@@ -84,7 +86,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .reply b { color: var(--ink); }
 .empty { color: var(--muted); font-size: 14px; padding: 6px 2px; }
 /* '미정'은 노란 형광펜으로: 시간을 아직 확인해야 한다는 표시 */
-.tbd { padding: 0 4px; border-radius: 4px; background: var(--today); color: var(--ink); font-weight: 700; }
+.tbd, .tbd-date { padding: 0 4px; border-radius: 4px; background: var(--today); color: var(--ink); font-weight: 700; }
+.tbd-date { background: var(--tbd-date); }
+/* 다가오는 일 안의 묶음 제목 (일정 미정) */
+.group-h { list-style: none; margin: 4px 2px 0; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.group-h:first-child { margin-top: 0; }
 
 /* 달력: 7칸, 날마다 그날 일의 색 점, 누르면 아래에 그날 목록 */
 .cal-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -114,10 +120,16 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .daylist { margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); }
 .daylist h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 700; }
 
-/* 완료: 흐리게, 줄 긋기 */
-.done-list .item { opacity: 0.55; }
-.done-list .body b { text-decoration: line-through; text-decoration-thickness: 1.5px; }
-.done-list .dday { font-size: 13px; font-family: var(--font-body); color: var(--muted); }
+/* 완료: 흐리게, 줄 긋기 — 완료 목록이든 달력 아래 그날 목록이든 똑같이 */
+.item.is-done { opacity: 0.55; filter: saturate(0.35); grid-template-columns: auto auto 1fr auto auto; }
+.done-at { display: block; color: var(--upload) !important; font-weight: 700; }
+.item.is-done .body b { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.item.is-done .dday { font-size: 13px; font-family: var(--font-body); color: var(--muted); }
+/* 완료한 일 지우기 (휴지통) */
+.del { width: 32px; height: 32px; margin: -4px -4px -4px 0; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; padding: 0; }
+.del:hover { background: var(--bg); color: var(--late); }
+.del:focus-visible { outline: 2px solid var(--late); outline-offset: 0; }
+.del svg { width: 17px; height: 17px; }
 
 .cols { display: grid; gap: 18px; }
 @media (min-width: 760px) {
@@ -148,11 +160,24 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .memo-form button { flex: 0 0 auto; height: 40px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--ink); color: var(--card); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 .memo-form input:focus-visible, .memo-form button:focus-visible { outline: 2px solid var(--shoot); outline-offset: 1px; }
 .toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 10px 14px 10px 16px; border-radius: 14px; background: var(--ink); color: var(--card); font-size: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+.me { margin: 0; text-align: center; font-size: 12px; color: var(--muted); }
+.me button { border: 0; background: none; color: var(--ink); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 2px; }
+/* 누가 완료했는지 물어보는 작은 창 (기기마다 처음 한 번) */
+.who { border: 0; border-radius: 20px; padding: 18px; width: min(320px, calc(100% - 32px)); background: var(--card); color: var(--ink); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3); }
+.who::backdrop { background: rgba(20, 22, 40, 0.35); }
+.who p { margin: 0 0 12px; font-family: var(--font-display); font-size: 19px; }
+.who p small { display: block; font-family: var(--font-body); font-size: 12.5px; color: var(--muted); }
+.who-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.who button, .who input { height: 42px; border-radius: 12px; font: inherit; font-size: 15px; }
+.who-btns button { border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); font-weight: 700; cursor: pointer; }
+.who-row { display: flex; gap: 6px; }
+.who input { flex: 1; min-width: 0; padding: 0 12px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
+.who-row button { border: 0; padding: 0 14px; background: var(--ink); color: var(--card); font-weight: 700; cursor: pointer; }
 .toast button { border: 0; background: none; color: var(--today); font: inherit; font-weight: 800; cursor: pointer; padding: 4px; }
 </style>
 </head>
 <body>
-<!-- 서버(Code.gs)가 공개해도 되는 칸만 넣어 준다: no, type, brand, title, date, time, done -->
+<!-- 서버(Code.gs)가 공개해도 되는 칸만 넣어 준다: no, type, brand, title, date, time, done, doneAt, doneBy -->
 <script type="application/json" id="tpos-data"><?!= dataJson ?></script>
 
 <div class="wrap">
@@ -219,7 +244,16 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     <h2 id="done-h">완료 <small id="done-count"></small></h2>
     <ul class="todo" id="done"></ul>
   </section>
+  <p class="me" id="me" hidden></p>
 </div>
+
+<dialog class="who" id="who">
+  <form method="dialog">
+    <p>누가 완료했나요?<small>이 기기에 기억해 두고, 완료 시각 옆에 이름을 남겨요</small></p>
+    <div class="who-btns"><button value="성현">성현</button><button value="예진">예진</button></div>
+    <div class="who-row"><input id="who-other" maxlength="20" placeholder="다른 이름" aria-label="다른 이름"><button value="other">확인</button></div>
+  </form>
+</dialog>
 
 <div class="toast" id="toast" role="status" hidden><span id="toast-msg"></span><button type="button" id="toast-undo">되돌리기</button></div>
 
@@ -237,28 +271,36 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
   const toUTC = ymd => { const [y, m, d] = ymd.split('-').map(Number); return Date.UTC(y, m - 1, d); };
   const diff = ymd => Math.round((toUTC(ymd) - toUTC(today)) / 86400000);
   const md = ymd => { const [, m, d] = ymd.split('-').map(Number); return `${m}월 ${d}일 (${DOW[new Date(toUTC(ymd)).getUTCDay()]})`; };
-  // 날짜 없는 메모는 '날짜 없음'으로, 메모는 시각이 없으면 그냥 날짜만
-  const when = it => !it.date ? '날짜 없음' : `${md(it.date)} ${it.type === 'pay' ? '입금 예정' : (it.time || (it.type === 'memo' ? '' : '시간 <mark class="tbd">미정</mark>'))}`.trim();
+  // 날짜 없는 메모는 '날짜 없음', 날짜 없는 일정은 '일정 미정'(라벤더), 시각 없는 일정은 '시간 미정'(노랑)
+  const when = it => !it.date ? (it.type === 'memo' ? '날짜 없음' : '일정 <mark class="tbd-date">미정</mark>') : `${md(it.date)} ${it.type === 'pay' ? '입금 예정' : (it.time || (it.type === 'memo' ? '' : '시간 <mark class="tbd">미정</mark>'))}`.trim();
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const byTime = (a, b) => (a.time || '99').localeCompare(b.time || '99');
 
   const ddayText = it => {
-    if (!it.date) return '메모';
+    if (!it.date) return it.type === 'memo' ? '메모' : '미정';
     const n = diff(it.date);
     if (it.type === 'pay') return n > 0 ? `입금 D-${n}` : n === 0 ? '입금 오늘' : '입금 확인';
     return n > 0 ? `D-${n}` : n === 0 ? 'D-DAY' : `${-n}일 지남`;
   };
   const saving = new Set();
+  // 완료 시각: "10/14 (수) 08:12 · 성현"
+  const doneWhen = it => {
+    if (!it.doneAt) return '';
+    const d = it.doneAt.slice(0, 10), [, m, dd] = d.split('-').map(Number);
+    return `${m}/${dd} (${DOW[new Date(toUTC(d)).getUTCDay()]}) ${it.doneAt.slice(11, 16)}${it.doneBy ? ' · ' + esc(it.doneBy) : ''}`;
+  };
+  const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
   const row = it => {
     const n = it.date ? diff(it.date) : Infinity;
     const alert = !it.done && n <= LEAD[it.type];
     const late = !it.done && n < 0;
     const label = it.done ? `${it.no}번 완료 취소` : `${it.no}번 완료로 표시`;
-    return `<li class="item${alert ? ' alert' : ''}${saving.has(it.no) ? ' saving' : ''}"${alert ? ` style="color: var(--${it.type})"` : ''}>
+    return `<li class="item${alert ? ' alert' : ''}${it.done ? ' is-done' : ''}${saving.has(it.no) ? ' saving' : ''}"${alert ? ` style="color: var(--${it.type})"` : ''}>
       <button type="button" class="tick${it.done ? ' on' : ''}" data-no="${it.no}" aria-label="${label}" aria-pressed="${it.done}"><span>✓</span></button>
       <span class="no b-${it.type}" aria-hidden="true">${it.no}</span>
-      <span class="body"><b>${esc(it.title)}</b><span>${it.type !== 'memo' && it.brand ? esc(it.brand) + ' · ' : ''}${NAME[it.type]} · ${when(it)}</span></span>
-      <span class="dday${late ? ' late' : ''}">${it.done ? '완료' : ddayText(it)}</span></li>`;
+      <span class="body"><b>${esc(it.title)}</b><span>${it.type !== 'memo' && it.brand ? esc(it.brand) + ' · ' : ''}${NAME[it.type]} · ${when(it)}</span>${it.done && doneWhen(it) ? `<span class="done-at">✓ ${doneWhen(it)} 완료</span>` : ''}</span>
+      <span class="dday${late ? ' late' : ''}">${it.done ? '완료' : ddayText(it)}</span>${it.done && it.no ? `
+      <button type="button" class="del" data-del="${it.no}" aria-label="${it.no}번 지우기">${TRASH}</button>` : ''}</li>`;
   };
 
   let [vy, vm] = today.split('-').map(Number);
@@ -273,7 +315,14 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     $('updated').textContent = data.updatedAt
       ? `${new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(data.updatedAt))} 트란시스가 정리했어요`
       : '아직 정리한 일정이 없어요';
-    $('todo').innerHTML = open.length ? open.map(row).join('') : '<li class="empty">남은 일이 없어요. 오늘은 스토리만 올리면 끝!</li>';
+    // 날짜가 아직 안 정해진 일정은 맨 위에 따로 묶는다 (날짜 없는 메모는 그 위)
+    const tbd = open.filter(i => !i.date && i.type !== 'memo');
+    const rest = open.filter(i => i.date || i.type === 'memo');
+    $('todo').innerHTML = open.length
+      ? rest.filter(i => !i.date).map(row).join('')
+        + (tbd.length ? `<li class="group-h">일정 미정 ${tbd.length}건 · 날짜가 정해지면 트란시스가 채워요</li>` + tbd.map(row).join('') + (rest.some(i => i.date) ? '<li class="group-h">날짜 순</li>' : '') : '')
+        + rest.filter(i => i.date).map(row).join('')
+      : '<li class="empty">남은 일이 없어요. 오늘은 스토리만 올리면 끝!</li>';
     $('todo-count').textContent = `${open.length}건`;
     $('done').innerHTML = done.length ? done.map(row).join('') : '<li class="empty">아직 완료한 일이 없어요.</li>';
     $('done-count').textContent = `${done.length}건`;
@@ -298,10 +347,13 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     const dl = byDay[sel] || [];
     $('day-h').textContent = md(sel) + (sel === today ? ' · 오늘' : '');
     $('daylist').innerHTML = dl.length ? dl.map(row).join('') : '<li class="empty">이날은 일정이 없어요.</li>';
+    const me = myName();
+    $('me').hidden = !me;
+    if (me) $('me').innerHTML = `이 기기에서 완료 표시하는 사람: <b>${esc(me)}</b> <button type="button" id="me-change">바꾸기</button>`;
   }
 
-  // 알림: 3.5초 뒤 사라짐, 되돌리기를 누르면 방금 바꾼 것을 반대로
-  let toastTimer, lastToggle = null;
+  // 알림: 3.5초 뒤 사라짐, 되돌리기를 누르면 방금 한 일을 반대로
+  let toastTimer, undoLast = null;
   function toast(msg, undo) {
     $('toast-msg').textContent = msg;
     $('toast-undo').hidden = !undo;
@@ -311,18 +363,55 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
   }
 
   // ✓: 화면을 먼저 바꾸고(바로 반응) 시트 저장이 실패하면 되돌린다
-  function setDone(no, done) {
+  // 이름은 이 기기(브라우저)에만 기억한다. 저장소가 막힌 브라우저면 매번 묻지 않고 이름 없이 저장
+  const myName = () => { try { return localStorage.getItem('transis-name') || ''; } catch (e) { return ''; } };
+  const saveName = n => { try { localStorage.setItem('transis-name', n); } catch (e) {} };
+  function askName(then) {
+    const dlg = $('who');
+    if (!dlg.showModal) { then(myName()); return; }
+    $('who-other').value = '';
+    dlg.onclose = () => {
+      const v = dlg.returnValue === 'other' ? $('who-other').value.trim() : dlg.returnValue;
+      if (v) saveName(v);
+      then(myName());
+    };
+    dlg.returnValue = '';
+    dlg.showModal();
+  }
+
+  function setDone(no, done, asked) {
     const it = data.items.filter(x => x.no === no)[0];
     if (!it || saving.has(no)) return;
+    // 이름을 아직 모르면 한 번 묻는다 (창을 그냥 닫으면 이름 없이 저장)
+    if (done && !myName() && !asked) { askName(() => setDone(no, done, true)); return; }
+    const by = myName();
     it.done = done;
+    // 시트 저장을 기다리지 않고 완료 시각을 바로 보여 준다 (저장되면 시트 시각으로 바뀜)
+    it.doneAt = done ? new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 19) + '+09:00' : '';
+    it.doneBy = done ? by : '';
     saving.add(no);
     render();
-    lastToggle = { no, done };
+    undoLast = () => setDone(no, !done);
     toast(done ? `${no}번을 완료로 옮겼어요` : `${no}번을 다시 할 일로 옮겼어요`, true);
     google.script.run
       .withSuccessHandler(fresh => { saving.delete(no); data = fresh; render(); })
       .withFailureHandler(() => { saving.delete(no); it.done = !done; render(); toast('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요', false); })
-      .markDone(no, done);
+      .markDone(no, done, by);
+  }
+
+  // 지우기: 완료한 일만. 시트에서는 '삭제 표시'라서 되돌릴 수 있고, 트란시스가 다시 넣지도 않는다
+  function remove(no, removed) {
+    const it = data.items.filter(x => x.no === no)[0];
+    if (removed && (!it || saving.has(no))) return;
+    const before = data.items;
+    if (removed) data.items = data.items.filter(x => x.no !== no);
+    render();
+    undoLast = removed ? () => remove(no, false) : null;
+    toast(removed ? `${no}번을 지웠어요` : `${no}번을 되살렸어요`, removed);
+    google.script.run
+      .withSuccessHandler(fresh => { data = fresh; render(); })
+      .withFailureHandler(() => { data.items = before; render(); toast('지우지 못했어요. 잠시 뒤 다시 눌러 주세요', false); })
+      .removeItem(no, removed);
   }
 
   $('memo-form').addEventListener('submit', e => {
@@ -344,10 +433,13 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
   document.addEventListener('click', e => {
     const t = e.target.closest('.tick');
     if (t) { const no = Number(t.dataset.no); const it = data.items.filter(x => x.no === no)[0]; if (it) setDone(no, !it.done); return; }
+    const del = e.target.closest('.del');
+    if (del) { remove(Number(del.dataset.del), true); return; }
+    if (e.target.closest('#me-change')) { askName(() => render()); return; }
     const b = e.target.closest('button[data-d]');
     if (b) { sel = b.dataset.d; render(); }
   });
-  $('toast-undo').addEventListener('click', () => { if (lastToggle) setDone(lastToggle.no, !lastToggle.done); });
+  $('toast-undo').addEventListener('click', () => { const u = undoLast; undoLast = null; $('toast').hidden = true; if (u) u(); });
   const shift = k => { vm += k; if (vm < 1) { vm = 12; vy--; } if (vm > 12) { vm = 1; vy++; } render(); };
   $('prev').addEventListener('click', () => shift(-1));
   $('next').addEventListener('click', () => shift(1));

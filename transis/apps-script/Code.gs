@@ -6,14 +6,18 @@
  *  2. 트란시스가 일정 보내기: doPost(JSON + 비밀 토큰) → 시트에 추가·갱신
  *  3. 트란시스가 현재 상태 읽기: doGet?api=items&token=... → 완료 여부까지 담긴 전체 목록
  *
+ * 날짜(date)가 빈 일정 = '일정 미정'. 메일에 일정은 있는데 날짜가 아직 안 정해진 것도 빠뜨리지 않고 남기기 위해서다.
+ * 삭제는 행을 지우지 않고 removed 표시만 한다. 행을 지우면 다음 날 트란시스가 같은 메일을 읽고 다시 넣어 버리기 때문.
+ *
  * 공개 화면에는 PUBLIC_FIELDS만 보낸다. 입금자명·금액·원본 메일 제목은 시트와 트란시스(메일)에만 있다.
  */
 
 const SHEET = 'items';
 const META = 'meta';
 // key = 원본 메일 스레드 id. 같은 메일에서 뽑은 일정이 두 번 들어가지 않게 하는 이름표
-const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt'];
-const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done'];
+// 새 칸은 맨 뒤에만 붙인다 (이미 쌓인 시트의 칸 순서가 어긋나지 않게)
+const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt', 'doneBy', 'removed'];
+const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'doneBy'];
 const TYPES = ['upload', 'draft', 'shoot', 'pay'];
 // 메모: 성현 님이 일정표에서 직접 적는 할 일. 트란시스는 보내지도 바꾸지도 않는다(key가 'memo-'로 시작)
 const MEMO = 'memo';
@@ -61,7 +65,8 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   if (p.api === 'items') {
     if (!checkToken_(p.token)) return json_({ ok: false, error: 'bad token' });
-    return json_({ ok: true, updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')), items: readItems_() });
+    return json_({ ok: true, updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')),
+                   fullScanAt: getMeta_('fullScanAt'), items: readItems_() });
   }
   const t = HtmlService.createTemplateFromFile('Index');
   // </script> 같은 글자가 들어와도 스크립트가 끊기지 않게 '<'를 바꿔서 넣는다
@@ -72,8 +77,10 @@ function doGet(e) {
 }
 
 /**
- * 트란시스가 일정을 보낸다: { token, updatedAt, reset?, items: [{ key, type, brand, title, date, time?, source?, payer?, amount?, done? }] }
- * - 같은 key가 있으면 내용만 갱신하고 번호·완료 여부는 그대로 둔다 (성현 님이 누른 ✓를 덮어쓰지 않게)
+ * 트란시스가 일정을 보낸다: { token, updatedAt, reset?, scan?, items: [{ key, type, brand, title, date, time?, source?, payer?, amount?, done? }] }
+ * - date는 YYYY-MM-DD 또는 ''(일정 미정)
+ * - 같은 key가 있으면 내용만 갱신하고 번호·완료·삭제 여부는 그대로 둔다 (성현 님이 누른 ✓·삭제를 덮어쓰지 않게)
+ * - scan: 'FULL'이면 전체 훑기를 마친 시각을 남긴다 (다음부터는 최근 메일만 읽어도 되는지 판단용)
  * - 새 key면 다음 번호를 붙인다
  * - reset: true면 예시 일정을 지우고 새로 시작한다 (첫 실제 실행 때 한 번)
  */
@@ -97,8 +104,8 @@ function doPost(e) {
 
     (body.items || []).forEach((raw, i) => {
       const it = clean_(raw);
-      if (!it.key || TYPES.indexOf(it.type) < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(it.date)) {
-        errors.push('item ' + i + ': key, type(' + TYPES.join('/') + ') and date(YYYY-MM-DD) are required');
+      if (!it.key || TYPES.indexOf(it.type) < 0 || (it.date && !/^\d{4}-\d{2}-\d{2}$/.test(it.date))) {
+        errors.push('item ' + i + ': key and type(' + TYPES.join('/') + ') are required; date must be YYYY-MM-DD or empty');
         return;
       }
       const old = byKey[it.key];
@@ -119,27 +126,28 @@ function doPost(e) {
     writeItems_(items);
     setMeta_('updatedAt', body.updatedAt || now_());
     setMeta_('sample', body.reset ? 'false' : getMeta_('sample') || 'false');
+    if (body.scan === 'FULL' && errors.length === 0) setMeta_('fullScanAt', now_());
     return json_({ ok: errors.length === 0, errors: errors, items: readItems_() });
   } finally {
     lock.releaseLock();
   }
 }
 
-/** 일정표의 ✓ 버튼. 화면은 결과를 받아 다시 그린다 */
-function markDone(no, done) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    const items = readItems_();
-    const it = items.filter(x => x.no === Number(no))[0];
-    if (!it) throw new Error('no such item: ' + no);
+/** 일정표의 ✓ 버튼. by = 누른 사람 이름(그 기기에 기억해 둔 것). 화면은 결과를 받아 다시 그린다 */
+function markDone(no, done, by) {
+  return editItem_(no, it => {
     it.done = done === true;
     it.doneAt = it.done ? now_() : '';
-    writeItems_(items);
-    return publicData_();
-  } finally {
-    lock.releaseLock();
-  }
+    it.doneBy = it.done ? String(by || '').trim().slice(0, 20) : '';
+  });
+}
+
+/** 완료 목록의 삭제 버튼. 끝낸 일만 지울 수 있다. removed = false면 되돌리기 */
+function removeItem(no, removed) {
+  return editItem_(no, it => {
+    if (removed !== false && !it.done) throw new Error('only done items can be removed');
+    it.removed = removed !== false;
+  });
 }
 
 /** 일정표의 메모 칸: 글(필수)과 날짜·시각(선택)으로 회색 메모 일정을 만든다 */
@@ -164,6 +172,21 @@ function addMemo(text, date, time) {
   }
 }
 
+function editItem_(no, change) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const items = readItems_();
+    const it = items.filter(x => x.no === Number(no))[0];
+    if (!it) throw new Error('no such item: ' + no);
+    change(it);
+    writeItems_(items);
+    return publicData_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /** 화면을 다시 열거나 돌아왔을 때 최신 상태를 받아 간다 */
 function getPublicData() {
   return publicData_();
@@ -172,7 +195,7 @@ function getPublicData() {
 // ---------- 내부 함수 ----------
 
 function publicData_() {
-  const items = readItems_().map(it => {
+  const items = readItems_().filter(it => !it.removed).map(it => {
     const o = {};
     PUBLIC_FIELDS.forEach(f => { o[f] = it[f]; });
     return o;
@@ -189,17 +212,20 @@ function readItems_() {
     FIELDS.forEach((f, i) => { o[f] = r[i]; });
     o.no = Number(o.no);
     o.done = isTrue_(o.done);
+    o.removed = isTrue_(o.removed);
     return o;
   });
 }
 
 function writeItems_(items) {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET);
+  // 머리줄도 매번 맞춘다 (칸이 늘어난 뒤 처음 저장할 때 새 칸 이름이 생기게)
+  sh.getRange(1, 1, 1, FIELDS.length).setValues([FIELDS]).setFontWeight('bold');
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, FIELDS.length).clearContent();
   if (!items.length) return;
   items.sort((a, b) => a.no - b.no);
   const rows = items.map(it => FIELDS.map(f => {
-    if (f === 'done') return it.done ? 'true' : 'false';
+    if (f === 'done' || f === 'removed') return it[f] ? 'true' : 'false';
     return it[f] === undefined || it[f] === null ? '' : String(it[f]);
   }));
   sh.getRange(2, 1, rows.length, FIELDS.length).setNumberFormat('@').setValues(rows);

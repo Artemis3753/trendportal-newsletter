@@ -3,7 +3,7 @@
 메일을 읽고 일정을 뽑는 일(판단이 필요한 일)은 트란시스(Claude)가 하고,
 이 스크립트는 그 결과를 받아 시트에 보내고, D-day로 고르고, 메일 HTML을 만든다.
 
-    python3 transis/transis.py state                 # 시트의 지금 일정 (중복 판단용, 금액·입금자명은 뺌)
+    python3 transis/transis.py state                 # 이번에 읽을 범위(FULL/DAILY) + 시트의 지금 일정 (금액·입금자명은 뺌)
     python3 transis/transis.py run extracted.json    # 시트에 보내기 → 다시 읽기 → 고르기 → /tmp/transis/에 메일 파일
 
 환경 변수 TRANSIS_URL(웹앱 주소), TRANSIS_TOKEN(비밀 열쇠)이 필요하다. 둘 다 출력하지 않는다.
@@ -25,6 +25,8 @@ NAME = {'upload': '업로드', 'draft': '초안·기획안', 'shoot': '방문 �
 # 성현 님이 정한 미리 알림: 업로드 하루 전, 초안·기획안 3일 전, 방문 촬영 3일 전, 정산은 입금 확인될 때까지 매일
 # 메모(성현 님이 일정표에서 직접 적은 할 일)는 날짜가 있으면 하루 전부터, 없으면 완료할 때까지 매일
 LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'memo': 1}
+# 전체 훑기(FULL)를 한 지 이만큼 지나면 다시 전체를 훑는다. 매일은 최근 메일만 읽으니, 한 달에 한 번 빠진 게 없는지 다시 확인
+FULL_EVERY_DAYS = 30
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
@@ -72,14 +74,14 @@ def md(day):
 
 def when(it):
     if not it.get('date'):
-        return '날짜 없음'
+        return '날짜 없음' if it['type'] == 'memo' else '일정 미정'
     tail = '입금 예정' if it['type'] == 'pay' else (it.get('time') or ('' if it['type'] == 'memo' else '시간 미정'))
     return f"{md(d_of(it['date']))} {tail}".strip()
 
 
 def dday(it, t):
     if not it.get('date'):
-        return '메모'
+        return '메모' if it['type'] == 'memo' else '일정 미정'
     n = (d_of(it['date']) - t).days
     if it['type'] == 'pay':
         return f'입금 D-{n}' if n > 0 else '입금 오늘' if n == 0 else '입금 확인'
@@ -91,7 +93,7 @@ def is_due(it, t):
     if it['done']:
         return False
     if not it.get('date'):
-        return True  # 날짜 없는 메모
+        return it['type'] == 'memo'  # 날짜 없는 메모는 매일. 일정 미정은 '날짜를 확인해 주세요' 칸에 따로
     n = (d_of(it['date']) - t).days
     if it['type'] == 'pay' or n < 0:
         return True  # 정산은 확인될 때까지, 지난 일은 끝낼 때까지 매일
@@ -103,9 +105,15 @@ def sort_key(it):
     return (it.get('date') or '0000', it.get('time') or '99', it['no'])
 
 
-# '미정'은 노란 형광펜으로 (시간을 아직 확인해야 한다는 표시)
+# '미정' 형광펜: 시간 미정은 노랑, 일정(날짜) 미정은 라벤더 (일정표와 같은 색)
 TBD = ('시간 <span style="background:#fff1a8;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
        '미정</span>')
+TBD_DATE = ('일정 <span style="background:#e4d9ff;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
+            '미정</span>')
+
+
+def when_html(it):
+    return e(when(it)).replace('시간 미정', TBD).replace('일정 미정', TBD_DATE)
 
 
 def e(s):
@@ -137,7 +145,7 @@ def card(it, t):
         f'text-align:center;">{it["no"]}</div></td>'
         f'<td style="padding:12px 8px;vertical-align:top;">'
         f'<div style="font-size:15px;font-weight:700;line-height:1.4;">{e(it["title"])}</div>'
-        f'<div style="font-size:12.5px;color:#7b7e8c;">{brand}{NAME[it["type"]]} · {when(it).replace("시간 미정", TBD)}</div>{pay}{src}</td>'
+        f'<div style="font-size:12.5px;color:#7b7e8c;">{brand}{NAME[it["type"]]} · {when_html(it)}</div>{pay}{src}</td>'
         f'<td width="72" style="padding:12px 12px 12px 0;vertical-align:top;text-align:right;font-size:16px;'
         f'font-weight:800;color:{"#e5484d" if late else c};white-space:nowrap;">{dday(it, t)}</td>'
         f'</tr></table>'
@@ -178,7 +186,9 @@ def later_rows(items, t):
 
 
 def render(items, unclear, t, url, coverage=None):
+    items = [x for x in items if not x.get('removed')]  # 일정표에서 지운 일은 메일에도 안 나온다
     open_items = [x for x in items if not x['done']]
+    tbd = sorted([x for x in open_items if not x.get('date') and x['type'] != 'memo'], key=sort_key)
     due = sorted([x for x in items if is_due(x, t)], key=sort_key)
     due_nos = {x['no'] for x in due}
     later = sorted([x for x in open_items if x['no'] not in due_nos and x.get('date') and (d_of(x['date']) - t).days <= 30],
@@ -186,7 +196,8 @@ def render(items, unclear, t, url, coverage=None):
     subject = f'[트란시스] {md(t)} 챙길 일 {len(due)}건'
     # 얼마나 읽었는지 매일 보이게 (놓친 메일이 없는지 성현 님이 가늠할 수 있도록)
     cov = coverage or {}
-    cov_line = (f"오늘 협업 관련 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
+    scope = '지난 60일' if cov.get('scan') == 'FULL' else '최근 3일'
+    cov_line = (f"{scope} 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
                 if cov.get('candidates') is not None else '')
     panel = 'background:#ffffff;border-radius:18px;padding:16px;'
 
@@ -198,14 +209,17 @@ def render(items, unclear, t, url, coverage=None):
     else:
         today_html = '<div style="font-size:14px;color:#7b7e8c;padding:4px 2px;">오늘 챙길 일은 없어요. 스토리만 올리면 끝! 🐺</div>'
 
+    # 날짜를 확인해 주세요 = 일정 미정 카드(시트에 남아 있음) + 이번에 읽다가 애매했던 메일
     unclear_html = ''
-    if unclear:
+    if tbd or unclear:
+        cards = ''.join(card(x, t) for x in tbd)
         lis = ''.join(f'<li style="margin:4px 0;">“{e(u.get("subject"))}” — {e(u.get("reason"))}</li>' for u in unclear)
         unclear_html = (f'<tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>'
                         f'<tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:6px;">'
-                        f'날짜를 확인해 주세요</div><div style="font-size:12.5px;color:#7b7e8c;margin-bottom:6px;">'
-                        f'일정 같은데 날짜가 분명하지 않아서 일정표에 넣지 않았어요.</div>'
-                        f'<ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.5;">{lis}</ul></td></tr>')
+                        f'날짜를 확인해 주세요</div><div style="font-size:12.5px;color:#7b7e8c;margin-bottom:8px;">'
+                        f'일정은 있는데 날짜가 아직 정해지지 않았거나, 확답이 필요한 일이에요.</div>{cards}'
+                        + (f'<ul style="margin:6px 0 0;padding-left:18px;font-size:13.5px;line-height:1.5;">{lis}</ul>' if lis else '')
+                        + '</td></tr>')
 
     later_html = ''
     if later:
@@ -240,22 +254,32 @@ def render(items, unclear, t, url, coverage=None):
         text.append(line)
     if not due:
         text.append('오늘 챙길 일은 없어요.')
-    if unclear:
-        text += ['', '날짜를 확인해 주세요:'] + [f"- {u.get('subject')} ({u.get('reason')})" for u in unclear]
+    if tbd or unclear:
+        text += ['', '날짜를 확인해 주세요:'] + [f"- {x['no']}. [{x.get('brand')}] ({NAME[x['type']]}) {x['title']} - 일정 미정" for x in tbd] \
+            + [f"- {u.get('subject')} ({u.get('reason')})" for u in unclear]
     text += ['', '끝낸 일은 트란시스 일정표에서 동그라미를 눌러 주세요.', f'일정표: {url}']
     if cov_line:
         text.append(cov_line)
     return subject, body, '\n'.join(text), due, later
 
 
-def public(it):
-    return {k: it.get(k) for k in ('no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'source')}
+def scan_mode(res):
+    """FULL = 지난 60일 전체 훑기 (처음, 그리고 30일마다), DAILY = 최근 3일 새 메일만"""
+    at = res.get('fullScanAt')
+    if not at:
+        return 'FULL'
+    last = dt.datetime.fromisoformat(at).astimezone(SEOUL).date()
+    return 'FULL' if (today() - last).days >= FULL_EVERY_DAYS else 'DAILY'
 
 
 def cmd_state():
     res = api_get()
-    print(json.dumps({'sample': res.get('sample'), 'updatedAt': res.get('updatedAt'),
-                      'items': [public(x) for x in res['items']]}, ensure_ascii=False, indent=1))
+    print(f"scan: {scan_mode(res)}  (last full scan: {res.get('fullScanAt') or 'never'})")
+    print('no | key | type | brand | title | date | time | done | removed | source')
+    # 한 줄에 하나씩 (토큰 절약). 금액·입금자명은 뺀다
+    for x in res['items']:
+        print(' | '.join(str(x.get(k) or '') for k in
+                         ('no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'removed', 'source')))
 
 
 def cmd_run(path):
@@ -264,13 +288,14 @@ def cmd_run(path):
     before = api_get()
     now = dt.datetime.now(SEOUL).replace(microsecond=0).isoformat()
     # 시트에 아직 예시 일정만 있으면 첫 실제 실행이므로 비우고 시작한다
-    post = api_post({'updatedAt': now, 'reset': bool(before.get('sample')), 'items': ext.get('items', [])})
+    post = api_post({'updatedAt': now, 'reset': bool(before.get('sample')), 'scan': ext.get('scan', 'DAILY'),
+                     'items': ext.get('items', [])})
     if not post.get('ok'):
         print('POST errors:', post.get('errors') or post.get('error'))
     after = api_get()
     t = today()
-    subject, body, text, due, later = render(after['items'], ext.get('unclear', []), t, env('TRANSIS_URL'),
-                                             ext.get('coverage'))
+    cov = dict(ext.get('coverage') or {}, scan=ext.get('scan', 'DAILY'))
+    subject, body, text, due, later = render(after['items'], ext.get('unclear', []), t, env('TRANSIS_URL'), cov)
     os.makedirs(OUT, exist_ok=True)
     for name, content in (('subject.txt', subject), ('email.html', body), ('email.txt', text)):
         with open(os.path.join(OUT, name), 'w', encoding='utf-8') as f:
