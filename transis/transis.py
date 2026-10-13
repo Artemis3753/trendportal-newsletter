@@ -103,9 +103,9 @@ def sort_key(it):
     return (it.get('date') or '0000', it.get('time') or '99', it['no'])
 
 
-# '시간 미정'은 노란 형광펜으로 (시간을 아직 확인해야 한다는 표시)
-TBD = ('<span style="background:#fff1a8;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
-       '시간 미정</span>')
+# '미정'은 노란 형광펜으로 (시간을 아직 확인해야 한다는 표시)
+TBD = ('시간 <span style="background:#fff1a8;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
+       '미정</span>')
 
 
 def e(s):
@@ -116,6 +116,7 @@ def e(s):
 
 def card(it, t):
     c, soft = COLOR[it['type']]
+    brand = f"{e(it['brand'])} · " if it.get('brand') and it['type'] != 'memo' else ''
     late = bool(it.get('date')) and (d_of(it['date']) - t).days < 0
     pay = ''
     if it['type'] == 'pay' and (it.get('payer') or it.get('amount')):
@@ -136,7 +137,7 @@ def card(it, t):
         f'text-align:center;">{it["no"]}</div></td>'
         f'<td style="padding:12px 8px;vertical-align:top;">'
         f'<div style="font-size:15px;font-weight:700;line-height:1.4;">{e(it["title"])}</div>'
-        f'<div style="font-size:12.5px;color:#7b7e8c;">{NAME[it["type"]]} · {when(it).replace("시간 미정", TBD)}</div>{pay}{src}</td>'
+        f'<div style="font-size:12.5px;color:#7b7e8c;">{brand}{NAME[it["type"]]} · {when(it).replace("시간 미정", TBD)}</div>{pay}{src}</td>'
         f'<td width="72" style="padding:12px 12px 12px 0;vertical-align:top;text-align:right;font-size:16px;'
         f'font-weight:800;color:{"#e5484d" if late else c};white-space:nowrap;">{dday(it, t)}</td>'
         f'</tr></table>'
@@ -232,6 +233,8 @@ def render(items, unclear, t, url, coverage=None):
     text = [f'트란시스 아침 브리핑 - {md(t)} 챙길 일 {len(due)}건', '']
     for x in due:
         line = f"{x['no']}. ({NAME[x['type']]}) {x['title']} - {when(x)} - {dday(x, t)}"
+        if x.get('brand') and x['type'] != 'memo':
+            line = f"{x['no']}. [{x['brand']}] ({NAME[x['type']]}) {x['title']} - {when(x)} - {dday(x, t)}"
         if x['type'] == 'pay' and x.get('payer'):
             line += f" / 입금자명 {x['payer']}"
         text.append(line)
