@@ -283,6 +283,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
   const LEAD = { upload: 1, draft: 3, shoot: 3, pay: Infinity, memo: 1 };
   const NAME = { upload: '업로드', draft: '초안·기획안', shoot: '방문 촬영', pay: '정산', memo: '메모' };
   const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  const MAX_EV = 5;
   const $ = id => document.getElementById(id);
 
   // 서울 날짜 기준 (폰이 다른 시간대여도 D-day가 같게)
@@ -376,8 +377,9 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       const ymd = `${vy}-${pad(vm)}-${pad(d)}`;
       const list = byDay[ymd] || [];
       const cls = ['day', (first + d - 1) % 7 === 0 ? 'sun' : '', ymd === today ? 'today' : '', ymd === sel ? 'sel' : ''].join(' ');
-      const evs = list.slice(0, 3).map(i => `<span class="ev ev-${i.type}${i.done ? ' done' : ''}${i.tentative && !i.done ? ' tentative' : ''}">${esc(i.type === 'memo' ? i.title : (i.brand || i.title))}</span>`).join('')
-        + (list.length > 3 ? `<span class="more">+${list.length - 3}</span>` : '');
+      // 한 칸에 칩은 5개까지 (3개였을 때 '+4'가 잦아서 늘림), 나머지는 +N — 날짜를 누르면 아래에 전부 나온다
+      const evs = list.slice(0, MAX_EV).map(i => `<span class="ev ev-${i.type}${i.done ? ' done' : ''}${i.tentative && !i.done ? ' tentative' : ''}">${esc(i.type === 'memo' ? i.title : (i.brand || i.title))}</span>`).join('')
+        + (list.length > MAX_EV ? `<span class="more">+${list.length - MAX_EV}</span>` : '');
       html += `<button type="button" class="${cls}" data-d="${ymd}" aria-label="${md(ymd)}, 일정 ${list.length}건" aria-pressed="${ymd === sel}"><span class="num">${d}</span>${evs}</button>`;
     }
     $('grid').innerHTML = html;
