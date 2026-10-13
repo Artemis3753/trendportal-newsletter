@@ -24,13 +24,13 @@ The routine prompt tells you the **MODE**:
 
    a. **Search.** Use `search_threads`, `pageSize` 50, `view` `THREAD_VIEW_METADATA_ONLY`, and **follow `nextPageToken` until there is none** (pass the token's literal value, never a shell expression). When a result is too large and saved to a file, use `jq` to list each thread's id, message count, latest date and senders.
 
-      - Always (both modes): `newer_than:3d -in:drafts` (every thread with a message in the last 3 days, no keyword filter).
+      - `DAILY`, `FULL` START, and the **last** `FULL` batch (`state` says the threads left are no more than THIS BATCH): `newer_than:3d -in:drafts` (every thread with a message in the last 3 days, no keyword filter). A middle `FULL` batch skips this search: the runs are made back to back, so the previous run has just read those threads, and the last batch reads them again before the scan is finished.
       - `FULL` with `full queue: none yet` (START) only: also `newer_than:60d -in:drafts (협업 OR 문의 OR 정산 OR 촬영 OR 행사 OR 취재 OR 입금 OR 초대 OR 방문 OR 광고 OR 업로드 OR 게시 OR 초안 OR 기획안 OR 일정 OR 가이드 OR 팝업 OR 가편 OR in:sent)`. `in:sent` is there on purpose: every thread we replied to is a candidate even without a keyword, because an agreed date needs our reply.
 
    b. **Candidates.** Drop a thread **only** if every message in it is from an automated sender (no-reply, noreply, notify, newsletter, mailer-daemon, or a platform such as LinkedIn, Reddit, Google, OpenAI) or it is a press release (보도자료) that we never replied to. Keep everything else, including threads you think are finished.
 
       - `FULL` START: write the 60-day candidate ids, one per line, newest first, to `/tmp/transis/queue.txt` and run `python3 transis/transis.py queue /tmp/transis/queue.txt`. Then run `state` again: it now prints the first batch.
-      - This run reads: the 3-day candidates, plus in `FULL` mode **every thread id in THIS BATCH** printed by `state`. Never stop early and never skip a thread in the batch; the batch is sized so that one run can finish it. The rest of the queue is read by the next runs.
+      - This run reads: the 3-day candidates (when searched above), plus in `FULL` mode **every thread id in THIS BATCH** printed by `state`. Never stop early and never skip a thread in the batch; the batch is sized so that one run can finish it. The rest of the queue is read by the next runs.
 
    c. Read every thread of this run like this (it costs far less than `get_thread` with bodies, because each reply already quotes the whole conversation below it):
       1. `get_thread` with `messageFormat` `METADATA_ONLY`: the list of message ids, dates and senders.
