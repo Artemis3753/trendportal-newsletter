@@ -18,11 +18,17 @@ The routine prompt tells you the **MODE**:
 
 1. Run `python3 transis/transis.py state`. It prints the items already in the sheet (key, number, type, brand, title, date, time, done, source subject). Use it to keep keys stable and to notice date changes.
 
-2. Find candidate threads with the Gmail connector's `search_threads`:
-   - query `newer_than:45d -in:sent -in:drafts -category:promotions -category:social -category:forums`, `pageSize` 50, up to 3 pages
-   - also search for the `source` subjects of open (not done) sheet items, so later messages that change a date are caught
+2. **Missing a schedule is the worst possible failure.** Do not pick threads by subject or snippet. Collect candidates by keyword, then read every one of them in full.
 
-   From senders, subjects and snippets, keep threads about collaboration or advertising work with brands, agencies or event organizers (협업, 광고, 제안, 캠페인, 업로드, 게시, 초안, 기획안, 시안, 촬영, 방문, 행사, 팝업, 전시, 정산, 입금, 세금계산서 and similar). Skip newsletters, receipts, platform notifications, security alerts and spam. Read every kept thread in full with `get_thread`.
+   a. Run `search_threads` with this query (sent mail included on purpose: our own replies often hold the confirmed date), `pageSize` 50, and **follow `nextPageToken` until there is none**. Pass the token's literal value; never a shell expression.
+
+      `newer_than:60d -in:drafts (협업 OR 문의 OR 정산 OR 촬영 OR 행사 OR 취재 OR 입금 OR 초대 OR 방문 OR 광고 OR 업로드 OR 게시 OR 초안 OR 기획안 OR 일정 OR 가이드 OR 팝업)`
+
+      Also run one search per open sheet item's `source` subject, so later messages that change a date are caught. When a result is too large and saved to a file, use `jq` to list each thread's id, latest date, senders and subject.
+
+   b. Make one candidate list (unique thread ids). Drop a thread **only** if every message in it is from an automated sender (no-reply, noreply, notify, newsletter, mailer-daemon, or a platform such as LinkedIn, Reddit, Google, OpenAI) or it is a press release (보도자료) that we never replied to. Keep everything else, including threads you think are finished.
+
+   c. Read **every** candidate with `get_thread` (`messageFormat` `PLAIN_TEXT`). Never read only the last few messages: dates are often in an early guide message. If the result is saved to a file, run `python3 transis/digest.py <that file>`, which removes quoted earlier replies and prints every message of the thread in order. Keep a count of threads read.
 
 3. Extract schedule items. There are four types:
 
@@ -36,6 +42,8 @@ The routine prompt tells you the **MODE**:
    - Use only agreed or clearly requested dates. If a later message in the thread changed the date or time, use the latest one.
    - Resolve relative dates such as 다음 주 화요일 or 내일 against the date the message was sent, in Asia/Seoul.
    - If something is clearly a real schedule but cannot be pinned to one day, do not guess: put it in `unclear` with the thread subject and a short Korean reason.
+   - **When unsure, include it in `unclear` rather than leave it out.** For example: an invitation to an event where we have not said whether we attend, an upload date that is still being negotiated, a payment that was promised without a date. A long `unclear` list is acceptable; a missing schedule is not.
+   - A proposed date that the other side has not confirmed yet still becomes an item (so it is on the calendar), and the thread also goes to `unclear` with the reason `상대 확답 전`.
    - Never mark anything done. Only 성현 marks items done on the schedule page.
 
    Fields for each item:
@@ -51,7 +59,9 @@ The routine prompt tells you the **MODE**:
    | `source` | the thread subject |
    | `payer`, `amount` | for `pay` only: 입금자명 and the amount as written, otherwise `""` |
 
-   Write `{"items": [...], "unclear": [{"subject": "...", "reason": "..."}]}` to `/tmp/transis/extracted.json` (create the folder first).
+   Write `{"items": [...], "unclear": [{"subject": "...", "reason": "..."}], "coverage": {"candidates": <number of candidate threads>, "read": <number read in full>}}` to `/tmp/transis/extracted.json` (create the folder first). The coverage numbers are printed at the bottom of the email, so they must be true.
+
+   Rows that 성현 added to the sheet by hand (keys that are not thread ids) are kept as they are; do not send items with those keys.
 
 4. Run `python3 transis/transis.py run /tmp/transis/extracted.json`. It sends the items to the sheet, reads the sheet back (with the done marks 성현 made), picks what to remind, and writes `/tmp/transis/subject.txt`, `email.html` and `email.txt`. If it prints `POST errors`, fix those items and run it once more.
 

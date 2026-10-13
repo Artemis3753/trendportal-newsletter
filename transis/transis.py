@@ -162,13 +162,17 @@ def later_rows(items, t):
     return rows
 
 
-def render(items, unclear, t, url):
+def render(items, unclear, t, url, coverage=None):
     open_items = [x for x in items if not x['done']]
     due = sorted([x for x in items if is_due(x, t)], key=sort_key)
     due_nos = {x['no'] for x in due}
     later = sorted([x for x in open_items if x['no'] not in due_nos and (d_of(x['date']) - t).days <= 30],
                    key=sort_key)
     subject = f'[트란시스] {md(t)} 챙길 일 {len(due)}건'
+    # 얼마나 읽었는지 매일 보이게 (놓친 메일이 없는지 성현 님이 가늠할 수 있도록)
+    cov = coverage or {}
+    cov_line = (f"오늘 협업 관련 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
+                if cov.get('candidates') is not None else '')
     panel = 'background:#ffffff;border-radius:18px;padding:16px;'
 
     if due:
@@ -208,7 +212,7 @@ def render(items, unclear, t, url):
 <tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:10px;">앞으로 7일</div>{week_strip(open_items, t)}{later_html}</td></tr>
 {unclear_html}
 <tr><td align="center" style="padding:16px 0 6px;"><a href="{e(url)}" style="display:inline-block;padding:12px 22px;border-radius:999px;background:#23242b;color:#ffffff;font-size:14px;font-weight:800;text-decoration:none;">트란시스 일정표 열기</a></td></tr>
-<tr><td align="center" style="padding:6px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.</td></tr>
+<tr><td align="center" style="padding:6px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.</td></tr>
 </table></td></tr></table></body></html>'''
 
     text = [f'트란시스 아침 브리핑 - {md(t)} 챙길 일 {len(due)}건', '']
@@ -222,6 +226,8 @@ def render(items, unclear, t, url):
     if unclear:
         text += ['', '날짜를 확인해 주세요:'] + [f"- {u.get('subject')} ({u.get('reason')})" for u in unclear]
     text += ['', '끝낸 일은 트란시스 일정표에서 동그라미를 눌러 주세요.', f'일정표: {url}']
+    if cov_line:
+        text.append(cov_line)
     return subject, body, '\n'.join(text), due, later
 
 
@@ -246,7 +252,8 @@ def cmd_run(path):
         print('POST errors:', post.get('errors') or post.get('error'))
     after = api_get()
     t = today()
-    subject, body, text, due, later = render(after['items'], ext.get('unclear', []), t, env('TRANSIS_URL'))
+    subject, body, text, due, later = render(after['items'], ext.get('unclear', []), t, env('TRANSIS_URL'),
+                                             ext.get('coverage'))
     os.makedirs(OUT, exist_ok=True)
     for name, content in (('subject.txt', subject), ('email.html', body), ('email.txt', text)):
         with open(os.path.join(OUT, name), 'w', encoding='utf-8') as f:
@@ -258,6 +265,7 @@ def cmd_run(path):
         'due_today': [f"{x['no']} {x['type']} {x['date']} {x['title']}" for x in due],
         'later': [f"{x['no']} {x['type']} {x['date']} {x['title']}" for x in later],
         'unclear': len(ext.get('unclear', [])),
+        'coverage': ext.get('coverage'),
         'subject': subject,
         'files': [os.path.join(OUT, n) for n in ('subject.txt', 'email.html', 'email.txt')],
     }, ensure_ascii=False, indent=1))
