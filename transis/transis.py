@@ -76,7 +76,9 @@ def when(it):
     if not it.get('date'):
         return '날짜 없음' if it['type'] == 'memo' else '일정 미정'
     tail = '입금 예정' if it['type'] == 'pay' else (it.get('time') or ('' if it['type'] == 'memo' else '시간 미정'))
-    return f"{md(d_of(it['date']))} {tail}".strip()
+    # 확답 전: 날짜는 제안됐지만 아직 확정 전 (일정표의 라벤더 '확답 전'과 같은 뜻)
+    tent = ' · 확답 전' if it.get('tentative') and not it.get('done') else ''
+    return f"{md(d_of(it['date']))} {tail}".strip() + tent
 
 
 def dday(it, t):
@@ -110,10 +112,12 @@ TBD = ('시간 <span style="background:#fff1a8;color:#23242b;font-weight:700;pad
        '미정</span>')
 TBD_DATE = ('일정 <span style="background:#e4d9ff;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
             '미정</span>')
+TENTATIVE = ('<span style="background:#e4d9ff;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;white-space:nowrap;">'
+             '확답 전</span>')
 
 
 def when_html(it):
-    return e(when(it)).replace('시간 미정', TBD).replace('일정 미정', TBD_DATE)
+    return e(when(it)).replace('시간 미정', TBD).replace('일정 미정', TBD_DATE).replace('확답 전', TENTATIVE)
 
 
 def e(s):
@@ -159,8 +163,10 @@ def week_strip(open_items, t):
         f'padding-bottom:4px;">{DOW[d.weekday()]}</td>' for d in days)
     cells = ''
     for d in days:
+        # 확답 전 칩은 바탕 없이 점선 테두리 (일정표 달력과 같은 모양)
         chips = ''.join(
-            f'<div style="margin-top:3px;padding:1px 2px;border-radius:4px;background:{COLOR[it["type"]][1]};'
+            f'<div style="margin-top:3px;padding:{"0 1px" if it.get("tentative") else "1px 2px"};border-radius:4px;'
+            f'{"background:#ffffff;border:1px dashed " + COLOR[it["type"]][0] if it.get("tentative") else "background:" + COLOR[it["type"]][1]};'
             f'color:{COLOR[it["type"]][0]};font-size:10px;font-weight:700;line-height:1.35;white-space:nowrap;'
             f'overflow:hidden;text-align:left;">{e(it.get("brand") or it["title"])}</div>'
             for it in sorted([x for x in open_items if x['date'] == d.isoformat()], key=sort_key))
@@ -178,7 +184,8 @@ def later_rows(items, t):
         c = COLOR[it['type']][0]
         rows += (f'<tr><td width="30" style="padding:5px 0;"><span style="display:inline-block;width:22px;height:22px;'
                  f'line-height:22px;border-radius:7px;background:{c};color:#fff;font-weight:800;font-size:12px;'
-                 f'text-align:center;">{it["no"]}</span></td><td style="padding:5px 0;">{e(it["title"])}</td>'
+                 f'text-align:center;">{it["no"]}</span></td><td style="padding:5px 0;">{e(it["title"])}'
+                 f'{" " + TENTATIVE if it.get("tentative") else ""}</td>'
                  f'<td style="padding:5px 0;text-align:right;color:#7b7e8c;white-space:nowrap;">'
                  f'{d_of(it["date"]).month}/{d_of(it["date"]).day} ({DOW[d_of(it["date"]).weekday()]})'
                  f'{" " + it["time"] if it.get("time") and it["type"] != "pay" else ""} · {dday(it, t)}</td></tr>')
@@ -275,11 +282,11 @@ def scan_mode(res):
 def cmd_state():
     res = api_get()
     print(f"scan: {scan_mode(res)}  (last full scan: {res.get('fullScanAt') or 'never'})")
-    print('no | key | type | brand | title | date | time | done | removed | source')
+    print('no | key | type | brand | title | date | time | tentative | done | removed | source')
     # 한 줄에 하나씩 (토큰 절약). 금액·입금자명은 뺀다
     for x in res['items']:
         print(' | '.join(str(x.get(k) or '') for k in
-                         ('no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'removed', 'source')))
+                         ('no', 'key', 'type', 'brand', 'title', 'date', 'time', 'tentative', 'done', 'removed', 'source')))
 
 
 def cmd_run(path):

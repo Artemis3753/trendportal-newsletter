@@ -16,8 +16,9 @@ const SHEET = 'items';
 const META = 'meta';
 // key = 원본 메일 스레드 id. 같은 메일에서 뽑은 일정이 두 번 들어가지 않게 하는 이름표
 // 새 칸은 맨 뒤에만 붙인다 (이미 쌓인 시트의 칸 순서가 어긋나지 않게)
-const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt', 'doneBy', 'removed'];
-const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'doneBy'];
+const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt', 'doneBy', 'removed', 'tentative'];
+// tentative = 확답 전: 날짜는 제안됐지만 한쪽이 아직 확정하지 않은 일정. 빈 칸(옛 줄)은 확정으로 읽는다
+const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'doneBy', 'tentative'];
 const TYPES = ['upload', 'draft', 'shoot', 'pay'];
 // 메모: 성현 님이 일정표에서 직접 적는 할 일. 트란시스는 보내지도 바꾸지도 않는다(key가 'memo-'로 시작)
 const MEMO = 'memo';
@@ -77,8 +78,9 @@ function doGet(e) {
 }
 
 /**
- * 트란시스가 일정을 보낸다: { token, updatedAt, reset?, scan?, items: [{ key, type, brand, title, date, time?, source?, payer?, amount?, done? }] }
+ * 트란시스가 일정을 보낸다: { token, updatedAt, reset?, scan?, items: [{ key, type, brand, title, date, time?, source?, payer?, amount?, tentative?, done? }] }
  * - date는 YYYY-MM-DD 또는 ''(일정 미정)
+ * - tentative: true면 확답 전 (제안된 날짜는 달력에 두되 아직 확정 아님을 표시). 확정되면 트란시스가 false로 다시 보낸다
  * - 같은 key가 있으면 내용만 갱신하고 번호·완료·삭제 여부는 그대로 둔다 (성현 님이 누른 ✓·삭제를 덮어쓰지 않게)
  * - scan: 'FULL'이면 전체 훑기를 마친 시각을 남긴다 (다음부터는 최근 메일만 읽어도 되는지 판단용)
  * - 새 key면 다음 번호를 붙인다
@@ -110,7 +112,7 @@ function doPost(e) {
       }
       const old = byKey[it.key];
       if (old) {
-        ['type', 'brand', 'title', 'date', 'time', 'source', 'payer', 'amount'].forEach(f => { old[f] = it[f]; });
+        ['type', 'brand', 'title', 'date', 'time', 'source', 'payer', 'amount', 'tentative'].forEach(f => { old[f] = it[f]; });
         if (raw.done === true && !old.done) { old.done = true; old.doneAt = now_(); }
         old.updatedAt = now_();
       } else {
@@ -213,6 +215,7 @@ function readItems_() {
     o.no = Number(o.no);
     o.done = isTrue_(o.done);
     o.removed = isTrue_(o.removed);
+    o.tentative = isTrue_(o.tentative);
     return o;
   });
 }
@@ -225,7 +228,7 @@ function writeItems_(items) {
   if (!items.length) return;
   items.sort((a, b) => a.no - b.no);
   const rows = items.map(it => FIELDS.map(f => {
-    if (f === 'done' || f === 'removed') return it[f] ? 'true' : 'false';
+    if (f === 'done' || f === 'removed' || f === 'tentative') return it[f] ? 'true' : 'false';
     return it[f] === undefined || it[f] === null ? '' : String(it[f]);
   }));
   sh.getRange(2, 1, rows.length, FIELDS.length).setNumberFormat('@').setValues(rows);
@@ -236,6 +239,7 @@ function clean_(raw) {
   return {
     key: s(raw.key), type: s(raw.type), brand: s(raw.brand), title: s(raw.title),
     date: s(raw.date), time: s(raw.time), source: s(raw.source), payer: s(raw.payer), amount: s(raw.amount),
+    tentative: isTrue_(raw.tentative),
   };
 }
 

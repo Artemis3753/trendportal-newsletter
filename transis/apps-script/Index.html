@@ -62,6 +62,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .t-shoot { background: var(--shoot-soft); color: var(--shoot); }
 .t-pay { background: var(--pay-soft); color: var(--pay); }
 .t-memo { background: var(--memo-soft); color: var(--memo); }
+.t-tentative { background: none; color: var(--muted); outline: 1.5px dashed currentColor; outline-offset: -1.5px; }
+.t-tentative::before { display: none; }
 
 .panel { background: var(--card); border-radius: 22px; padding: 16px; box-shadow: 0 1px 2px rgba(20, 22, 40, 0.04), 0 8px 24px rgba(20, 22, 40, 0.05); min-width: 0; }
 .panel h2 { margin: 0 0 12px; font-family: var(--font-display); font-weight: 400; font-size: 19px; display: flex; align-items: baseline; gap: 8px; }
@@ -87,7 +89,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .empty { color: var(--muted); font-size: 14px; padding: 6px 2px; }
 /* '미정'은 노란 형광펜으로: 시간을 아직 확인해야 한다는 표시 */
 .tbd, .tbd-date { padding: 0 4px; border-radius: 4px; background: var(--today); color: var(--ink); font-weight: 700; }
-.tbd-date { background: var(--tbd-date); }
+.tbd-date { background: var(--tbd-date); white-space: nowrap; }
 /* 다가오는 일 안의 묶음 제목 (일정 미정) */
 .group-h { list-style: none; margin: 4px 2px 0; font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .group-h:first-child { margin-top: 0; }
@@ -106,6 +108,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .num { align-self: center; min-width: 24px; height: 24px; line-height: 24px; padding: 0 4px; border-radius: 12px; }
 .ev { display: block; overflow: hidden; white-space: nowrap; text-overflow: clip; padding: 1px 3px; border-radius: 4px; font-size: 10px; font-weight: 700; line-height: 1.35; text-align: left; }
 .ev.done { opacity: 0.4; text-decoration: line-through; }
+/* 확답 전: 바탕을 비우고 점선 테두리 — 확정된 일정(꽉 찬 칩)과 한눈에 구분 */
+.ev.tentative { background: none; outline: 1.5px dashed currentColor; outline-offset: -1.5px; }
 .ev-upload { background: var(--upload-soft); color: var(--upload); }
 .ev-draft { background: var(--draft-soft); color: var(--draft); }
 .ev-shoot { background: var(--shoot-soft); color: var(--shoot); }
@@ -177,7 +181,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 </style>
 </head>
 <body>
-<!-- 서버(Code.gs)가 공개해도 되는 칸만 넣어 준다: no, type, brand, title, date, time, done, doneAt, doneBy -->
+<!-- 서버(Code.gs)가 공개해도 되는 칸만 넣어 준다: no, type, brand, title, date, time, done, doneAt, doneBy, tentative -->
 <script type="application/json" id="tpos-data"><?!= dataJson ?></script>
 
 <div class="wrap">
@@ -209,6 +213,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     <li class="chip t-shoot">방문 촬영·오프라인 행사 · 3일 전</li>
     <li class="chip t-pay">정산 · 입금 확인까지</li>
     <li class="chip t-memo">메모 · 완료할 때까지</li>
+    <li class="chip t-tentative">점선 칸 · 확답 전</li>
   </ul>
 
   <div class="cols">
@@ -298,7 +303,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     return `<li class="item${alert ? ' alert' : ''}${it.done ? ' is-done' : ''}${saving.has(it.no) ? ' saving' : ''}"${alert ? ` style="color: var(--${it.type})"` : ''}>
       <button type="button" class="tick${it.done ? ' on' : ''}" data-no="${it.no}" aria-label="${label}" aria-pressed="${it.done}"><span>✓</span></button>
       <span class="no b-${it.type}" aria-hidden="true">${it.no}</span>
-      <span class="body"><b>${esc(it.title)}</b><span>${it.type !== 'memo' && it.brand ? esc(it.brand) + ' · ' : ''}${NAME[it.type]} · ${when(it)}</span>${it.done && doneWhen(it) ? `<span class="done-at">✓ ${doneWhen(it)} 완료</span>` : ''}</span>
+      <span class="body"><b>${esc(it.title)}</b><span>${it.type !== 'memo' && it.brand ? esc(it.brand) + ' · ' : ''}${NAME[it.type]} · ${when(it)}${it.tentative && !it.done ? ' · <mark class="tbd-date">확답 전</mark>' : ''}</span>${it.done && doneWhen(it) ? `<span class="done-at">✓ ${doneWhen(it)} 완료</span>` : ''}</span>
       <span class="dday${late ? ' late' : ''}">${it.done ? '완료' : ddayText(it)}</span>${it.done && it.no ? `
       <button type="button" class="del" data-del="${it.no}" aria-label="${it.no}번 지우기">${TRASH}</button>` : ''}</li>`;
   };
@@ -339,7 +344,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       const ymd = `${vy}-${pad(vm)}-${pad(d)}`;
       const list = byDay[ymd] || [];
       const cls = ['day', (first + d - 1) % 7 === 0 ? 'sun' : '', ymd === today ? 'today' : '', ymd === sel ? 'sel' : ''].join(' ');
-      const evs = list.slice(0, 3).map(i => `<span class="ev ev-${i.type}${i.done ? ' done' : ''}">${esc(i.type === 'memo' ? i.title : (i.brand || i.title))}</span>`).join('')
+      const evs = list.slice(0, 3).map(i => `<span class="ev ev-${i.type}${i.done ? ' done' : ''}${i.tentative && !i.done ? ' tentative' : ''}">${esc(i.type === 'memo' ? i.title : (i.brand || i.title))}</span>`).join('')
         + (list.length > 3 ? `<span class="more">+${list.length - 3}</span>` : '');
       html += `<button type="button" class="${cls}" data-d="${ymd}" aria-label="${md(ymd)}, 일정 ${list.length}건" aria-pressed="${ymd === sel}"><span class="num">${d}</span>${evs}</button>`;
     }

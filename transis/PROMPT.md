@@ -18,7 +18,7 @@ The routine prompt tells you the **MODE**:
 
 ## Steps
 
-1. Run `python3 transis/transis.py state`. The first line says the scan mode, `FULL` or `DAILY`. The rest lists the items already in the sheet, one per line (no, key, type, brand, title, date, time, done, removed, source). An empty date means the date is still open (일정 미정). Use the list to keep keys stable and to notice date changes.
+1. Run `python3 transis/transis.py state`. The first line says the scan mode, `FULL` or `DAILY`. The rest lists the items already in the sheet, one per line (no, key, type, brand, title, date, time, tentative, done, removed, source). An empty date means the date is still open (일정 미정). Use the list to keep keys stable and to notice date changes.
 
 2. **Missing a schedule is the worst possible failure.** Collect candidate threads, then read every one of them completely.
 
@@ -53,7 +53,7 @@ The routine prompt tells you the **MODE**:
    - **Never drop a real schedule because its date is open.** If an upload, draft, shoot or payment clearly exists but its day is not fixed (조율 중, 추후 안내, 미정), make the item with `date` `""` (shown as 일정 미정) and also put the thread in `unclear` with a short Korean reason. If an agreed date was later put back into negotiation, set `date` to `""` and say the old date in the reason, for example `기존 10/16(금) 저녁 → 조율 중`.
    - Payment rules relative to another date (for example 업로드한 달의 익월 23일) become a date once that other date is known; until then the payment item has `date` `""`.
    - **When unsure, include it in `unclear` rather than leave it out.** For example: an invitation to an event where we have not said whether we attend, an upload date that is still being negotiated, a payment that was promised without a date. A long `unclear` list is acceptable; a missing schedule is not.
-   - A proposed date that the other side has not confirmed yet still becomes an item (so it is on the calendar), and the thread also goes to `unclear` with the reason `상대 확답 전`.
+   - A proposed date that one side has not confirmed yet (we proposed and they have not replied, or they proposed and we have not answered) still becomes an item with that date (so it is on the calendar and still gets its reminder), with `tentative` `true`, and the thread also goes to `unclear` with the reason `상대 확답 전` or `우리 확답 전`. Once the date is agreed, send the item again with `tentative` `false`.
    - Never mark anything done. Only 성현 marks items done on the schedule page.
 
    Fields for each item:
@@ -66,6 +66,7 @@ The routine prompt tells you the **MODE**:
    | `title` | a short Korean phrase, for example `○○ 릴스 업로드` or `○○ 팝업 방문 촬영` |
    | `date` | `YYYY-MM-DD`, or `""` when the day is still open |
    | `time` | `HH:MM` (24-hour) if stated, otherwise `""` |
+   | `tentative` | `true` when the date is only proposed and not yet confirmed by both sides (shown as 확답 전), otherwise `false` |
    | `source` | the thread subject |
    | `payer`, `amount` | for `pay` only: 입금자명 and the amount as written, otherwise `""` |
 
