@@ -21,14 +21,16 @@ import urllib.request
 OUT = '/tmp/transis'
 SEOUL = dt.timezone(dt.timedelta(hours=9))
 DOW = '월화수목금토일'  # date.weekday(): 월=0
-NAME = {'upload': '업로드', 'draft': '초안·기획안', 'shoot': '방문 촬영', 'pay': '정산'}
+NAME = {'upload': '업로드', 'draft': '초안·기획안', 'shoot': '방문 촬영', 'pay': '정산', 'memo': '메모'}
 # 성현 님이 정한 미리 알림: 업로드 하루 전, 초안·기획안 3일 전, 방문 촬영 3일 전, 정산은 입금 확인될 때까지 매일
-LEAD = {'upload': 1, 'draft': 3, 'shoot': 3}
+# 메모(성현 님이 일정표에서 직접 적은 할 일)는 날짜가 있으면 하루 전부터, 없으면 완료할 때까지 매일
+LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'memo': 1}
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
     'shoot': ('#3a86ff', '#dde9ff'),
     'pay': ('#c49a1c', '#f6edd0'),
+    'memo': ('#6b6f80', '#e9eaf0'),
 }
 
 
@@ -69,11 +71,15 @@ def md(day):
 
 
 def when(it):
-    tail = '입금 예정' if it['type'] == 'pay' else (it.get('time') or '시간 미정')
-    return f"{md(d_of(it['date']))} {tail}"
+    if not it.get('date'):
+        return '날짜 없음'
+    tail = '입금 예정' if it['type'] == 'pay' else (it.get('time') or ('' if it['type'] == 'memo' else '시간 미정'))
+    return f"{md(d_of(it['date']))} {tail}".strip()
 
 
 def dday(it, t):
+    if not it.get('date'):
+        return '메모'
     n = (d_of(it['date']) - t).days
     if it['type'] == 'pay':
         return f'입금 D-{n}' if n > 0 else '입금 오늘' if n == 0 else '입금 확인'
@@ -84,6 +90,8 @@ def is_due(it, t):
     """오늘 메일의 '오늘 챙길 일'에 들어가는지"""
     if it['done']:
         return False
+    if not it.get('date'):
+        return True  # 날짜 없는 메모
     n = (d_of(it['date']) - t).days
     if it['type'] == 'pay' or n < 0:
         return True  # 정산은 확인될 때까지, 지난 일은 끝낼 때까지 매일
@@ -91,7 +99,8 @@ def is_due(it, t):
 
 
 def sort_key(it):
-    return (it['date'], it.get('time') or '99', it['no'])
+    # 날짜 없는 메모는 맨 위
+    return (it.get('date') or '0000', it.get('time') or '99', it['no'])
 
 
 def e(s):
@@ -102,7 +111,7 @@ def e(s):
 
 def card(it, t):
     c, soft = COLOR[it['type']]
-    late = (d_of(it['date']) - t).days < 0
+    late = bool(it.get('date')) and (d_of(it['date']) - t).days < 0
     pay = ''
     if it['type'] == 'pay' and (it.get('payer') or it.get('amount')):
         bits = []
@@ -166,7 +175,7 @@ def render(items, unclear, t, url, coverage=None):
     open_items = [x for x in items if not x['done']]
     due = sorted([x for x in items if is_due(x, t)], key=sort_key)
     due_nos = {x['no'] for x in due}
-    later = sorted([x for x in open_items if x['no'] not in due_nos and (d_of(x['date']) - t).days <= 30],
+    later = sorted([x for x in open_items if x['no'] not in due_nos and x.get('date') and (d_of(x['date']) - t).days <= 30],
                    key=sort_key)
     subject = f'[트란시스] {md(t)} 챙길 일 {len(due)}건'
     # 얼마나 읽었는지 매일 보이게 (놓친 메일이 없는지 성현 님이 가늠할 수 있도록)

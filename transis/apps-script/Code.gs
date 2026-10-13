@@ -15,6 +15,8 @@ const META = 'meta';
 const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt'];
 const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done'];
 const TYPES = ['upload', 'draft', 'shoot', 'pay'];
+// 메모: 성현 님이 일정표에서 직접 적는 할 일. 트란시스는 보내지도 바꾸지도 않는다(key가 'memo-'로 시작)
+const MEMO = 'memo';
 const TZ = 'Asia/Seoul';
 
 /** 처음 한 번만 실행: 시트·머리줄·비밀 토큰·예시 일정을 만든다. 토큰은 실행 로그에 찍힌다 */
@@ -133,6 +135,28 @@ function markDone(no, done) {
     if (!it) throw new Error('no such item: ' + no);
     it.done = done === true;
     it.doneAt = it.done ? now_() : '';
+    writeItems_(items);
+    return publicData_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 일정표의 메모 칸: 글(필수)과 날짜·시각(선택)으로 회색 메모 일정을 만든다 */
+function addMemo(text, date, time) {
+  const title = String(text || '').trim().slice(0, 200);
+  if (!title) throw new Error('memo is empty');
+  const d = String(date || '').trim();
+  const tm = String(time || '').trim();
+  if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error('bad date');
+  if (tm && !/^\d{2}:\d{2}$/.test(tm)) throw new Error('bad time');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const items = readItems_();
+    const no = items.reduce((m, it) => Math.max(m, it.no), 0) + 1;
+    items.push({ no: no, key: 'memo-' + Utilities.getUuid(), type: MEMO, brand: '메모', title: title,
+                 date: d, time: tm, done: false, doneAt: '', source: '', payer: '', amount: '', updatedAt: now_() });
     writeItems_(items);
     return publicData_();
   } finally {

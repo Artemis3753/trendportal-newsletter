@@ -20,6 +20,7 @@
   --draft: #ec4a5a;   --draft-soft: #ffe2e5;
   --shoot: #3a86ff;   --shoot-soft: #dde9ff;
   --pay: #c49a1c;     --pay-soft: #f6edd0;
+  --memo: #6b6f80;   --memo-soft: #e9eaf0;
   --late: #e5484d;
   --font-display: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
@@ -28,14 +29,14 @@
   :root:not([data-theme="light"]) {
     --bg: #15161b; --card: #1f2027; --ink: #eceef4; --muted: #9a9dab; --line: #2e3039; --today: #5a4d12;
     --upload: #3cc98f; --upload-soft: #173a2c; --draft: #ff6b79; --draft-soft: #3d2126;
-    --shoot: #6aa4ff; --shoot-soft: #1c2b45; --pay: #e2bd4f; --pay-soft: #3a3217; --late: #ff6b6f;
+    --shoot: #6aa4ff; --shoot-soft: #1c2b45; --pay: #e2bd4f; --pay-soft: #3a3217; --memo: #a3a7b6; --memo-soft: #2b2d36; --late: #ff6b6f;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #15161b; --card: #1f2027; --ink: #eceef4; --muted: #9a9dab; --line: #2e3039; --today: #5a4d12;
   --upload: #3cc98f; --upload-soft: #173a2c; --draft: #ff6b79; --draft-soft: #3d2126;
-  --shoot: #6aa4ff; --shoot-soft: #1c2b45; --pay: #e2bd4f; --pay-soft: #3a3217; --late: #ff6b6f;
+  --shoot: #6aa4ff; --shoot-soft: #1c2b45; --pay: #e2bd4f; --pay-soft: #3a3217; --memo: #a3a7b6; --memo-soft: #2b2d36; --late: #ff6b6f;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -58,6 +59,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .t-draft { background: var(--draft-soft); color: var(--draft); }
 .t-shoot { background: var(--shoot-soft); color: var(--shoot); }
 .t-pay { background: var(--pay-soft); color: var(--pay); }
+.t-memo { background: var(--memo-soft); color: var(--memo); }
 
 .panel { background: var(--card); border-radius: 22px; padding: 16px; box-shadow: 0 1px 2px rgba(20, 22, 40, 0.04), 0 8px 24px rgba(20, 22, 40, 0.05); min-width: 0; }
 .panel h2 { margin: 0 0 12px; font-family: var(--font-display); font-weight: 400; font-size: 19px; display: flex; align-items: baseline; gap: 8px; }
@@ -72,6 +74,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .b-draft { background: var(--draft); }
 .b-shoot { background: var(--shoot); }
 .b-pay { background: var(--pay); }
+.b-memo { background: var(--memo); }
 .body { min-width: 0; color: var(--ink); }
 .body b { display: block; font-size: 15px; line-height: 1.4; }
 .body span { font-size: 12.5px; color: var(--muted); }
@@ -99,6 +102,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .ev-draft { background: var(--draft-soft); color: var(--draft); }
 .ev-shoot { background: var(--shoot-soft); color: var(--shoot); }
 .ev-pay { background: var(--pay-soft); color: var(--pay); }
+.ev-memo { background: var(--memo-soft); color: var(--memo); }
 .more { font-size: 10px; color: var(--muted); text-align: left; padding-left: 3px; }
 .day.out { visibility: hidden; }
 .day.sun { color: var(--late); }
@@ -130,6 +134,13 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .tick.on span { background: var(--upload); border-color: var(--upload); color: #fff; }
 .item.saving { opacity: 0.6; }
 /* 저장 알림: 아래에서 떠오르고, 되돌리기 버튼이 있다 */
+/* 메모 칸: 글 + 날짜(선택) + 추가. 폰에서는 날짜와 버튼이 아랫줄로 */
+.memo-form { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.memo-form input { min-width: 0; height: 40px; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
+.memo-form input[type="text"] { flex: 1 1 220px; }
+.memo-form input[type="date"] { flex: 1 1 140px; }
+.memo-form button { flex: 0 0 auto; height: 40px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--ink); color: var(--card); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.memo-form input:focus-visible, .memo-form button:focus-visible { outline: 2px solid var(--shoot); outline-offset: 1px; }
 .toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 10px 14px 10px 16px; border-radius: 14px; background: var(--ink); color: var(--card); font-size: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
 .toast button { border: 0; background: none; color: var(--today); font: inherit; font-weight: 800; cursor: pointer; padding: 4px; }
 </style>
@@ -166,11 +177,18 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     <li class="chip t-draft">초안·기획안 · 3일 전</li>
     <li class="chip t-shoot">방문 촬영·오프라인 행사 · 3일 전</li>
     <li class="chip t-pay">정산 · 입금 확인까지</li>
+    <li class="chip t-memo">메모 · 완료할 때까지</li>
   </ul>
 
   <div class="cols">
     <section class="panel" aria-labelledby="todo-h">
       <h2 id="todo-h">다가오는 일 <small id="todo-count"></small></h2>
+      <form class="memo-form" id="memo-form" autocomplete="off">
+        <label class="sr" for="memo-text" hidden>메모</label>
+        <input type="text" id="memo-text" maxlength="200" placeholder="까먹으면 안 되는 일 적기" aria-label="메모">
+        <input type="date" id="memo-date" aria-label="날짜 (없어도 돼요)">
+        <button type="submit">추가</button>
+      </form>
       <ul class="todo" id="todo"></ul>
       <p class="reply">끝낸 일은 왼쪽 <b>동그라미를 누르면</b> 바로 완료로 옮겨져요. 다음 날 아침 리마인더에서도 빠져요.</p>
     </section>
@@ -202,8 +220,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 <script>
 (() => {
   let data = JSON.parse(document.getElementById('tpos-data').textContent);
-  const LEAD = { upload: 1, draft: 3, shoot: 3, pay: Infinity };
-  const NAME = { upload: '업로드', draft: '초안·기획안', shoot: '방문 촬영', pay: '정산' };
+  const LEAD = { upload: 1, draft: 3, shoot: 3, pay: Infinity, memo: 1 };
+  const NAME = { upload: '업로드', draft: '초안·기획안', shoot: '방문 촬영', pay: '정산', memo: '메모' };
   const DOW = ['일', '월', '화', '수', '목', '금', '토'];
   const $ = id => document.getElementById(id);
 
@@ -213,18 +231,20 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
   const toUTC = ymd => { const [y, m, d] = ymd.split('-').map(Number); return Date.UTC(y, m - 1, d); };
   const diff = ymd => Math.round((toUTC(ymd) - toUTC(today)) / 86400000);
   const md = ymd => { const [, m, d] = ymd.split('-').map(Number); return `${m}월 ${d}일 (${DOW[new Date(toUTC(ymd)).getUTCDay()]})`; };
-  const when = it => `${md(it.date)} ${it.type === 'pay' ? '입금 예정' : (it.time || '시간 미정')}`;
+  // 날짜 없는 메모는 '날짜 없음'으로, 메모는 시각이 없으면 그냥 날짜만
+  const when = it => !it.date ? '날짜 없음' : `${md(it.date)} ${it.type === 'pay' ? '입금 예정' : (it.time || (it.type === 'memo' ? '' : '시간 미정'))}`.trim();
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const byTime = (a, b) => (a.time || '99').localeCompare(b.time || '99');
 
   const ddayText = it => {
+    if (!it.date) return '메모';
     const n = diff(it.date);
     if (it.type === 'pay') return n > 0 ? `입금 D-${n}` : n === 0 ? '입금 오늘' : '입금 확인';
     return n > 0 ? `D-${n}` : n === 0 ? 'D-DAY' : `${-n}일 지남`;
   };
   const saving = new Set();
   const row = it => {
-    const n = diff(it.date);
+    const n = it.date ? diff(it.date) : Infinity;
     const alert = !it.done && n <= LEAD[it.type];
     const late = !it.done && n < 0;
     const label = it.done ? `${it.no}번 완료 취소` : `${it.no}번 완료로 표시`;
@@ -240,7 +260,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
   const pad = n => String(n).padStart(2, '0');
 
   function render() {
-    const items = data.items.slice().sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b) || a.no - b.no);
+    const items = data.items.slice().sort((a, b) => (a.date || '0000').localeCompare(b.date || '0000') || byTime(a, b) || a.no - b.no);
     const open = items.filter(i => !i.done);
     const done = items.filter(i => i.done).reverse();
     $('sample').hidden = !data.sample;
@@ -253,7 +273,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     $('done-count').textContent = `${done.length}건`;
 
     const byDay = {};
-    items.forEach(i => (byDay[i.date] = byDay[i.date] || []).push(i));
+    items.filter(i => i.date).forEach(i => (byDay[i.date] = byDay[i.date] || []).push(i));
     Object.values(byDay).forEach(l => l.sort(byTime));
     $('cal-h').textContent = `${vy}년 ${vm}월`;
     const first = new Date(Date.UTC(vy, vm - 1, 1)).getUTCDay();
@@ -264,7 +284,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       const ymd = `${vy}-${pad(vm)}-${pad(d)}`;
       const list = byDay[ymd] || [];
       const cls = ['day', (first + d - 1) % 7 === 0 ? 'sun' : '', ymd === today ? 'today' : '', ymd === sel ? 'sel' : ''].join(' ');
-      const evs = list.slice(0, 3).map(i => `<span class="ev ev-${i.type}${i.done ? ' done' : ''}">${esc(i.brand || i.title)}</span>`).join('')
+      const evs = list.slice(0, 3).map(i => `<span class="ev ev-${i.type}${i.done ? ' done' : ''}">${esc(i.type === 'memo' ? i.title : (i.brand || i.title))}</span>`).join('')
         + (list.length > 3 ? `<span class="more">+${list.length - 3}</span>` : '');
       html += `<button type="button" class="${cls}" data-d="${ymd}" aria-label="${md(ymd)}, 일정 ${list.length}건" aria-pressed="${ymd === sel}"><span class="num">${d}</span>${evs}</button>`;
     }
@@ -298,6 +318,22 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       .withFailureHandler(() => { saving.delete(no); it.done = !done; render(); toast('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요', false); })
       .markDone(no, done);
   }
+
+  $('memo-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const text = $('memo-text').value.trim();
+    if (!text) { $('memo-text').focus(); return; }
+    const date = $('memo-date').value;
+    const temp = { no: 0, type: 'memo', brand: '메모', title: text, date: date, time: '', done: false };
+    data.items.push(temp);
+    $('memo-text').value = ''; $('memo-date').value = '';
+    render();
+    toast('메모를 추가했어요', false);
+    google.script.run
+      .withSuccessHandler(fresh => { data = fresh; render(); })
+      .withFailureHandler(() => { data.items = data.items.filter(x => x !== temp); render(); $('memo-text').value = text; toast('메모를 저장하지 못했어요. 다시 눌러 주세요', false); })
+      .addMemo(text, date, '');
+  });
 
   document.addEventListener('click', e => {
     const t = e.target.closest('.tick');
