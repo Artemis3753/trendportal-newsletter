@@ -67,7 +67,7 @@ function doGet(e) {
   if (p.api === 'items') {
     if (!checkToken_(p.token)) return json_({ ok: false, error: 'bad token' });
     return json_({ ok: true, updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')),
-                   fullScanAt: getMeta_('fullScanAt'), items: readItems_() });
+                   fullScanAt: getMeta_('fullScanAt'), fullQueue: getQueue_(), items: readItems_() });
   }
   const t = HtmlService.createTemplateFromFile('Index');
   // </script> 같은 글자가 들어와도 스크립트가 끊기지 않게 '<'를 바꿔서 넣는다
@@ -82,7 +82,9 @@ function doGet(e) {
  * - date는 YYYY-MM-DD 또는 ''(일정 미정)
  * - tentative: true면 확답 전 (제안된 날짜는 달력에 두되 아직 확정 아님을 표시). 확정되면 트란시스가 false로 다시 보낸다
  * - 같은 key가 있으면 내용만 갱신하고 번호·완료·삭제 여부는 그대로 둔다 (성현 님이 누른 ✓·삭제를 덮어쓰지 않게)
- * - scan: 'FULL'이면 전체 훑기를 마친 시각을 남긴다 (다음부터는 최근 메일만 읽어도 되는지 판단용)
+ * - queue: 전체 훑기(FULL)에서 읽을 스레드 id 목록. 한 번에 다 못 읽어서 시트에 남겨 두고 여러 번 나눠 읽는다
+ * - readThreads: 이번에 끝까지 읽은 스레드 id. 남은 목록(queue)에서 뺀다
+ * - scan: 'FULL'이고 남은 목록이 비었을 때만 전체 훑기를 마친 시각을 남긴다 (다음부터는 최근 메일만 읽어도 되는지 판단용)
  * - 새 key면 다음 번호를 붙인다
  * - reset: true면 예시 일정을 지우고 새로 시작한다 (첫 실제 실행 때 한 번)
  */
@@ -128,8 +130,17 @@ function doPost(e) {
     writeItems_(items);
     setMeta_('updatedAt', body.updatedAt || now_());
     setMeta_('sample', body.reset ? 'false' : getMeta_('sample') || 'false');
-    if (body.scan === 'FULL' && errors.length === 0) setMeta_('fullScanAt', now_());
-    return json_({ ok: errors.length === 0, errors: errors, items: readItems_() });
+    // 남은 목록: 새로 받으면 통째로 바꾸고, 읽은 스레드는 뺀다
+    let queue = Array.isArray(body.queue) ? body.queue.map(String) : getQueue_();
+    if (Array.isArray(body.readThreads)) {
+      const read = {};
+      body.readThreads.forEach(id => { read[String(id)] = true; });
+      queue = queue.filter(id => !read[id]);
+    }
+    setMeta_('fullQueue', JSON.stringify(queue));
+    // 남은 스레드가 하나라도 있으면 아직 전체 훑기를 마친 게 아니다
+    if (body.scan === 'FULL' && errors.length === 0 && queue.length === 0) setMeta_('fullScanAt', now_());
+    return json_({ ok: errors.length === 0, errors: errors, fullQueue: queue, items: readItems_() });
   } finally {
     lock.releaseLock();
   }
@@ -251,6 +262,15 @@ function isTrue_(v) {
 function checkToken_(t) {
   const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
   return !!token && t === token;
+}
+
+function getQueue_() {
+  try {
+    const q = JSON.parse(getMeta_('fullQueue') || '[]');
+    return Array.isArray(q) ? q.map(String) : [];
+  } catch (err) {
+    return [];
+  }
 }
 
 function getMeta_(k) {

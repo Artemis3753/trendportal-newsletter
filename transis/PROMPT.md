@@ -18,26 +18,27 @@ The routine prompt tells you the **MODE**:
 
 ## Steps
 
-1. Run `python3 transis/transis.py state`. The first line says the scan mode, `FULL` or `DAILY`. The rest lists the items already in the sheet, one per line (no, key, type, brand, title, date, time, tentative, done, removed, source). An empty date means the date is still open (일정 미정). Use the list to keep keys stable and to notice date changes.
+1. Run `python3 transis/transis.py state`. The first line says the scan mode, `FULL` or `DAILY`. In `FULL` mode the next line is about the **full queue** (see step 2). The rest lists the items already in the sheet, one per line (no, key, type, brand, title, date, time, tentative, done, removed, source). An empty date means the date is still open (일정 미정). Use the list to keep keys stable and to notice date changes.
 
 2. **Missing a schedule is the worst possible failure.** Collect candidate threads, then read every one of them completely.
 
-   a. Search with `search_threads`, `pageSize` 50, and **follow `nextPageToken` until there is none** (pass the token's literal value, never a shell expression). Sent mail is included on purpose: our own replies often hold the confirmed date.
+   a. **Search.** Use `search_threads`, `pageSize` 50, `view` `THREAD_VIEW_METADATA_ONLY`, and **follow `nextPageToken` until there is none** (pass the token's literal value, never a shell expression). When a result is too large and saved to a file, use `jq` to list each thread's id, message count, latest date and senders.
 
-      - `DAILY`: `newer_than:3d -in:drafts` (every thread with a message in the last 3 days, no keyword filter). The sheet remembers everything older, so threads without new mail need no rereading.
-      - `FULL`: `newer_than:60d -in:drafts (협업 OR 문의 OR 정산 OR 촬영 OR 행사 OR 취재 OR 입금 OR 초대 OR 방문 OR 광고 OR 업로드 OR 게시 OR 초안 OR 기획안 OR 일정 OR 가이드 OR 팝업 OR 가편)`.
+      - Always (both modes): `newer_than:3d -in:drafts` (every thread with a message in the last 3 days, no keyword filter).
+      - `FULL` with `full queue: none yet` (START) only: also `newer_than:60d -in:drafts (협업 OR 문의 OR 정산 OR 촬영 OR 행사 OR 취재 OR 입금 OR 초대 OR 방문 OR 광고 OR 업로드 OR 게시 OR 초안 OR 기획안 OR 일정 OR 가이드 OR 팝업 OR 가편 OR in:sent)`. `in:sent` is there on purpose: every thread we replied to is a candidate even without a keyword, because an agreed date needs our reply.
 
-      When a result is too large and saved to a file, use `jq` to list each thread's id, latest date, senders and subject.
+   b. **Candidates.** Drop a thread **only** if every message in it is from an automated sender (no-reply, noreply, notify, newsletter, mailer-daemon, or a platform such as LinkedIn, Reddit, Google, OpenAI) or it is a press release (보도자료) that we never replied to. Keep everything else, including threads you think are finished.
 
-   b. Make one candidate list (unique thread ids). Drop a thread **only** if every message in it is from an automated sender (no-reply, noreply, notify, newsletter, mailer-daemon, or a platform such as LinkedIn, Reddit, Google, OpenAI) or it is a press release (보도자료) that we never replied to. Keep everything else, including threads you think are finished.
+      - `FULL` START: write the 60-day candidate ids, one per line, newest first, to `/tmp/transis/queue.txt` and run `python3 transis/transis.py queue /tmp/transis/queue.txt`. Then run `state` again: it now prints the first batch.
+      - This run reads: the 3-day candidates, plus in `FULL` mode **every thread id in THIS BATCH** printed by `state`. Never stop early and never skip a thread in the batch; the batch is sized so that one run can finish it. The rest of the queue is read by the next runs.
 
-   c. Read every candidate like this (it costs far less than `get_thread` with bodies, because each reply already quotes the whole conversation below it):
+   c. Read every thread of this run like this (it costs far less than `get_thread` with bodies, because each reply already quotes the whole conversation below it):
       1. `get_thread` with `messageFormat` `METADATA_ONLY`: the list of message ids, dates and senders.
       2. `get_message` (`PLAIN_TEXT`) on the **latest** message. If it is only a recall notice or has no quoted history, take the next latest one too.
       3. Compare the quoted history (lines such as `On ... wrote:`, `...님이 작성:`, `보낸 날짜:`, `From:`) with the message list. Read with `get_message` every message that is not inside it, for example a message sent in parallel, or one of ours that the latest reply did not quote.
       4. If a result is too large and saved to a file, read the body with `jq -r '.plaintextBody' <file>` (or the Read tool, in parts). Never skip the older part: dates are often in an early guide message far down the quote.
 
-      Keep a count of candidate threads and threads read completely.
+      After each thread, append its id to `/tmp/transis/read.txt` and the items you found to a notes file, so nothing is lost if the context grows long.
 
 3. Extract schedule items. There are four types:
 
@@ -70,16 +71,16 @@ The routine prompt tells you the **MODE**:
    | `source` | the thread subject |
    | `payer`, `amount` | for `pay` only: 입금자명 and the amount as written, otherwise `""` |
 
-   Write `{"scan": "FULL" or "DAILY", "items": [...], "unclear": [{"subject": "...", "reason": "..."}], "coverage": {"candidates": <number of candidate threads>, "read": <number read completely>}}` to `/tmp/transis/extracted.json` (create the folder first). The coverage numbers are printed at the bottom of the email, so they must be true. `scan` is the mode from step 1; the sheet records a finished `FULL` scan.
+   Write `{"scan": "FULL" or "DAILY", "items": [...], "unclear": [{"subject": "...", "reason": "..."}], "read_threads": [<every thread id you read completely in this run>], "coverage": {"candidates": <number of candidate threads>, "read": <number read completely in this run>}}` to `/tmp/transis/extracted.json` (create the folder first). `scan` is the mode from step 1, unchanged. In `FULL` mode `candidates` is the size of the whole 60-day queue (when it was built, or `state`'s count plus what you read) and the 3-day threads. The coverage numbers are printed at the bottom of the email, so they must be true. The sheet removes `read_threads` from the queue and records a finished `FULL` scan only when the queue is empty, so list only threads you really read to the end.
 
    Send only items from threads you read in this run; the sheet keeps all the others. Rows that 성현 added by hand (keys that are not thread ids) are kept as they are; do not send items with those keys. Items marked `removed` were deleted on purpose: you may send their key again (the sheet keeps them deleted), but never create a new key for the same schedule.
 
 4. Run `python3 transis/transis.py run /tmp/transis/extracted.json`. It sends the items to the sheet, reads the sheet back (with the done marks 성현 made), picks what to remind, and writes `/tmp/transis/subject.txt`, `email.html` and `email.txt`. If it prints `POST errors`, fix those items and run it once more.
 
-5. Prepare the email (skip this step in `REFRESH` mode). Get the mascot image with `base64 -w0 transis/husky.png`.
-   - `DRAFT`: call `create_draft` with `to` = `["kwonross5@gmail.com"]`, `subject` = the text of `subject.txt`, `htmlBody` = the full text of `email.html` unchanged, `body` = the text of `email.txt`, and `attachments` = `[{"content": <base64>, "filename": "husky.png", "mimeType": "image/png", "inline": true}]`.
+5. Prepare the email (skip this step in `REFRESH` mode). The mascot image is loaded from a web address inside `email.html`; attach nothing.
+   - `DRAFT`: call `create_draft` with `to` = `["kwonross5@gmail.com"]`, `subject` = the text of `subject.txt`, `htmlBody` = the full text of `email.html` unchanged, and `body` = the text of `email.txt`.
    - `SEND`: call `send_message` with exactly the same fields.
 
    Create exactly one draft or email per run.
 
-6. Finish with a short report: the scan mode, how many threads you scanned and read, each extracted item (number if known, type, brand, date, time; no payer or amount), the unclear list, the script's `due_today` list, and the draft or message id.
+6. Finish with a short report: the scan mode, how many threads you scanned and read, the script's `full_queue_left`, each extracted item (number if known, type, brand, date, time; no payer or amount), the unclear list, the script's `due_today` list, and the draft or message id.

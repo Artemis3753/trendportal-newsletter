@@ -3,7 +3,8 @@
 메일을 읽고 일정을 뽑는 일(판단이 필요한 일)은 트란시스(Claude)가 하고,
 이 스크립트는 그 결과를 받아 시트에 보내고, D-day로 고르고, 메일 HTML을 만든다.
 
-    python3 transis/transis.py state                 # 이번에 읽을 범위(FULL/DAILY) + 시트의 지금 일정 (금액·입금자명은 뺌)
+    python3 transis/transis.py state                 # 이번에 읽을 범위(FULL/DAILY) + 이번 묶음 스레드 + 시트의 지금 일정 (금액·입금자명은 뺌)
+    python3 transis/transis.py queue ids.txt         # FULL 시작: 읽을 스레드 id 목록(한 줄에 하나)을 시트에 저장
     python3 transis/transis.py run extracted.json    # 시트에 보내기 → 다시 읽기 → 고르기 → /tmp/transis/에 메일 파일
 
 환경 변수 TRANSIS_URL(웹앱 주소), TRANSIS_TOKEN(비밀 열쇠)이 필요하다. 둘 다 출력하지 않는다.
@@ -27,6 +28,10 @@ NAME = {'upload': '업로드', 'draft': '초안·기획안', 'shoot': '방문 �
 LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'memo': 1}
 # 전체 훑기(FULL)를 한 지 이만큼 지나면 다시 전체를 훑는다. 매일은 최근 메일만 읽으니, 한 달에 한 번 빠진 게 없는지 다시 확인
 FULL_EVERY_DAYS = 30
+# 전체 훑기는 한 번 실행에 이만큼씩만 읽는다. 400개를 한 번에 읽으려다 중간에 멈춘 적이 있어서(10/14) 나눠 읽고 이어 간다
+BATCH = 60
+# 메일 머리의 허스키. cid 첨부는 Gmail 초안에서 본문에 안 붙어서(10/14) 공개 저장소 주소로 불러온다
+HUSKY_URL = 'https://raw.githubusercontent.com/Artemis3753/trendportal-newsletter/main/transis/husky.png'
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
@@ -203,9 +208,14 @@ def render(items, unclear, t, url, coverage=None):
     subject = f'[트란시스] {md(t)} 챙길 일 {len(due)}건'
     # 얼마나 읽었는지 매일 보이게 (놓친 메일이 없는지 성현 님이 가늠할 수 있도록)
     cov = coverage or {}
-    scope = '지난 60일' if cov.get('scan') == 'FULL' else '최근 3일'
-    cov_line = (f"{scope} 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
-                if cov.get('candidates') is not None else '')
+    if cov.get('scan') == 'FULL':
+        left = cov.get('left') or 0
+        cov_line = (f"지난 60일 협업 메일 {cov.get('candidates')}개 스레드 중 이번에 {cov.get('read')}개를 끝까지 읽었어요. "
+                    + (f"남은 {left}개는 다음 실행에서 이어 읽어요(전체 확인 전)." if left else '이번으로 전체 확인을 마쳤어요.'))
+    elif cov.get('candidates') is not None:
+        cov_line = f"최근 3일 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
+    else:
+        cov_line = ''
     panel = 'background:#ffffff;border-radius:18px;padding:16px;'
 
     if due:
@@ -240,7 +250,7 @@ def render(items, unclear, t, url, coverage=None):
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6fa;"><tr><td align="center" style="padding:20px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;word-break:keep-all;overflow-wrap:break-word;font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#23242b;">
 <tr><td style="padding:0 4px 14px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="vertical-align:middle;padding-right:12px;"><img src="cid:husky.png" width="48" height="48" alt="트란시스" style="display:block;border:0;"></td>
+<td style="vertical-align:middle;padding-right:12px;"><img src="{HUSKY_URL}" width="48" height="48" alt="트란시스" style="display:block;border:0;"></td>
 <td style="vertical-align:middle;"><div style="font-size:12px;color:#7b7e8c;font-weight:700;">트란시스 아침 브리핑</div>
 <div style="font-size:21px;font-weight:800;line-height:1.3;">{md(t)} 챙길 일 {len(due)}건</div></td></tr></table></td></tr>
 <tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:10px;">오늘 챙길 일</div>{today_html}</td></tr>
@@ -281,7 +291,14 @@ def scan_mode(res):
 
 def cmd_state():
     res = api_get()
-    print(f"scan: {scan_mode(res)}  (last full scan: {res.get('fullScanAt') or 'never'})")
+    mode = scan_mode(res)
+    queue = res.get('fullQueue') or []
+    print(f"scan: {mode}  (last full scan: {res.get('fullScanAt') or 'never'})")
+    if mode == 'FULL' and not queue:
+        print('full queue: none yet -> START: build the candidate list and save it with `queue`, then run `state` again')
+    elif mode == 'FULL':
+        print(f'full queue: {len(queue)} threads left. Read THIS BATCH ({min(BATCH, len(queue))}) this run:')
+        print(' '.join(queue[:BATCH]))
     print('no | key | type | brand | title | date | time | tentative | done | removed | source')
     # 한 줄에 하나씩 (토큰 절약). 금액·입금자명은 뺀다
     for x in res['items']:
@@ -296,12 +313,13 @@ def cmd_run(path):
     now = dt.datetime.now(SEOUL).replace(microsecond=0).isoformat()
     # 시트에 아직 예시 일정만 있으면 첫 실제 실행이므로 비우고 시작한다
     post = api_post({'updatedAt': now, 'reset': bool(before.get('sample')), 'scan': ext.get('scan', 'DAILY'),
-                     'items': ext.get('items', [])})
+                     'items': ext.get('items', []), 'readThreads': ext.get('read_threads', [])})
     if not post.get('ok'):
         print('POST errors:', post.get('errors') or post.get('error'))
     after = api_get()
     t = today()
-    cov = dict(ext.get('coverage') or {}, scan=ext.get('scan', 'DAILY'))
+    left = len(after.get('fullQueue') or [])
+    cov = dict(ext.get('coverage') or {}, scan=ext.get('scan', 'DAILY'), left=left)
     subject, body, text, due, later = render(after['items'], ext.get('unclear', []), t, env('TRANSIS_URL'), cov)
     os.makedirs(OUT, exist_ok=True)
     for name, content in (('subject.txt', subject), ('email.html', body), ('email.txt', text)):
@@ -315,14 +333,25 @@ def cmd_run(path):
         'later': [f"{x['no']} {x['type']} {x['date']} {x['title']}" for x in later],
         'unclear': len(ext.get('unclear', [])),
         'coverage': ext.get('coverage'),
+        'full_queue_left': left,
+        'full_scan_at': after.get('fullScanAt') or None,
         'subject': subject,
         'files': [os.path.join(OUT, n) for n in ('subject.txt', 'email.html', 'email.txt')],
     }, ensure_ascii=False, indent=1))
 
 
+def cmd_queue(path):
+    with open(path, encoding='utf-8') as f:
+        ids = list(dict.fromkeys(x.strip() for x in f if x.strip()))  # 순서 유지, 중복 제거
+    res = api_post({'updatedAt': dt.datetime.now(SEOUL).replace(microsecond=0).isoformat(), 'queue': ids, 'items': []})
+    print(f"queue saved: {len(res.get('fullQueue') or [])} threads" if res.get('ok') else f"queue failed: {res}")
+
+
 if __name__ == '__main__':
     if len(sys.argv) >= 2 and sys.argv[1] == 'state':
         cmd_state()
+    elif len(sys.argv) >= 3 and sys.argv[1] == 'queue':
+        cmd_queue(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == 'run':
         cmd_run(sys.argv[2])
     else:
