@@ -80,7 +80,7 @@ The routine prompt tells you the **MODE**:
 
 4. Run `python3 transis/transis.py run /tmp/transis/extracted.json`. It sends the items to the sheet, reads the sheet back (with the done marks 성현 made), picks what to remind, and writes `/tmp/transis/subject.txt`, `email.html` and `email.txt`. If it prints `POST errors`, fix those items and run it once more.
 
-5. Prepare the email (skip this step in `REFRESH` mode). The mascot image is loaded from a web address inside `email.html`; attach nothing.
+5. Prepare the email (skip this step in `REFRESH` mode). `email.html` has no images (the Gmail tool strips `<img>` tags); attach nothing.
    - `DRAFT`: call `create_draft` with `to` = `["kwonross5@gmail.com"]`, `subject` = the text of `subject.txt`, `htmlBody` = the full text of `email.html` unchanged, and `body` = the text of `email.txt`.
    - `SEND`: call `send_message` with the same fields plus `bcc` = `["yd30421@gmail.com"]` (지환 checks every reminder while Transis is being tested).
 

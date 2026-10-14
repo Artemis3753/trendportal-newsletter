@@ -32,11 +32,8 @@ LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'pay': 3, 'memo': 1}
 FULL_EVERY_DAYS = 30
 # 전체 훑기는 한 번 실행에 이만큼씩만 읽는다. 400개를 한 번에 읽으려다 중간에 멈춘 적이 있어서(10/14) 나눠 읽고 이어 간다
 BATCH = 60
-# 메일 머리의 허스키(실제 인형 사진 + 오른쪽 위 ✨). cid 첨부는 Gmail 초안에서 본문에 안 붙어서(10/14) 공개 저장소 주소로 불러온다
-# 일정표처럼 ✨를 겹쳐 놓으면 Gmail이 위치 지정을 지워서, 사진과 ✨를 한 장의 투명 PNG로 구워 넣었다
-# GitHub(raw.githubusercontent) 주소는 Gmail에서 그림이 안 떠서(10/14 두 번 확인) 사이트 미디어(587)에 올린 주소를 쓴다
-# 원본은 저장소의 transis/mascot-mail.png. 옛 husky.png·mascot.jpg는 이미 보낸 메일이 참조해서 지우지 않는다
-HUSKY_URL = 'https://trendportal.kr/wp-content/uploads/2026/10/mascot-mail.png'
+# 메일엔 그림을 넣지 않는다. 보내는 Gmail 도구 send_message가 <img> 태그를 통째로 지워서(10/14 보낸 원문으로 확인)
+# 주소를 바꾸든 cid 첨부든 안 뜬다(create_draft로 만든 초안도 그림이 안 떴다). 같은 이유로 배경은 background: 줄임 표기 대신 background-color:로 쓴다(줄임 표기는 지워짐)
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
@@ -179,7 +176,7 @@ def row(it, t, first, detail=True, when=True, off=False):
             bits.append(f"입금자명 <b>{e(it['payer'])}</b>")
         if it.get('amount'):
             bits.append(f"금액 <b>{e(it['amount'])}</b>")
-        extra += (f'<div style="font-size:12.5px;margin-top:4px;background:{COLOR["pay"][1]};'
+        extra += (f'<div style="font-size:12.5px;margin-top:4px;background-color:{COLOR["pay"][1]};'
                   f'border-left:3px solid {COLOR["pay"][0]};padding:4px 8px;">{" · ".join(bits)}</div>')
     if detail and it.get('source'):
         extra += f'<div style="font-size:11.5px;color:#a0a3b1;margin-top:3px;">원본 메일: “{e(it["source"])}”</div>'
@@ -279,7 +276,7 @@ def calendar_html(items, t):
                 label = x['title'] if x['type'] == 'memo' else (x.get('brand') or x['title'])
                 # 확답 전 = 바탕 없이 점선 (Gmail은 outline을 안 받아서 border로)
                 look = (f'border:1px dashed {strong};' if x.get('tentative')
-                        else f'background:{soft};border-left:3px solid {strong};')
+                        else f'background-color:{soft};border-left:3px solid {strong};')
                 chips += (f'<div style="margin-top:2px;padding:0 2px;border-radius:4px;{look}color:{strong};'
                           f'font-size:10px;font-weight:700;line-height:1.4;white-space:nowrap;overflow:hidden;text-align:left;">'
                           f'{e(label)}</div>')
@@ -335,7 +332,7 @@ def render(items, unclear, t, url, coverage=None):
         cov_line = f"최근 하루 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
     else:
         cov_line = ''
-    panel = 'background:#ffffff;border:1px solid #e6e8ef;border-radius:18px;padding:16px;'
+    panel = 'background-color:#ffffff;border:1px solid #e6e8ef;border-radius:18px;padding:16px;'
     gap = '<tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>'
 
     # 맨 위 한 줄 요약: 오늘이 마감인 일만 종류별로 센다 (오늘 하루가 얼마나 바쁜지 먼저 보이게)
@@ -349,7 +346,7 @@ def render(items, unclear, t, url, coverage=None):
 
     if due:
         today_html = (f'<div style="font-size:14px;font-weight:700;padding:10px 12px;border-radius:12px;'
-                      f'background:#f5f6fa;border:1px solid #e6e8ef;">{summary}</div>{grouped(due, t)}')
+                      f'background-color:#f5f6fa;border:1px solid #e6e8ef;">{summary}</div>{grouped(due, t)}')
     else:
         today_html = '<div style="font-size:14px;color:#7b7e8c;padding:4px 2px;">오늘 체크할 일은 없어요. 스토리만 올리면 끝! 🐺</div>'
 
@@ -383,11 +380,10 @@ def render(items, unclear, t, url, coverage=None):
 
     body = f'''<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>트란시스 아침 브리핑</title></head>
-<body style="margin:0;padding:0;background:#f5f6fa;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6fa;"><tr><td align="center" style="padding:20px 12px;">
+<body style="margin:0;padding:0;background-color:#f5f6fa;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f6fa;"><tr><td align="center" style="padding:20px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;word-break:keep-all;overflow-wrap:break-word;font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#23242b;">
 <tr><td style="padding:0 4px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td width="60" style="vertical-align:middle;"><img src="{HUSKY_URL}" width="56" height="54" alt="트란시스" style="display:block;border:0;"></td>
 <td style="vertical-align:middle;"><div style="font-size:12px;color:#7b7e8c;font-weight:700;">트란시스 아침 브리핑</div>
 <div style="font-size:21px;font-weight:800;line-height:1.3;">{md(t)} 체크리스트</div></td>
 <td align="right" style="vertical-align:middle;"><a href="{e(url)}" style="display:inline-block;padding:7px 12px;border-radius:999px;border:1.5px solid #23242b;color:#23242b;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap;">일정표 열기 →</a></td>
