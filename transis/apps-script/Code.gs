@@ -246,14 +246,34 @@ const MAIL_DONE_BY = '성현(메일)';
 function mailLink_(p) {
   const no = Number(p.no);
   if (!no || !checkSig_(p.a + ':' + no, p.sig)) return linkPage_('링크가 올바르지 않아요', '메일의 링크를 그대로 눌러 주세요.', null);
-  const it = readItems_().filter(x => x.no === no)[0];
-  if (!it || it.removed) return linkPage_('일정표에서 빠진 일이에요', '이미 지웠거나 취소된 일이라 바꾸지 않았어요.', null);
-  const name = (it.type !== MEMO && it.brand && String(it.title).indexOf(it.brand) !== 0 ? it.brand + ' ' : '') + it.title;
-  if (p.a === 'done') {
-    if (!it.done) editItem_(no, x => { x.done = true; x.doneAt = now_(); x.doneBy = MAIL_DONE_BY; });
-    return linkPage_(it.done ? '이미 완료돼 있어요' : '완료했어요', name, { a: 'undo', no: no, label: '되돌리기' });
+  // 폰에서 누르고 기다리는 화면이라 빨라야 한다: 시트 전체를 읽고 다시 쓰는 editItem_ 대신
+  // 번호 칸만 읽어 그 줄을 찾고, 그 한 줄만 고친다(10/15 로딩이 길다는 사용자 피드백)
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  let it, was;
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET);
+    const nos = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues() : [];
+    const i = nos.findIndex(r => Number(r[0]) === no);
+    if (i < 0) return linkPage_('일정표에서 빠진 일이에요', '이미 지웠거나 취소된 일이라 바꾸지 않았어요.', null);
+    const range = sh.getRange(i + 2, 1, 1, FIELDS.length);
+    const row = range.getDisplayValues()[0];
+    it = {};
+    FIELDS.forEach((f, k) => { it[f] = row[k]; });
+    if (isTrue_(it.removed)) return linkPage_('일정표에서 빠진 일이에요', '이미 지웠거나 취소된 일이라 바꾸지 않았어요.', null);
+    was = isTrue_(it.done);
+    const want = p.a === 'done';
+    if (was !== want) {
+      row[FIELDS.indexOf('done')] = want ? 'true' : 'false';
+      row[FIELDS.indexOf('doneAt')] = want ? now_() : '';
+      row[FIELDS.indexOf('doneBy')] = want ? MAIL_DONE_BY : '';
+      range.setNumberFormat('@').setValues([row]);
+    }
+  } finally {
+    lock.releaseLock();
   }
-  if (it.done) editItem_(no, x => { x.done = false; x.doneAt = ''; x.doneBy = ''; });
+  const name = (it.type !== MEMO && it.brand && String(it.title).indexOf(it.brand) !== 0 ? it.brand + ' ' : '') + it.title;
+  if (p.a === 'done') return linkPage_(was ? '이미 완료돼 있어요' : '완료했어요', name, { a: 'undo', no: no, label: '되돌리기' });
   return linkPage_('되돌렸어요', name + ' — 다시 할 일로 돌아갔어요.', { a: 'done', no: no, label: '다시 완료' });
 }
 
