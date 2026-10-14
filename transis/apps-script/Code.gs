@@ -73,6 +73,7 @@ function doGet(e) {
     return json_({ ok: true, updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')),
                    fullScanAt: getMeta_('fullScanAt'), fullQueue: getQueue_(), items: readItems_() });
   }
+  if (p.a === 'done' || p.a === 'undo') return mailLink_(p);
   const t = HtmlService.createTemplateFromFile('Index');
   // </script> 같은 글자가 들어와도 스크립트가 끊기지 않게 '<'를 바꿔서 넣는다
   t.dataJson = JSON.stringify(publicData_()).replace(/</g, '\\u003c');
@@ -232,6 +233,56 @@ function editItem_(no, change) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 메일의 '✓ 완료' 링크: ?a=done&no=17&sig=… (되돌리기는 a=undo)
+ * 메일 안에서는 일정표(스크립트)가 돌지 않아서, 링크 한 번으로 완료하고 결과 화면을 보여 준다(10/15 사용자 B안).
+ * sig = HMAC-SHA256(TOKEN, 'done:17') — 토큰은 링크에 안 들어가고, 번호만 바꿔서는 다른 일을 건드릴 수 없다.
+ * 잘못 누른 경우를 위해 결과 화면에 되돌리기 버튼을 둔다
+ */
+const MAIL_DONE_BY = '성현(메일)';
+
+function mailLink_(p) {
+  const no = Number(p.no);
+  if (!no || !checkSig_(p.a + ':' + no, p.sig)) return linkPage_('링크가 올바르지 않아요', '메일의 링크를 그대로 눌러 주세요.', null);
+  const it = readItems_().filter(x => x.no === no)[0];
+  if (!it || it.removed) return linkPage_('일정표에서 빠진 일이에요', '이미 지웠거나 취소된 일이라 바꾸지 않았어요.', null);
+  const name = (it.type !== MEMO && it.brand && String(it.title).indexOf(it.brand) !== 0 ? it.brand + ' ' : '') + it.title;
+  if (p.a === 'done') {
+    if (!it.done) editItem_(no, x => { x.done = true; x.doneAt = now_(); x.doneBy = MAIL_DONE_BY; });
+    return linkPage_(it.done ? '이미 완료돼 있어요' : '완료했어요', name, { a: 'undo', no: no, label: '되돌리기' });
+  }
+  if (it.done) editItem_(no, x => { x.done = false; x.doneAt = ''; x.doneBy = ''; });
+  return linkPage_('되돌렸어요', name + ' — 다시 할 일로 돌아갔어요.', { a: 'done', no: no, label: '다시 완료' });
+}
+
+function sign_(msg) {
+  const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
+  return Utilities.computeHmacSha256Signature(msg, token)
+    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+}
+
+function checkSig_(msg, sig) {
+  return !!sig && sign_(msg) === String(sig);
+}
+
+function linkPage_(head, body, again) {
+  const url = ScriptApp.getService().getUrl();
+  const btn = 'display:inline-block;margin:6px 4px 0;padding:10px 16px;border-radius:999px;font-weight:800;text-decoration:none;font-size:15px;';
+  const againHtml = again
+    ? '<a href="' + esc_(url + '?a=' + again.a + '&no=' + again.no + '&sig=' + sign_(again.a + ':' + again.no)) + '" target="_top" style="' + btn + 'border:1.5px solid #23242b;color:#23242b;">' + esc_(again.label) + '</a>'
+    : '';
+  const html = '<div style="font-family:-apple-system,\'Apple SD Gothic Neo\',sans-serif;max-width:420px;margin:48px auto;padding:0 20px;text-align:center;color:#23242b;word-break:keep-all;">'
+    + '<div style="font-size:22px;font-weight:800;">' + esc_(head) + '</div>'
+    + '<div style="font-size:15px;color:#7b7e8c;margin:10px 0 18px;line-height:1.5;">' + esc_(body) + '</div>'
+    + '<a href="' + esc_(url) + '" target="_top" style="' + btn + 'background-color:#23242b;color:#ffffff;">일정표 열기</a>' + againHtml + '</div>';
+  return HtmlService.createHtmlOutput(html).setTitle('트란시스 일정표')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function esc_(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /** 화면을 다시 열거나 돌아왔을 때 최신 상태를 받아 간다 */

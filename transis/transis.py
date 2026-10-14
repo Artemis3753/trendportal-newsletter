@@ -13,6 +13,8 @@
 """
 
 import datetime as dt
+import hashlib
+import hmac
 import html
 import json
 import os
@@ -34,8 +36,9 @@ LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'pay': 3, 'memo': 1}
 FULL_EVERY_DAYS = 30
 # 전체 훑기는 한 번 실행에 이만큼씩만 읽는다. 400개를 한 번에 읽으려다 중간에 멈춘 적이 있어서(10/14) 나눠 읽고 이어 간다
 BATCH = 60
-# 메일엔 그림을 넣지 않는다. 보내는 Gmail 도구 send_message가 <img> 태그를 통째로 지워서(10/14 보낸 원문으로 확인)
-# 주소를 바꾸든 cid 첨부든 안 뜬다(create_draft로 만든 초안도 그림이 안 떴다). 같은 이유로 배경은 background: 줄임 표기 대신 background-color:로 쓴다(줄임 표기는 지워짐)
+# 메일 머리의 허스키(실제 인형 사진 + 오른쪽 위 ✨를 한 장으로 구운 투명 PNG, Gmail이 겹치기 위치 지정을 지워서).
+# 10/14엔 Gmail 커넥터 send_message가 <img>를 지워서 뺐다가, 발신함 웹앱(MailApp)으로 보내면서 되살렸다(10/15 받은편지함 확인)
+HUSKY_URL = 'https://trendportal.kr/wp-content/uploads/2026/10/mascot-mail.png'
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
@@ -116,13 +119,15 @@ def sort_key(it):
     return (it.get('date') or '0000', it.get('time') or '99', it['no'])
 
 
-# 메일은 배경색에 기대지 않는다: Gmail에서 배경·그림·버튼이 빠져 흰 바탕에 흰 글씨가 된 적이 있어서(10/14)
-# 표시는 색 글씨·테두리로만 하고, 배경은 있으면 좋은 꾸밈으로만 쓴다
-# '미정': 시간 미정은 주황 글씨, 일정(날짜) 미정은 보라 글씨 (일정표 형광펜의 노랑·라벤더 계열)
-TBD = '시간 <span style="color:#c27c0e;font-weight:700;">미정</span>'
-TBD_DATE = '일정 <span style="color:#6b4fd8;font-weight:700;">미정</span>'
-# 확답 전: 날짜는 제안됐지만 아직 확정 전 (일정표의 라벤더 '확답 전'과 같은 뜻)
-TENTATIVE = '<span style="color:#6b4fd8;font-weight:700;white-space:nowrap;">· 확답 전</span>'
+# 10/14엔 Gmail 커넥터가 배경을 지워서 색 글씨로 바꿨다가, 발신함 웹앱으로 보내면서 일정표와 같은 형광펜·알약으로 되돌렸다(10/15)
+# '미정' 형광펜: 시간 미정은 노랑, 일정(날짜) 미정은 라벤더 (일정표와 같은 색)
+TBD = ('시간 <span style="background-color:#fff1a8;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
+       '미정</span>')
+TBD_DATE = ('일정 <span style="background-color:#e4d9ff;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
+            '미정</span>')
+# 확답 전: 날짜는 제안됐지만 아직 확정 전 (일정표의 라벤더 '확답 전'과 같은 모양)
+TENTATIVE = ('<span style="background-color:#e4d9ff;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;white-space:nowrap;">'
+             '확답 전</span>')
 
 
 def e(s):
@@ -185,9 +190,20 @@ def sub_line(it, t):
     return e(it['time']) if it.get('time') else TBD
 
 
-def row(it, t, first, detail=True, when=True, off=False):
+def done_link(it):
+    """메일의 '✓ 완료' 링크. 메일 안에선 일정표가 안 돌아서(Gmail이 iframe·스크립트를 지움) 링크 한 번으로 완료한다(10/15).
+    sig = HMAC(TRANSIS_TOKEN, 'done:번호') — Code.gs mailLink_가 같은 계산으로 확인한다. 토큰 자체는 링크에 안 들어간다"""
+    url, token = os.environ.get('TRANSIS_URL', '').strip(), os.environ.get('TRANSIS_TOKEN', '').strip()
+    if not (url and token):
+        return ''
+    sig = hmac.new(token.encode(), f"done:{it['no']}".encode(), hashlib.sha256).hexdigest()
+    return f"{url}?{urllib.parse.urlencode({'a': 'done', 'no': it['no'], 'sig': sig})}"
+
+
+def row(it, t, first, detail=True, when=True, off=False, link=False):
     """when=False: 날짜 칸 없이 (날짜를 확인해 주세요 칸은 전부 '일정 미정'이라 날짜 칸이 매 줄 같은 말이 돼서)
-    off=True: 취소돼서 뺀 일. 일정표 완료 칸처럼 제목에 줄을 긋고 회색으로, 날짜 칸은 원래 날짜 + 빨간 '✕ 취소'"""
+    off=True: 취소돼서 뺀 일. 일정표 완료 칸처럼 제목에 줄을 긋고 회색으로, 날짜 칸은 원래 날짜 + 빨간 '✕ 취소'
+    link=True: 오른쪽에 '✓ 완료' 링크 (오늘 체크리스트·저녁 확인 메일)"""
     late = (days_left(it, t) or 0) < 0 and not off
     line = '' if first else f'border-top:1px solid {LINE};'
     tent = f' {TENTATIVE}' if it.get('tentative') and not it.get('done') and not off else ''
@@ -211,35 +227,41 @@ def row(it, t, first, detail=True, when=True, off=False):
     elif when:
         label = rel_day(it, t)
         if days_left(it, t) == 0:
-            # 오늘 할 일은 종류 색 글씨 + 점 (알약은 배경이 빠지면 흰 글씨가 사라져서 글씨로, 10/14)
-            label = f'<span style="color:{COLOR[it["type"]][0]};">● {label}</span>'
+            # 오늘 할 일은 종류 색으로 채운 알약 (일정표의 오늘 D-DAY 알약과 같은 모양)
+            label = (f'<span style="display:inline-block;padding:1px 9px;border-radius:999px;'
+                     f'background-color:{COLOR[it["type"]][0]};color:#ffffff;">{label}</span>')
     if when:
         date_td = (f'<td width="78" style="padding:9px 8px 9px 0;vertical-align:top;{line}">'
                    f'<div style="font-size:14px;font-weight:800;white-space:nowrap;color:{"#a0a3b1" if off else "#e5484d" if late else "#23242b"};">{label}</div>'
                    + (f'<div style="font-size:12px;color:#7b7e8c;white-space:nowrap;margin-top:1px;">{sub}</div>' if sub else '')
                    + '</td>')
+    href = done_link(it) if link and not off else ''
+    done_td = (f'<td width="52" align="right" style="padding:9px 0 9px 6px;vertical-align:top;{line}">'
+               f'<a href="{e(href)}" style="display:inline-block;padding:3px 8px;border-radius:999px;border:1.5px solid {COLOR[it["type"]][0]};'
+               f'color:{COLOR[it["type"]][0]};font-size:12px;font-weight:800;text-decoration:none;white-space:nowrap;">✓ 완료</a></td>'
+               if href else '')
     return (
         f'<tr>{date_td}<td style="padding:9px 0;vertical-align:top;{line}">'
         + (f'<div style="font-size:15px;font-weight:700;line-height:1.4;color:#a0a3b1;text-decoration:line-through;">{e(it.get("title"))}</div>'
            if off else
            f'<div style="font-size:15px;font-weight:700;line-height:1.4;">{title_html(it)}{tent}</div>')
-        + f'{extra}</td></tr>'
+        + f'{extra}</td>{done_td}</tr>'
     )
 
 
-def rows_table(items, t, detail=True, when=True, off=False):
+def rows_table(items, t, detail=True, when=True, off=False, link=False):
     return ('<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
-            + ''.join(row(x, t, i == 0, detail, when, off) for i, x in enumerate(items)) + '</table>')
+            + ''.join(row(x, t, i == 0, detail, when, off, link) for i, x in enumerate(items)) + '</table>')
 
 
-def grouped(items, t, when=True):
+def grouped(items, t, when=True, link=False):
     """종류(색)별 소제목 + 줄 목록. 체크리스트와 날짜를 확인해 주세요 칸이 같은 모양을 쓴다"""
     out = ''
     for typ, head, _, _ in GROUPS:
         group = [x for x in items if x['type'] == typ]
         if group:
             out += (f'<div style="font-size:15px;font-weight:800;color:{COLOR[typ][0]};'
-                    f'margin:{"14px" if out else "4px"} 0 2px;">{head} {len(group)}</div>' + rows_table(group, t, when=when))
+                    f'margin:{"14px" if out else "4px"} 0 2px;">{head} {len(group)}</div>' + rows_table(group, t, when=when, link=link))
     return out
 
 
@@ -286,9 +308,9 @@ def calendar_html(items, t):
             day = start + dt.timedelta(days=w * 7 + i)
             lst = sorted(by_day.get(day.isoformat(), []), key=sort_key)
             if day == t:
-                # 오늘 = 숫자에 테두리 동그라미 (채운 동그라미는 배경이 빠지면 흰 숫자가 사라져서)
-                num = (f'<span style="display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:10px;'
-                       f'border:2px solid #23242b;color:#23242b;font-weight:800;">{day.day}</span>')
+                # 오늘 = 숫자 동그라미 (일정표의 오늘 표시와 같은 모양)
+                num = (f'<span style="display:inline-block;min-width:20px;height:20px;line-height:20px;border-radius:10px;'
+                       f'background-color:#23242b;color:#ffffff;font-weight:800;">{day.day}</span>')
             else:
                 color = '#c3c5cf' if day < t else ('#e5484d' if i == 0 else '#23242b')
                 num = f'<span style="display:inline-block;height:20px;line-height:20px;color:{color};">{day.day}</span>'
@@ -340,9 +362,10 @@ def shell(kicker, heading, url, rows, footer):
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f6fa;"><tr><td align="center" style="padding:20px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;word-break:keep-all;overflow-wrap:break-word;font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#23242b;">
 <tr><td style="padding:0 4px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td width="64" style="vertical-align:middle;"><img src="{HUSKY_URL}" width="56" height="54" alt="트란시스" style="display:block;border:0;"></td>
 <td style="vertical-align:middle;"><div style="font-size:12px;color:#7b7e8c;font-weight:700;">{e(kicker)}</div>
 <div style="font-size:21px;font-weight:800;line-height:1.3;">{e(heading)}</div></td>
-<td align="right" style="vertical-align:middle;"><a href="{e(url)}" style="display:inline-block;padding:7px 12px;border-radius:999px;border:1.5px solid #23242b;color:#23242b;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap;">일정표 열기 →</a></td>
+<td align="right" style="vertical-align:middle;"><a href="{e(url)}" style="display:inline-block;padding:9px 14px;border-radius:999px;background-color:#23242b;color:#ffffff;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap;">일정표 열기</a></td>
 </tr></table></td></tr>
 {rows}
 <tr><td align="center" style="padding:16px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">{footer}</td></tr>
@@ -356,10 +379,10 @@ def render_evening(items, t, url):
                   key=sort_key)
     subject = f'트란시스가 전하는 저녁 확인 · {md(t)}'  # 아침처럼 날짜를 붙여 Gmail이 한 대화로 묶지 않게
     # 저녁 8시쯤 도착하니 오늘 밤 올릴 업로드는 아직일 수 있다 → '잊으셨다'고 단정하지 않는 말투로
-    note = '끝냈다면 일정표에서 동그라미를 눌러 주세요. 오늘 밤에 할 일이면 끝나고 눌러도 돼요.'
+    note = '끝냈다면 ✓ 완료를 눌러 주세요. 오늘 밤에 할 일이면 끝나고 눌러도 돼요.'
     body = shell(f'트란시스 저녁 확인 · {md(t)}', '오늘 잊으신 건 없으셨나요?', url,
                  f'<tr><td style="{PANEL}"><div style="font-size:14px;font-weight:700;">아직 완료 표시가 없는 오늘 일 {len(left)}건</div>'
-                 f'<div style="font-size:12.5px;color:#7b7e8c;margin-top:2px;">{note}</div>{grouped(left, t)}</td></tr>',
+                 f'<div style="font-size:12.5px;color:#7b7e8c;margin-top:2px;">{note}</div>{grouped(left, t, link=True)}</td></tr>',
                  "동그라미를 누르지 않은 일은 내일 아침 메일에 '지난 일'로 다시 나와요.<br>"
                  '트란시스가 저녁 정리를 마친 뒤, 오늘 남은 일이 있을 때만 보내요.')
     text = [f'트란시스 저녁 확인 - {md(t)}', '오늘 잊으신 건 없으셨나요?', f'일정표: {url}', '',
@@ -402,7 +425,7 @@ def render(items, unclear, t, url, coverage=None):
 
     if due:
         today_html = (f'<div style="font-size:14px;font-weight:700;padding:10px 12px;border-radius:12px;'
-                      f'background-color:#f5f6fa;border:1px solid #e6e8ef;">{summary}</div>{grouped(due, t)}')
+                      f'background-color:#f5f6fa;border:1px solid #e6e8ef;">{summary}</div>{grouped(due, t, link=True)}')
     else:
         today_html = '<div style="font-size:14px;color:#7b7e8c;padding:4px 2px;">오늘 체크할 일은 없어요. 스토리만 올리면 끝! 🐺</div>'
 
@@ -439,7 +462,7 @@ def render(items, unclear, t, url, coverage=None):
 {gap}
 <tr><td style="{panel}">{today_html}</td></tr>
 {unclear_html}{later_html}''',
-                 f'''끝낸 일은 <a href="{e(url)}" style="color:#7b7e8c;font-weight:700;">일정표</a>에서 동그라미를 누르면 바로 빠지고, 내일 메일에도 안 나와요.<br>{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.''')
+                 f'''끝낸 일은 ✓ 완료나 <a href="{e(url)}" style="color:#7b7e8c;font-weight:700;">일정표</a>의 동그라미를 누르면 바로 빠지고, 내일 메일에도 안 나와요.<br>{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.''')
 
     text = [f'트란시스 아침 브리핑 - {md(t)} 체크리스트', f'일정표: {url}', '']
     if cancelled:
