@@ -6,8 +6,9 @@
     python3 transis/transis.py state                 # 이번에 읽을 범위(FULL/DAILY) + 이번 묶음 스레드 + 시트의 지금 일정 (금액·입금자명은 뺌)
     python3 transis/transis.py queue ids.txt         # FULL 시작: 읽을 스레드 id 목록(한 줄에 하나)을 시트에 저장
     python3 transis/transis.py run extracted.json    # 시트에 보내기 → 다시 읽기 → 고르기 → /tmp/transis/에 메일 파일
+    python3 transis/transis.py send morning|evening [--preview]   # 그 메일 파일을 발신함 웹앱으로 보내기 (--preview는 지환 님에게만)
 
-환경 변수 TRANSIS_URL(웹앱 주소), TRANSIS_TOKEN(비밀 열쇠)이 필요하다. 둘 다 출력하지 않는다.
+환경 변수 TRANSIS_URL(웹앱 주소), TRANSIS_TOKEN(비밀 열쇠)이 필요하고, send는 MAILER_URL·MAILER_TOKEN(발신함)도 쓴다. 모두 출력하지 않는다.
 표준 라이브러리만 쓴다(클라우드 환경에 따로 설치할 게 없게).
 """
 
@@ -150,6 +151,8 @@ GROUPS = [
     ('pay', '💰 들어올 돈', '입금', '건'),
 ]
 LINE = '#eef0f4'
+PANEL = 'background-color:#ffffff;border:1px solid #e6e8ef;border-radius:18px;padding:16px;'
+GAP = '<tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>'
 
 
 def days_left(it, t):
@@ -329,6 +332,41 @@ def recently_cancelled(items, hours=24):
 CANCELLED_BY = '트란시스(취소)'
 
 
+def shell(kicker, heading, url, rows, footer):
+    """메일 바깥 틀: 머리(작은 글씨 + 큰 제목 + 일정표 버튼) → 칸들(rows) → 바닥 안내. 아침·저녁 메일이 같이 쓴다"""
+    return f'''<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{e(kicker)}</title></head>
+<body style="margin:0;padding:0;background-color:#f5f6fa;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f6fa;"><tr><td align="center" style="padding:20px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;word-break:keep-all;overflow-wrap:break-word;font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#23242b;">
+<tr><td style="padding:0 4px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle;"><div style="font-size:12px;color:#7b7e8c;font-weight:700;">{e(kicker)}</div>
+<div style="font-size:21px;font-weight:800;line-height:1.3;">{e(heading)}</div></td>
+<td align="right" style="vertical-align:middle;"><a href="{e(url)}" style="display:inline-block;padding:7px 12px;border-radius:999px;border:1.5px solid #23242b;color:#23242b;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap;">일정표 열기 →</a></td>
+</tr></table></td></tr>
+{rows}
+<tr><td align="center" style="padding:16px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">{footer}</td></tr>
+</table></td></tr></table></body></html>'''
+
+
+def render_evening(items, t, url):
+    """저녁 정리 뒤 확인 메일: 오늘 날짜인데 아직 동그라미가 안 눌린 일만 (10/14 사용자 A안).
+    지난 정산까지 넣으면 매일 저녁 나가게 돼서 오늘 날짜만. 남은 일이 없으면 안 보낸다(left가 빈 목록)"""
+    left = sorted([x for x in items if not x.get('removed') and not x['done'] and x.get('date') == t.isoformat()],
+                  key=sort_key)
+    subject = f'트란시스가 전하는 저녁 확인 · {md(t)}'  # 아침처럼 날짜를 붙여 Gmail이 한 대화로 묶지 않게
+    # 저녁 8시쯤 도착하니 오늘 밤 올릴 업로드는 아직일 수 있다 → '잊으셨다'고 단정하지 않는 말투로
+    note = '끝냈다면 일정표에서 동그라미를 눌러 주세요. 오늘 밤에 할 일이면 끝나고 눌러도 돼요.'
+    body = shell(f'트란시스 저녁 확인 · {md(t)}', '오늘 잊으신 건 없으셨나요?', url,
+                 f'<tr><td style="{PANEL}"><div style="font-size:14px;font-weight:700;">아직 완료 표시가 없는 오늘 일 {len(left)}건</div>'
+                 f'<div style="font-size:12.5px;color:#7b7e8c;margin-top:2px;">{note}</div>{grouped(left, t)}</td></tr>',
+                 "동그라미를 누르지 않은 일은 내일 아침 메일에 '지난 일'로 다시 나와요.<br>"
+                 '트란시스가 저녁 정리를 마친 뒤, 오늘 남은 일이 있을 때만 보내요.')
+    text = [f'트란시스 저녁 확인 - {md(t)}', '오늘 잊으신 건 없으셨나요?', f'일정표: {url}', '',
+            f'아직 완료 표시가 없는 오늘 일 {len(left)}건', note] + text_grouped(left, t)
+    return subject, body, '\n'.join(text), left
+
+
 def render(items, unclear, t, url, coverage=None):
     cancelled = recently_cancelled(items)
     items = [x for x in items if not x.get('removed')]  # 일정표에서 지운 일은 메일에도 안 나온다
@@ -351,8 +389,7 @@ def render(items, unclear, t, url, coverage=None):
         cov_line = f"최근 하루 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
     else:
         cov_line = ''
-    panel = 'background-color:#ffffff;border:1px solid #e6e8ef;border-radius:18px;padding:16px;'
-    gap = '<tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>'
+    panel, gap = PANEL, GAP
 
     # 맨 위 한 줄 요약: 오늘이 마감인 일만 종류별로 센다 (오늘 하루가 얼마나 바쁜지 먼저 보이게)
     on_today = [x for x in due if days_left(x, t) == 0]
@@ -397,22 +434,12 @@ def render(items, unclear, t, url, coverage=None):
         later_html = (gap + f'<tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:2px;">'
                       f'그 다음 30일 - {len(later)}건</div>{rows_table(later, t, detail=False)}</td></tr>')
 
-    body = f'''<!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>트란시스 아침 브리핑</title></head>
-<body style="margin:0;padding:0;background-color:#f5f6fa;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f6fa;"><tr><td align="center" style="padding:20px 12px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;word-break:keep-all;overflow-wrap:break-word;font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#23242b;">
-<tr><td style="padding:0 4px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td style="vertical-align:middle;"><div style="font-size:12px;color:#7b7e8c;font-weight:700;">트란시스 아침 브리핑</div>
-<div style="font-size:21px;font-weight:800;line-height:1.3;">{md(t)} 체크리스트</div></td>
-<td align="right" style="vertical-align:middle;"><a href="{e(url)}" style="display:inline-block;padding:7px 12px;border-radius:999px;border:1.5px solid #23242b;color:#23242b;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap;">일정표 열기 →</a></td>
-</tr></table></td></tr>
-{cancelled_html}<tr><td style="{panel}">{calendar_html(items, t)}</td></tr>
+    body = shell('트란시스 아침 브리핑', f'{md(t)} 체크리스트', url,
+                 f'''{cancelled_html}<tr><td style="{panel}">{calendar_html(items, t)}</td></tr>
 {gap}
 <tr><td style="{panel}">{today_html}</td></tr>
-{unclear_html}{later_html}
-<tr><td align="center" style="padding:16px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">끝낸 일은 <a href="{e(url)}" style="color:#7b7e8c;font-weight:700;">일정표</a>에서 동그라미를 누르면 바로 빠지고, 내일 메일에도 안 나와요.<br>{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.</td></tr>
-</table></td></tr></table></body></html>'''
+{unclear_html}{later_html}''',
+                 f'''끝낸 일은 <a href="{e(url)}" style="color:#7b7e8c;font-weight:700;">일정표</a>에서 동그라미를 누르면 바로 빠지고, 내일 메일에도 안 나와요.<br>{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.''')
 
     text = [f'트란시스 아침 브리핑 - {md(t)} 체크리스트', f'일정표: {url}', '']
     if cancelled:
@@ -472,7 +499,17 @@ def cmd_run(path):
     cov = dict(ext.get('coverage') or {}, scan=ext.get('scan', 'DAILY'), left=left)
     subject, body, text, due, later = render(after['items'], ext.get('unclear', []), t, env('TRANSIS_URL'), cov)
     os.makedirs(OUT, exist_ok=True)
-    for name, content in (('subject.txt', subject), ('email.html', body), ('email.txt', text)):
+    files = [('subject.txt', subject), ('email.html', body), ('email.txt', text)]
+    # 저녁 확인 메일은 남은 오늘 일이 있을 때만 파일을 만든다 (없으면 보낼 것도 없음)
+    ev_subject, ev_body, ev_text, ev_left = render_evening(after['items'], t, env('TRANSIS_URL'))
+    ev_files = [('evening_subject.txt', ev_subject), ('evening.html', ev_body), ('evening.txt', ev_text)]
+    if ev_left:
+        files += ev_files
+    else:  # run을 다시 돌렸을 때 앞 실행의 저녁 파일이 남아 잘못 보내지 않게
+        for name, _ in ev_files:
+            if os.path.exists(os.path.join(OUT, name)):
+                os.remove(os.path.join(OUT, name))
+    for name, content in files:
         with open(os.path.join(OUT, name), 'w', encoding='utf-8') as f:
             f.write(content)
     print(json.dumps({
@@ -486,8 +523,39 @@ def cmd_run(path):
         'full_queue_left': left,
         'full_scan_at': after.get('fullScanAt') or None,
         'subject': subject,
-        'files': [os.path.join(OUT, n) for n in ('subject.txt', 'email.html', 'email.txt')],
+        'evening_left_today': [f"{x['no']} {x['type']} {x['title']}" for x in ev_left],
+        'files': [os.path.join(OUT, n) for n, _ in files],
     }, ensure_ascii=False, indent=1))
+
+
+# 메일은 contact@가 아니라 발신 전용 계정(transis.trendportal@gmail.com)의 웹앱이 보낸다.
+# contact@ 보낸편지함에 리마인더가 매일 쌓이지 않게(10/14). 받는 사람은 여기서 고정하고, 발신함도 같은 목록만 허락한다
+MAIL_TO = 'kwonross5@gmail.com'
+MAIL_BCC = 'yd30421@gmail.com'  # 시험 기간 동안 지환 님이 모든 메일을 같이 받는다
+MAIL_FILES = {
+    'morning': ('subject.txt', 'email.html', 'email.txt'),
+    'evening': ('evening_subject.txt', 'evening.html', 'evening.txt'),
+}
+
+
+def cmd_send(kind, preview=False):
+    paths = [os.path.join(OUT, n) for n in MAIL_FILES[kind]]
+    if not all(os.path.exists(p) for p in paths):
+        sys.exit(f'no {kind} email files in {OUT} (run `run` first; the evening email exists only when work is left today)')
+    subject, body, text = (open(p, encoding='utf-8').read() for p in paths)
+    mail = {'token': env('MAILER_TOKEN'), 'subject': subject, 'html': body, 'text': text}
+    if preview:
+        mail.update(to=[MAIL_BCC], subject='[미리보기] ' + subject)
+    else:
+        # 같은 날 같은 종류는 한 번만: 응답이 끊겨 다시 보내도 발신함이 두 번째를 버린다
+        mail.update(to=[MAIL_TO], bcc=[MAIL_BCC], id=f'{kind}:{today().isoformat()}')
+    req = urllib.request.Request(env('MAILER_URL'), data=json.dumps(mail).encode(),
+                                 headers={'Content-Type': 'application/json'})
+    res = urlopen_json(req)
+    if not res.get('ok'):
+        sys.exit(f"send failed: {res.get('error')}")
+    print(f"{kind} email {'already sent today (not sent again)' if res.get('duplicate') else 'sent'}"
+          f" to {', '.join(mail['to'])}{' (preview)' if preview else ''}")
 
 
 def cmd_queue(path):
@@ -504,5 +572,7 @@ if __name__ == '__main__':
         cmd_queue(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == 'run':
         cmd_run(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == 'send' and sys.argv[2] in MAIL_FILES:
+        cmd_send(sys.argv[2], preview='--preview' in sys.argv[3:])
     else:
         sys.exit(__doc__)
