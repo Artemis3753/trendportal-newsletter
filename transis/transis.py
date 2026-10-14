@@ -34,8 +34,9 @@ FULL_EVERY_DAYS = 30
 BATCH = 60
 # 메일 머리의 허스키(실제 인형 사진 + 오른쪽 위 ✨). cid 첨부는 Gmail 초안에서 본문에 안 붙어서(10/14) 공개 저장소 주소로 불러온다
 # 일정표처럼 ✨를 겹쳐 놓으면 Gmail이 위치 지정을 지워서, 사진과 ✨를 한 장의 투명 PNG로 구워 넣었다
-# 옛 husky.png·mascot.jpg는 이미 보낸 메일이 그 주소로 그림을 불러오고 있어서 지우지 않는다
-HUSKY_URL = 'https://raw.githubusercontent.com/Artemis3753/trendportal-newsletter/main/transis/mascot-mail.png'
+# GitHub(raw.githubusercontent) 주소는 Gmail에서 그림이 안 떠서(10/14 두 번 확인) 사이트 미디어(587)에 올린 주소를 쓴다
+# 원본은 저장소의 transis/mascot-mail.png. 옛 husky.png·mascot.jpg는 이미 보낸 메일이 참조해서 지우지 않는다
+HUSKY_URL = 'https://trendportal.kr/wp-content/uploads/2026/10/mascot-mail.png'
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
