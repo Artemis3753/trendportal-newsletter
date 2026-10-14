@@ -17,6 +17,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 
@@ -50,10 +51,29 @@ def env(name):
     return v
 
 
+# 웹앱이 가끔 몇 분 동안 느려지거나 404·500을 낸다(10/14 저녁 정리가 첫 단계에서 멈춤, 5분 뒤엔 4초에 정상 응답).
+# 한 번 실패로 포기하면 아침 메일이 안 나가니, 쉬었다가 몇 번 더 해 본다.
+# POST를 다시 보내도 괜찮다: 같은 key는 내용만 갱신하므로 두 번 들어가도 결과가 같다
+RETRY_WAITS = (30, 60)  # 첫 시도 실패 뒤 30초, 그다음 60초 쉬고 다시 → 최대 3번
+
+
+def urlopen_json(req):
+    for wait in RETRY_WAITS + (None,):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read())
+        except (OSError, ValueError) as err:  # 시간 초과·404·500·응답이 JSON이 아님
+            if wait is None:
+                raise
+            # 주소에 토큰이 들어 있어서 에러 내용 전체는 찍지 않는다
+            print(f'sheet call failed ({type(err).__name__}: {getattr(err, "code", "")}), retry in {wait}s',
+                  file=sys.stderr)
+            time.sleep(wait)
+
+
 def api_get():
     q = urllib.parse.urlencode({'api': 'items', 'token': env('TRANSIS_TOKEN')})
-    with urllib.request.urlopen(env('TRANSIS_URL') + '?' + q, timeout=60) as r:
-        res = json.loads(r.read())
+    res = urlopen_json(env('TRANSIS_URL') + '?' + q)
     if not res.get('ok'):
         sys.exit('sheet read failed: ' + str(res.get('error')))
     return res
@@ -63,8 +83,7 @@ def api_post(body):
     body = dict(body, token=env('TRANSIS_TOKEN'))
     req = urllib.request.Request(env('TRANSIS_URL'), data=json.dumps(body).encode(),
                                  headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read())
+    return urlopen_json(req)
 
 
 def today():

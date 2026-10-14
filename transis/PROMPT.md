@@ -16,6 +16,8 @@ The routine prompt tells you the **MODE**:
 4. Payer names and amounts go only into `extracted.json`. The script puts them in the reminder email and the private sheet, never on the public schedule page. Do not repeat them in your final report.
 5. Do all the reading yourself, one thread after another. Do not start subagents or parallel tasks. Do not write or run your own scripts on email content; use the Gmail tools, the Read tool and `jq` only.
 
+The schedule sheet's web app sometimes stays slow or returns 404/500 for a few minutes. `transis.py` already retries by itself (up to 3 tries over about 5 minutes), so run every `transis.py` command with a Bash timeout of 600000 ms. If it still fails, wait 5 minutes and run it once more before you stop. A failure like this does not mean the URL or deployment changed.
+
 ## Steps
 
 1. Run `python3 transis/transis.py state`. The first line says the scan mode, `FULL` or `DAILY`. In `FULL` mode the next line is about the **full queue** (see step 2). The rest lists the items already in the sheet, one per line (no, key, type, brand, title, date, time, tentative, done, removed, source). An empty date means the date is still open (일정 미정). Use the list to keep keys stable and to notice date changes.
