@@ -49,7 +49,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 
 /* 머리: 트란시스(허스키) 얼굴 + 이름 + 갱신 시각 */
 .head { display: flex; align-items: center; gap: 12px; }
-.face { flex: none; width: 48px; height: 48px; }
+.face { flex: none; width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
 .head h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1.1; letter-spacing: -0.01em; }
 .head p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
 .sample { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--today); color: var(--ink); font-size: 11px; font-weight: 700; vertical-align: 1px; }
@@ -198,21 +198,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 
 <div class="wrap">
   <header class="head">
-    <svg class="face" viewBox="0 0 48 48" role="img" aria-label="트란시스 마스코트, 허스키">
-      <path d="M7 21 L10 3 L21 13 Z" fill="#6f7685"/><path d="M41 21 L38 3 L27 13 Z" fill="#6f7685"/>
-      <path d="M10.5 16 L11.8 7.5 L17 12.5 Z" fill="#ffb3c1"/><path d="M37.5 16 L36.2 7.5 L31 12.5 Z" fill="#ffb3c1"/>
-      <ellipse cx="24" cy="27" rx="18" ry="16" fill="#6f7685"/>
-      <path d="M24 12 C21.5 18 20 22 20 26 L28 26 C28 22 26.5 18 24 12 Z" fill="#ffffff"/>
-      <ellipse cx="24" cy="34" rx="13.5" ry="9.5" fill="#ffffff"/>
-      <ellipse cx="15.5" cy="20.5" rx="2.6" ry="1.6" fill="#ffffff"/><ellipse cx="32.5" cy="20.5" rx="2.6" ry="1.6" fill="#ffffff"/>
-      <circle cx="16.5" cy="26" r="3.4" fill="#3d9bff"/><circle cx="31.5" cy="26" r="3.4" fill="#3d9bff"/>
-      <circle cx="16.5" cy="26" r="1.6" fill="#1b1c22"/><circle cx="31.5" cy="26" r="1.6" fill="#1b1c22"/>
-      <circle cx="17.6" cy="24.9" r="0.9" fill="#ffffff"/><circle cx="32.6" cy="24.9" r="0.9" fill="#ffffff"/>
-      <ellipse cx="24" cy="31" rx="3" ry="2.1" fill="#1b1c22"/>
-      <path d="M24 33 v2.2 M20.5 35.2 q3.5 2.8 7 0" stroke="#1b1c22" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-      <path d="M22.4 36.6 q1.6 3.2 3.2 0 Z" fill="#ff8aa0"/>
-      <circle cx="12" cy="32" r="2.4" fill="#ff8aa0" opacity="0.55"/><circle cx="36" cy="32" r="2.4" fill="#ff8aa0" opacity="0.55"/>
-    </svg>
+    <!-- 마스코트 = 실제 허스키 인형 사진. 메일과 같은 파일을 공개 저장소에서 불러온다 (Apps Script는 그림 파일을 둘 곳이 없어서) -->
+    <img class="face" src="https://raw.githubusercontent.com/Artemis3753/trendportal-newsletter/main/transis/mascot.jpg" width="48" height="48" alt="트란시스 마스코트, 허스키 인형">
     <div>
       <h1>트란시스 일정표<span class="sample" id="sample" hidden>예시 데이터</span></h1>
       <p id="updated">불러오는 중</p>

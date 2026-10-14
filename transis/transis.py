@@ -32,8 +32,9 @@ LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'pay': 3, 'memo': 1}
 FULL_EVERY_DAYS = 30
 # 전체 훑기는 한 번 실행에 이만큼씩만 읽는다. 400개를 한 번에 읽으려다 중간에 멈춘 적이 있어서(10/14) 나눠 읽고 이어 간다
 BATCH = 60
-# 메일 머리의 허스키. cid 첨부는 Gmail 초안에서 본문에 안 붙어서(10/14) 공개 저장소 주소로 불러온다
-HUSKY_URL = 'https://raw.githubusercontent.com/Artemis3753/trendportal-newsletter/main/transis/husky.png'
+# 메일 머리의 허스키(실제 인형 사진, 일정표와 같은 파일). cid 첨부는 Gmail 초안에서 본문에 안 붙어서(10/14) 공개 저장소 주소로 불러온다
+# 옛 husky.png는 이미 보낸 메일이 이 주소로 그림을 불러오고 있어서 지우지 않는다
+HUSKY_URL = 'https://raw.githubusercontent.com/Artemis3753/trendportal-newsletter/main/transis/mascot.jpg'
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
@@ -376,7 +377,7 @@ def render(items, unclear, t, url, coverage=None):
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6fa;"><tr><td align="center" style="padding:20px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;word-break:keep-all;overflow-wrap:break-word;font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#23242b;">
 <tr><td style="padding:0 4px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td width="60" style="vertical-align:middle;"><img src="{HUSKY_URL}" width="48" height="48" alt="트란시스" style="display:block;border:0;"></td>
+<td width="60" style="vertical-align:middle;"><img src="{HUSKY_URL}" width="48" height="48" alt="트란시스" style="display:block;border:0;border-radius:50%;"></td>
 <td style="vertical-align:middle;"><div style="font-size:12px;color:#7b7e8c;font-weight:700;">트란시스 아침 브리핑</div>
 <div style="font-size:21px;font-weight:800;line-height:1.3;">{md(t)} 체크리스트</div></td>
 <td align="right" style="vertical-align:middle;"><a href="{e(url)}" style="display:inline-block;padding:9px 14px;border-radius:999px;background:#23242b;color:#ffffff;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap;">일정표 열기</a></td>
