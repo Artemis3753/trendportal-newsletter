@@ -19,6 +19,10 @@ const META = 'meta';
 const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt', 'doneBy', 'removed', 'tentative'];
 // tentative = 확답 전: 날짜는 제안됐지만 한쪽이 아직 확정하지 않은 일정. 빈 칸(옛 줄)은 확정으로 읽는다
 const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'doneBy', 'tentative'];
+// 트란시스가 메일에서 취소를 확인해 뺀 일은 removed + doneBy 이름표로 구분한다 (성현 님이 지운 일은 doneBy가 사람 이름)
+// 취소된 일은 완료 칸에 줄 그은 채 남고, 휴지통을 누르면 이름표만 '지움'으로 바뀌어 화면에서 사라진다
+const CANCELLED = '트란시스(취소)';
+const CANCELLED_GONE = '트란시스(취소·지움)';
 const TYPES = ['upload', 'draft', 'shoot', 'pay'];
 // 메모: 성현 님이 일정표에서 직접 적는 할 일. 트란시스는 보내지도 바꾸지도 않는다(key가 'memo-'로 시작)
 const MEMO = 'memo';
@@ -118,7 +122,7 @@ function doPost(e) {
       if (old) {
         ['type', 'brand', 'title', 'date', 'time', 'source', 'payer', 'amount', 'tentative'].forEach(f => { old[f] = it[f]; });
         if (raw.done === true && !old.done) { old.done = true; old.doneAt = now_(); }
-        if (raw.cancelled === true && !old.done && !old.removed) { old.removed = true; old.doneBy = '트란시스(취소)'; old.doneAt = now_(); }
+        if (raw.cancelled === true && !old.done && !old.removed) { old.removed = true; old.doneBy = CANCELLED; old.doneAt = now_(); }
         old.updatedAt = now_();
       } else if (raw.cancelled === true) {
         return;  // 시트에 없던 일이 이미 취소된 거면 새로 넣지 않는다
@@ -160,11 +164,36 @@ function markDone(no, done, by) {
   });
 }
 
-/** 완료 목록의 삭제 버튼. 끝낸 일만 지울 수 있다. removed = false면 되돌리기 */
+/** 완료 목록의 삭제 버튼. 끝낸 일과 취소된 일만 지울 수 있다. removed = false면 되돌리기 */
 function removeItem(no, removed) {
   return editItem_(no, it => {
+    // 취소된 일은 이미 removed라서 이름표만 바꾼다 (되돌리면 다시 완료 칸의 '취소'로)
+    if (it.doneBy === CANCELLED || it.doneBy === CANCELLED_GONE) {
+      it.doneBy = removed === false ? CANCELLED : CANCELLED_GONE;
+      return;
+    }
     if (removed !== false && !it.done) throw new Error('only done items can be removed');
     it.removed = removed !== false;
+  });
+}
+
+/**
+ * 취소된 일의 동그라미. cancelled = false면 되살리기(다시 할 일로), true면 그 되살리기를 되돌리기.
+ * 메일만 보고 판단한 취소라 틀릴 수 있어서, 성현 님이 바로 되살릴 수 있게 둔다
+ */
+function setCancelled(no, cancelled) {
+  return editItem_(no, it => {
+    if (cancelled === false) {
+      if (!isCancelled_(it)) throw new Error('only cancelled items can be restored');
+      it.removed = false;
+      it.doneBy = '';
+      it.doneAt = '';
+    } else {
+      if (it.done || it.removed) throw new Error('only open items can be cancelled');
+      it.removed = true;
+      it.doneBy = CANCELLED;
+      it.doneAt = now_();
+    }
   });
 }
 
@@ -212,13 +241,19 @@ function getPublicData() {
 
 // ---------- 내부 함수 ----------
 
+// 지운 일은 화면에 안 보내지만, 트란시스가 취소로 뺀 일은 완료 칸에 남기려고 cancelled 표시를 붙여 보낸다
 function publicData_() {
-  const items = readItems_().filter(it => !it.removed).map(it => {
+  const items = readItems_().filter(it => !it.removed || isCancelled_(it)).map(it => {
     const o = {};
     PUBLIC_FIELDS.forEach(f => { o[f] = it[f]; });
+    o.cancelled = isCancelled_(it);
     return o;
   });
   return { updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')), items: items };
+}
+
+function isCancelled_(it) {
+  return it.removed && it.doneBy === CANCELLED;
 }
 
 function readItems_() {
