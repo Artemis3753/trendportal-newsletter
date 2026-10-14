@@ -237,6 +237,54 @@ def text_grouped(items, t, when=True):
     return out
 
 
+# 메일 맨 위 2주 달력 (이번 주 + 다음 주). 메일 앱은 스크립트를 안 돌려서 일정표처럼 눌러 펼칠 수 없으니,
+# 칸마다 칩을 미리 그려 둔다. 한 달은 폰에서 너무 길어져 체크리스트가 밀려서 2주만(10/14 사용자 A안)
+CAL_MAX = 4  # 한 칸에 칩 4개까지, 나머지는 +N (폰에서 칸 높이가 들쭉날쭉해지지 않게)
+
+
+def calendar_html(items, t):
+    start = t - dt.timedelta(days=(t.weekday() + 1) % 7)  # 이번 주 일요일 (일정표와 같이 일요일부터)
+    by_day = {}
+    for x in items:
+        if x.get('date') and not x['done']:  # 끝낸 일은 빼고 남은 일만 (메일은 아침 기준 '남은 일' 보기)
+            by_day.setdefault(x['date'], []).append(x)
+    head = ''.join(f'<td align="center" style="font-size:11px;font-weight:700;padding-bottom:2px;'
+                   f'color:{"#e5484d" if i == 0 else "#7b7e8c"};">{d}</td>' for i, d in enumerate('일월화수목금토'))
+    weeks = ''
+    for w in range(2):
+        cells = ''
+        for i in range(7):
+            day = start + dt.timedelta(days=w * 7 + i)
+            lst = sorted(by_day.get(day.isoformat(), []), key=sort_key)
+            if day == t:
+                # 오늘 = 숫자 동그라미 (일정표의 오늘 표시와 같은 모양)
+                num = (f'<span style="display:inline-block;min-width:20px;height:20px;line-height:20px;border-radius:10px;'
+                       f'background:#23242b;color:#ffffff;font-weight:800;">{day.day}</span>')
+            else:
+                color = '#c3c5cf' if day < t else ('#e5484d' if i == 0 else '#23242b')
+                num = f'<span style="display:inline-block;height:20px;line-height:20px;color:{color};">{day.day}</span>'
+            chips = ''
+            for x in lst[:CAL_MAX]:
+                strong, soft = COLOR[x['type']]
+                label = x['title'] if x['type'] == 'memo' else (x.get('brand') or x['title'])
+                # 확답 전 = 바탕 없이 점선 (Gmail은 outline을 안 받아서 border로)
+                look = (f'border:1px dashed {strong};' if x.get('tentative')
+                        else f'background:{soft};border:1px solid {soft};')
+                chips += (f'<div style="margin-top:2px;padding:0 2px;border-radius:4px;{look}color:{strong};'
+                          f'font-size:10px;font-weight:700;line-height:1.4;white-space:nowrap;overflow:hidden;text-align:left;">'
+                          f'{e(label)}</div>')
+            if len(lst) > CAL_MAX:
+                chips += f'<div style="font-size:10px;color:#7b7e8c;text-align:left;padding-left:2px;">+{len(lst) - CAL_MAX}</div>'
+            cells += (f'<td width="14%" align="center" style="vertical-align:top;padding:4px 1px 6px;'
+                      f'border-top:1px solid {LINE};font-size:12.5px;overflow:hidden;">{num}{chips}</td>')
+        weeks += f'<tr>{cells}</tr>'
+    end = start + dt.timedelta(days=13)
+    return (f'<div style="font-size:15px;font-weight:800;margin-bottom:6px;">이번 주 · 다음 주 '
+            f'<span style="font-size:12px;font-weight:700;color:#7b7e8c;">{start.month}/{start.day} – {end.month}/{end.day}</span></div>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">'
+            f'<tr>{head}</tr>{weeks}</table>')
+
+
 def render(items, unclear, t, url, coverage=None):
     items = [x for x in items if not x.get('removed')]  # 일정표에서 지운 일은 메일에도 안 나온다
     open_items = [x for x in items if not x['done']]
@@ -305,6 +353,8 @@ def render(items, unclear, t, url, coverage=None):
 <div style="font-size:21px;font-weight:800;line-height:1.3;">{md(t)} 체크리스트</div></td>
 <td align="right" style="vertical-align:middle;"><a href="{e(url)}" style="display:inline-block;padding:9px 14px;border-radius:999px;background:#23242b;color:#ffffff;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap;">일정표 열기</a></td>
 </tr></table></td></tr>
+<tr><td style="{panel}">{calendar_html(items, t)}</td></tr>
+{gap}
 <tr><td style="{panel}">{today_html}</td></tr>
 {unclear_html}{later_html}
 <tr><td align="center" style="padding:16px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">끝낸 일은 일정표에서 동그라미를 누르면 바로 빠지고, 내일 메일에도 안 나와요.<br>{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.</td></tr>
