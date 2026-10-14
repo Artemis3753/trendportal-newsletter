@@ -56,7 +56,8 @@ The routine prompt tells you the **MODE**:
    - **When unsure, include it in `unclear` rather than leave it out.** For example: an invitation to an event where we have not said whether we attend, an upload date that is still being negotiated, a payment that was promised without a date. A long `unclear` list is acceptable; a missing schedule is not.
    - A proposed date that one side has not confirmed yet (we proposed and they have not replied, or they proposed and we have not answered) still becomes an item with that date (so it is on the calendar and still gets its reminder), with `tentative` `true`, and the thread also goes to `unclear` with the reason `상대 확답 전` or `우리 확답 전`. Once the date is agreed, send the item again with `tentative` `false`.
    - **Skip work that is already over.** Do not create a new `upload`, `draft` or `shoot` item whose date is before today (Asia/Seoul): it has already happened. If the sheet already has that key, you may still send it to update it. A `pay` item is different: create it even when its date has passed, because 성현 must check the bank; skip it only when the thread says the money arrived (입금 완료, 입금 확인).
-   - Never mark anything done. Only 성현 marks items done on the schedule page.
+   - Never mark anything done. Only 성현 marks items done on the schedule page, even when the day has passed or our email shows the work was sent.
+   - **Cancelled work.** When a thread you read in this run clearly says the collaboration or that schedule will not go ahead (for example 진행이 어렵게 되었다, 취소, 무산, 진행하지 않기로), send the sheet's existing items from that thread with their keys and `"cancelled": true`; the sheet takes them off the schedule and the next morning email lists them. A delay, 보류 or renegotiation is not a cancellation: keep the item and set `date` `""` as above. Cancellations by phone or KakaoTalk never reach the inbox, so never guess one from silence or from a missing reply. Do not create new items only to cancel them.
 
    Fields for each item:
 
@@ -71,6 +72,7 @@ The routine prompt tells you the **MODE**:
    | `tentative` | `true` when the date is only proposed and not yet confirmed by both sides (shown as 확답 전), otherwise `false` |
    | `source` | the thread subject |
    | `payer`, `amount` | for `pay` only: 입금자명 and the amount as written, otherwise `""` |
+   | `cancelled` | `true` only for an existing item whose work was called off (see above); otherwise leave it out |
 
    Write `{"scan": "FULL" or "DAILY", "items": [...], "unclear": [{"subject": "...", "reason": "..."}], "read_threads": [<every thread id you read completely in this run>], "coverage": {"candidates": <number of candidate threads>, "read": <number read completely in this run>}}` to `/tmp/transis/extracted.json` (create the folder first). `scan` is the mode from step 1, unchanged. In `FULL` mode `candidates` is the size of the whole 60-day queue (when it was built, or `state`'s count plus what you read) and the 2-day threads. The coverage numbers are printed at the bottom of the email, so they must be true. The sheet removes `read_threads` from the queue and records a finished `FULL` scan only when the queue is empty, so list only threads you really read to the end.
 

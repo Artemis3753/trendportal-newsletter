@@ -285,7 +285,26 @@ def calendar_html(items, t):
             f'<tr>{head}</tr>{weeks}</table>')
 
 
+def recently_cancelled(items, hours=24):
+    """트란시스가 메일에서 진행 취소를 확인해 뺀 일 중 최근 것 (저녁 정리에서 뺀 것도 다음 아침 메일에 한 번 보이게)"""
+    since = dt.datetime.now(SEOUL) - dt.timedelta(hours=hours)
+    out = []
+    for x in items:
+        if x.get('removed') and x.get('doneBy') == CANCELLED_BY and x.get('doneAt'):
+            try:
+                if dt.datetime.fromisoformat(x['doneAt']) >= since:
+                    out.append(x)
+            except ValueError:
+                pass
+    return sorted(out, key=sort_key)
+
+
+# Code.gs가 취소로 뺀 일에 남기는 이름 (성현 님이 직접 지운 일과 구분)
+CANCELLED_BY = '트란시스(취소)'
+
+
 def render(items, unclear, t, url, coverage=None):
+    cancelled = recently_cancelled(items)
     items = [x for x in items if not x.get('removed')]  # 일정표에서 지운 일은 메일에도 안 나온다
     open_items = [x for x in items if not x['done']]
     tbd = sorted([x for x in open_items if not x.get('date') and x['type'] != 'memo'], key=sort_key)
@@ -337,6 +356,14 @@ def render(items, unclear, t, url, coverage=None):
                         + (f'<ul style="margin:6px 0 0;padding-left:18px;font-size:13.5px;line-height:1.5;">{lis}</ul>' if lis else '')
                         + '</td></tr>')
 
+    # 취소돼서 뺀 일: 메일만 보고 판단한 거라 틀릴 수 있어서, 근거(원본 메일)와 함께 한 번 알린다
+    cancelled_html = ''
+    if cancelled:
+        cancelled_html = (gap + f'<tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:2px;">'
+                          f'취소돼서 뺀 일 - {len(cancelled)}건</div><div style="font-size:12.5px;color:#7b7e8c;margin-bottom:4px;">'
+                          f'메일에서 진행 취소를 확인해 일정표에서 뺐어요. 잘못 뺐다면 알려 주세요.</div>'
+                          + rows_table(cancelled, t) + '</td></tr>')
+
     # 그 다음 30일: 원본 메일 줄은 빼고 짧게 (자세한 건 그날 체크리스트에서)
     later_html = ''
     if later:
@@ -357,7 +384,7 @@ def render(items, unclear, t, url, coverage=None):
 <tr><td style="{panel}">{calendar_html(items, t)}</td></tr>
 {gap}
 <tr><td style="{panel}">{today_html}</td></tr>
-{unclear_html}{later_html}
+{cancelled_html}{unclear_html}{later_html}
 <tr><td align="center" style="padding:16px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">끝낸 일은 일정표에서 동그라미를 누르면 바로 빠지고, 내일 메일에도 안 나와요.<br>{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.</td></tr>
 </table></td></tr></table></body></html>'''
 
@@ -366,6 +393,8 @@ def render(items, unclear, t, url, coverage=None):
     text += text_grouped(due, t)
     if not due:
         text.append('오늘 체크할 일은 없어요.')
+    if cancelled:
+        text += ['', f'취소돼서 뺀 일 - {len(cancelled)}건 (잘못 뺐다면 알려 주세요)'] + text_grouped(cancelled, t)
     if tbd or unclear:
         text += ['', f'날짜를 확인해 주세요 - {len(tbd) + len(unclear)}건'] + text_grouped(tbd, t, when=False) \
             + ([''] if unclear else []) + [f"- {u.get('subject')} ({u.get('reason')})" for u in unclear]

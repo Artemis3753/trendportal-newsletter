@@ -82,6 +82,8 @@ function doGet(e) {
  * - date는 YYYY-MM-DD 또는 ''(일정 미정)
  * - tentative: true면 확답 전 (제안된 날짜는 달력에 두되 아직 확정 아님을 표시). 확정되면 트란시스가 false로 다시 보낸다
  * - 같은 key가 있으면 내용만 갱신하고 번호·완료·삭제 여부는 그대로 둔다 (성현 님이 누른 ✓·삭제를 덮어쓰지 않게)
+ * - cancelled: true = 메일에서 진행 취소가 확인된 일. 아직 안 끝낸 일이면 삭제 표시(removed)로 빼고
+ *   doneBy에 '트란시스(취소)'를 남긴다 → 다음 아침 메일에 '취소돼서 뺀 일'로 한 번 알린다(잘못 뺐으면 성현 님이 알아채게)
  * - queue: 전체 훑기(FULL)에서 읽을 스레드 id 목록. 한 번에 다 못 읽어서 시트에 남겨 두고 여러 번 나눠 읽는다
  * - readThreads: 이번에 끝까지 읽은 스레드 id. 남은 목록(queue)에서 뺀다
  * - scan: 'FULL'이고 남은 목록이 비었을 때만 전체 훑기를 마친 시각을 남긴다 (다음부터는 최근 메일만 읽어도 되는지 판단용)
@@ -116,7 +118,10 @@ function doPost(e) {
       if (old) {
         ['type', 'brand', 'title', 'date', 'time', 'source', 'payer', 'amount', 'tentative'].forEach(f => { old[f] = it[f]; });
         if (raw.done === true && !old.done) { old.done = true; old.doneAt = now_(); }
+        if (raw.cancelled === true && !old.done && !old.removed) { old.removed = true; old.doneBy = '트란시스(취소)'; old.doneAt = now_(); }
         old.updatedAt = now_();
+      } else if (raw.cancelled === true) {
+        return;  // 시트에 없던 일이 이미 취소된 거면 새로 넣지 않는다
       } else {
         it.no = ++maxNo;
         it.done = raw.done === true;
