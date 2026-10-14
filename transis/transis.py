@@ -294,7 +294,8 @@ def render(items, unclear, t, url, coverage=None):
     later = sorted([x for x in open_items if x['no'] not in due_nos and x.get('date') and (d_of(x['date']) - t).days <= 30],
                    key=sort_key)
     # 건수는 빼고 날짜 + 체크리스트만. 몇 건인지보다 내용을 보고 판단하게(10/14 사용자)
-    subject = f'[트란시스] {md(t)} 체크리스트'
+    # 날짜는 꼭 붙인다: 매일 제목이 같으면 Gmail이 한 대화로 묶어 새 메일이 안 보여서
+    subject = f'트란시스가 전하는 오전 리마인더 체크리스트 · {md(t)}'
     # 얼마나 읽었는지 매일 보이게 (놓친 메일이 없는지 성현 님이 가늠할 수 있도록)
     cov = coverage or {}
     if cov.get('scan') == 'FULL':
