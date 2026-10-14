@@ -15,6 +15,7 @@ import datetime as dt
 import html
 import json
 import os
+import re
 import sys
 import urllib.parse
 import urllib.request
@@ -78,26 +79,8 @@ def md(day):
     return f'{day.month}월 {day.day}일 ({DOW[day.weekday()]})'
 
 
-def when(it):
-    if not it.get('date'):
-        return '날짜 없음' if it['type'] == 'memo' else '일정 미정'
-    tail = '입금 예정' if it['type'] == 'pay' else (it.get('time') or ('' if it['type'] == 'memo' else '시간 미정'))
-    # 확답 전: 날짜는 제안됐지만 아직 확정 전 (일정표의 라벤더 '확답 전'과 같은 뜻)
-    tent = ' · 확답 전' if it.get('tentative') and not it.get('done') else ''
-    return f"{md(d_of(it['date']))} {tail}".strip() + tent
-
-
-def dday(it, t):
-    if not it.get('date'):
-        return '메모' if it['type'] == 'memo' else '일정 미정'
-    n = (d_of(it['date']) - t).days
-    if it['type'] == 'pay':
-        return f'입금 D-{n}' if n > 0 else '입금 오늘' if n == 0 else '입금 확인'
-    return f'D-{n}' if n > 0 else 'D-DAY' if n == 0 else f'{-n}일 지남'
-
-
 def is_due(it, t):
-    """오늘 메일의 '오늘 챙길 일'에 들어가는지"""
+    """오늘 메일의 체크리스트에 들어가는지"""
     if it['done']:
         return False
     if not it.get('date'):
@@ -118,12 +101,9 @@ TBD = ('시간 <span style="background:#fff1a8;color:#23242b;font-weight:700;pad
        '미정</span>')
 TBD_DATE = ('일정 <span style="background:#e4d9ff;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;">'
             '미정</span>')
+# 확답 전: 날짜는 제안됐지만 아직 확정 전 (일정표의 라벤더 '확답 전'과 같은 뜻)
 TENTATIVE = ('<span style="background:#e4d9ff;color:#23242b;font-weight:700;padding:0 4px;border-radius:4px;white-space:nowrap;">'
              '확답 전</span>')
-
-
-def when_html(it):
-    return e(when(it)).replace('시간 미정', TBD).replace('일정 미정', TBD_DATE).replace('확답 전', TENTATIVE)
 
 
 def e(s):
@@ -142,69 +122,119 @@ def title_html(it):
     return f'<span style="color:{COLOR[it["type"]][0]};">{e(b)}</span> {e(rest)}'
 
 
-def card(it, t):
-    c, soft = COLOR[it['type']]
-    late = bool(it.get('date')) and (d_of(it['date']) - t).days < 0
-    pay = ''
-    if it['type'] == 'pay' and (it.get('payer') or it.get('amount')):
+# 메일은 '무엇을 해야 하나'로 묶는다. 일정표가 날짜로 묶으니, 메일은 같은 일을 다른 각도로 보여 준다(10/14)
+# (종류, 칸 제목, 맨 위 요약에 쓰는 이름, 단위)
+GROUPS = [
+    ('memo', '📝 적어 둔 일', '메모', '건'),
+    ('shoot', '📍 가야 할 곳', '촬영', '곳'),
+    ('draft', '✉️ 보내야 할 것', '초안', '건'),
+    ('upload', '⬆️ 올려야 할 것', '업로드', '건'),
+    ('pay', '💰 들어올 돈', '입금', '건'),
+]
+LINE = '#eef0f4'
+
+
+def days_left(it, t):
+    return (d_of(it['date']) - t).days if it.get('date') else None
+
+
+def rel_day(it, t):
+    """오늘·내일·모레는 말로, 그 뒤는 날짜로. 아침에 훑어볼 때 D-숫자보다 빨리 읽혀서"""
+    n = days_left(it, t)
+    if n is None:
+        return '언제든' if it['type'] == 'memo' else TBD_DATE
+    if n < 0:
+        return f'{-n}일 지남'
+    d = d_of(it['date'])
+    return {0: '오늘', 1: '내일', 2: '모레'}.get(n) or f'{d.month}/{d.day} ({DOW[d.weekday()]})'
+
+
+def sub_line(it, t):
+    """날짜 칸 아래 작은 글씨: 지난 일은 원래 날짜, 정산은 '입금 예정', 나머지는 시각"""
+    n = days_left(it, t)
+    if n is None:
+        return ''
+    d = d_of(it['date'])
+    if n < 0:
+        return f'{d.month}/{d.day} ({DOW[d.weekday()]})' + (' 예정' if it['type'] == 'pay' else '')
+    if it['type'] == 'pay':
+        return '입금 예정'
+    if it['type'] == 'memo':
+        return it.get('time') or ''
+    return e(it['time']) if it.get('time') else TBD
+
+
+def row(it, t, first, detail=True, when=True):
+    """when=False: 날짜 칸 없이 (날짜를 확인해 주세요 칸은 전부 '일정 미정'이라 날짜 칸이 매 줄 같은 말이 돼서)"""
+    late = (days_left(it, t) or 0) < 0
+    line = '' if first else f'border-top:1px solid {LINE};'
+    tent = f' {TENTATIVE}' if it.get('tentative') and not it.get('done') else ''
+    extra = ''
+    if detail and it['type'] == 'pay' and (it.get('payer') or it.get('amount')):
         bits = []
         if it.get('payer'):
             bits.append(f"입금자명 <b>{e(it['payer'])}</b>")
         if it.get('amount'):
             bits.append(f"금액 <b>{e(it['amount'])}</b>")
-        pay = (f'<div style="font-size:12.5px;color:#23242b;margin-top:4px;background:{soft};'
-               f'border-radius:8px;padding:6px 8px;">{" · ".join(bits)}</div>')
-    src = (f'<div style="font-size:11.5px;color:#a0a3b1;margin-top:3px;">원본 메일: “{e(it["source"])}”</div>'
-           if it.get('source') else '')
+        extra += (f'<div style="font-size:12.5px;margin-top:4px;background:{COLOR["pay"][1]};'
+                  f'border-radius:8px;padding:5px 8px;">{" · ".join(bits)}</div>')
+    if detail and it.get('source'):
+        extra += f'<div style="font-size:11.5px;color:#a0a3b1;margin-top:3px;">원본 메일: “{e(it["source"])}”</div>'
+    sub = sub_line(it, t)
+    date_td = ''
+    if when:
+        label = rel_day(it, t)
+        if days_left(it, t) == 0:
+            # 오늘 할 일은 종류 색으로 채운 알약 (일정표의 오늘 D-DAY 알약과 같은 모양, 10/14 사용자)
+            label = (f'<span style="display:inline-block;padding:1px 9px;border-radius:999px;'
+                     f'background:{COLOR[it["type"]][0]};color:#ffffff;">{label}</span>')
+        date_td = (f'<td width="78" style="padding:9px 8px 9px 0;vertical-align:top;{line}">'
+                   f'<div style="font-size:14px;font-weight:800;white-space:nowrap;color:{"#e5484d" if late else "#23242b"};">{label}</div>'
+                   + (f'<div style="font-size:12px;color:#7b7e8c;white-space:nowrap;margin-top:1px;">{sub}</div>' if sub else '')
+                   + '</td>')
     return (
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="border:1.5px solid {c};border-radius:14px;margin-bottom:8px;"><tr>'
-        f'<td width="44" style="padding:12px 0 12px 12px;vertical-align:top;"><div style="width:32px;height:32px;'
-        f'line-height:32px;border-radius:10px;background:{c};color:#ffffff;font-weight:800;font-size:16px;'
-        f'text-align:center;">{it["no"]}</div></td>'
-        f'<td style="padding:12px 8px;vertical-align:top;">'
-        f'<div style="font-size:15px;font-weight:700;line-height:1.4;">{title_html(it)}</div>'
-        f'<div style="font-size:12.5px;color:#7b7e8c;">{NAME[it["type"]]} · {when_html(it)}</div>{pay}{src}</td>'
-        f'<td width="72" style="padding:12px 12px 12px 0;vertical-align:top;text-align:right;font-size:16px;'
-        f'font-weight:800;color:{"#e5484d" if late else c};white-space:nowrap;">{dday(it, t)}</td>'
-        f'</tr></table>'
+        f'<tr>{date_td}<td style="padding:9px 0;vertical-align:top;{line}">'
+        f'<div style="font-size:15px;font-weight:700;line-height:1.4;">{title_html(it)}{tent}</div>{extra}</td></tr>'
     )
 
 
-def week_strip(open_items, t):
-    days = [t + dt.timedelta(days=i) for i in range(7)]
-    head = ''.join(
-        f'<td style="font-size:11.5px;font-weight:700;color:{"#e5484d" if d.weekday() == 6 else "#7b7e8c"};'
-        f'padding-bottom:4px;">{DOW[d.weekday()]}</td>' for d in days)
-    cells = ''
-    for d in days:
-        # 확답 전 칩은 바탕 없이 점선 테두리 (일정표 달력과 같은 모양)
-        chips = ''.join(
-            f'<div style="margin-top:3px;padding:{"0 1px" if it.get("tentative") else "1px 2px"};border-radius:4px;'
-            f'{"background:#ffffff;border:1px dashed " + COLOR[it["type"]][0] if it.get("tentative") else "background:" + COLOR[it["type"]][1]};'
-            f'color:{COLOR[it["type"]][0]};font-size:10px;font-weight:700;line-height:1.35;white-space:nowrap;'
-            f'overflow:hidden;text-align:left;">{e(it.get("brand") or it["title"])}</div>'
-            for it in sorted([x for x in open_items if x['date'] == d.isoformat()], key=sort_key))
-        bg = 'background:#fff1a8;border-radius:10px;font-weight:800;' if d == t else ''
-        red = 'color:#e5484d;' if d.weekday() == 6 else ''
-        cells += (f'<td style="padding:2px;vertical-align:top;"><div style="{bg}padding:6px 2px 7px;'
-                  f'font-size:14px;{red}">{d.day}{chips}</div></td>')
-    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-            f'style="table-layout:fixed;text-align:center;"><tr>{head}</tr><tr>{cells}</tr></table>')
+def rows_table(items, t, detail=True, when=True):
+    return ('<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+            + ''.join(row(x, t, i == 0, detail, when) for i, x in enumerate(items)) + '</table>')
 
 
-def later_rows(items, t):
-    rows = ''
-    for it in items:
-        c = COLOR[it['type']][0]
-        rows += (f'<tr><td width="30" style="padding:5px 0;"><span style="display:inline-block;width:22px;height:22px;'
-                 f'line-height:22px;border-radius:7px;background:{c};color:#fff;font-weight:800;font-size:12px;'
-                 f'text-align:center;">{it["no"]}</span></td><td style="padding:5px 0;">{e(it["title"])}'
-                 f'{" " + TENTATIVE if it.get("tentative") else ""}</td>'
-                 f'<td style="padding:5px 0;text-align:right;color:#7b7e8c;white-space:nowrap;">'
-                 f'{d_of(it["date"]).month}/{d_of(it["date"]).day} ({DOW[d_of(it["date"]).weekday()]})'
-                 f'{" " + it["time"] if it.get("time") and it["type"] != "pay" else ""} · {dday(it, t)}</td></tr>')
-    return rows
+def grouped(items, t, when=True):
+    """종류(색)별 소제목 + 줄 목록. 체크리스트와 날짜를 확인해 주세요 칸이 같은 모양을 쓴다"""
+    out = ''
+    for typ, head, _, _ in GROUPS:
+        group = [x for x in items if x['type'] == typ]
+        if group:
+            out += (f'<div style="font-size:15px;font-weight:800;color:{COLOR[typ][0]};'
+                    f'margin:{"14px" if out else "4px"} 0 2px;">{head} {len(group)}</div>' + rows_table(group, t, when=when))
+    return out
+
+
+def text_grouped(items, t, when=True):
+    """grouped()의 글자 버전 (HTML을 못 보는 메일 앱용)"""
+    out = []
+    for typ, head, _, _ in GROUPS:
+        group = [x for x in items if x['type'] == typ]
+        if not group:
+            continue
+        out += ['', f'{head} {len(group)}']
+        for x in group:
+            # 제목이 이미 브랜드로 시작하면 한 번만 (HTML의 title_html과 같은 규칙)
+            brand = f"[{x['brand']}] " if x.get('brand') and typ != 'memo' and not x['title'].startswith(x['brand']) else ''
+            day = f"{re.sub(r'<[^>]+>', '', rel_day(x, t))} {re.sub(r'<[^>]+>', '', sub_line(x, t))}".rstrip() + ' | ' if when else ''
+            line = f"- {day}{brand}{x['title']}"
+            if x.get('tentative'):
+                line += ' (확답 전)'
+            if typ == 'pay' and x.get('payer'):
+                line += f" / 입금자명 {x['payer']}"
+            if typ == 'pay' and x.get('amount'):
+                line += f" / 금액 {x['amount']}"
+            out.append(line)
+    return out
 
 
 def render(items, unclear, t, url, coverage=None):
@@ -215,7 +245,8 @@ def render(items, unclear, t, url, coverage=None):
     due_nos = {x['no'] for x in due}
     later = sorted([x for x in open_items if x['no'] not in due_nos and x.get('date') and (d_of(x['date']) - t).days <= 30],
                    key=sort_key)
-    subject = f'[트란시스] {md(t)} 챙길 일 {len(due)}건'
+    # 건수는 빼고 날짜 + 체크리스트만. 몇 건인지보다 내용을 보고 판단하게(10/14 사용자)
+    subject = f'[트란시스] {md(t)} 체크리스트'
     # 얼마나 읽었는지 매일 보이게 (놓친 메일이 없는지 성현 님이 가늠할 수 있도록)
     cov = coverage or {}
     if cov.get('scan') == 'FULL':
@@ -227,64 +258,67 @@ def render(items, unclear, t, url, coverage=None):
     else:
         cov_line = ''
     panel = 'background:#ffffff;border-radius:18px;padding:16px;'
+    gap = '<tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>'
+
+    # 맨 위 한 줄 요약: 오늘이 마감인 일만 종류별로 센다 (오늘 하루가 얼마나 바쁜지 먼저 보이게)
+    on_today = [x for x in due if days_left(x, t) == 0]
+    bits = [f'{label} {n}{unit}' for typ, _, label, unit in GROUPS
+            if (n := sum(1 for x in on_today if x['type'] == typ))]
+    late_n = sum(1 for x in due if (days_left(x, t) or 0) < 0)
+    summary = ('오늘 ' + ' · '.join(bits)) if bits else '오늘이 마감인 일은 없어요'
+    if late_n:
+        summary += f' <span style="color:#e5484d;">· 지난 일 {late_n}건</span>'
 
     if due:
-        today_html = ''.join(card(x, t) for x in due) + (
-            '<div style="margin-top:12px;padding:10px 12px;border-radius:12px;background:#f5f6fa;font-size:13px;'
-            'color:#7b7e8c;line-height:1.55;">끝낸 일은 <b style="color:#23242b;">트란시스 일정표에서 동그라미</b>를 '
-            '누르면 바로 빠지고, 내일 메일에도 안 나와요.</div>')
+        today_html = (f'<div style="font-size:14px;font-weight:700;padding:10px 12px;border-radius:12px;'
+                      f'background:#f5f6fa;">{summary}</div>{grouped(due, t)}')
     else:
-        today_html = '<div style="font-size:14px;color:#7b7e8c;padding:4px 2px;">오늘 챙길 일은 없어요. 스토리만 올리면 끝! 🐺</div>'
+        today_html = '<div style="font-size:14px;color:#7b7e8c;padding:4px 2px;">오늘 체크할 일은 없어요. 스토리만 올리면 끝! 🐺</div>'
 
-    # 날짜를 확인해 주세요 = 일정 미정 카드(시트에 남아 있음) + 이번에 읽다가 애매했던 메일
+    # 날짜를 확인해 주세요 = 일정 미정(시트에 남아 있음) + 이번에 읽다가 애매했던 메일
+    # 전부 날짜 미정이라 날짜 칸은 빼고, 체크리스트처럼 종류(색)별로 묶는다.
+    # 정산을 브랜드 한 줄로 묶어 봤다가 금액·원본 메일이 안 보여 판단이 애매해서 되돌림(10/14)
     unclear_html = ''
     if tbd or unclear:
-        cards = ''.join(card(x, t) for x in tbd)
         lis = ''.join(f'<li style="margin:4px 0;">“{e(u.get("subject"))}” — {e(u.get("reason"))}</li>' for u in unclear)
-        unclear_html = (f'<tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>'
-                        f'<tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:6px;">'
-                        f'날짜를 확인해 주세요</div><div style="font-size:12.5px;color:#7b7e8c;margin-bottom:8px;">'
-                        f'일정은 있는데 날짜가 아직 정해지지 않았거나, 확답이 필요한 일이에요.</div>{cards}'
+        unclear_html = (gap + f'<tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:2px;">'
+                        f'날짜를 확인해 주세요 - {len(tbd) + len(unclear)}건</div><div style="font-size:12.5px;color:#7b7e8c;margin-bottom:4px;">'
+                        f'일정은 있는데 날짜가 아직 정해지지 않았거나, 확답이 필요한 일이에요.</div>'
+                        + grouped(tbd, t, when=False)
                         + (f'<ul style="margin:6px 0 0;padding-left:18px;font-size:13.5px;line-height:1.5;">{lis}</ul>' if lis else '')
                         + '</td></tr>')
 
+    # 그 다음 30일: 원본 메일 줄은 빼고 짧게 (자세한 건 그날 체크리스트에서)
     later_html = ''
     if later:
-        later_html = (f'<div style="font-size:13px;font-weight:800;color:#7b7e8c;margin:14px 0 6px;">그 다음</div>'
-                      f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-                      f'style="font-size:13.5px;">{later_rows(later, t)}</table>')
+        later_html = (gap + f'<tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:2px;">'
+                      f'그 다음 30일 - {len(later)}건</div>{rows_table(later, t, detail=False)}</td></tr>')
 
     body = f'''<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>트란시스 아침 브리핑</title></head>
 <body style="margin:0;padding:0;background:#f5f6fa;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6fa;"><tr><td align="center" style="padding:20px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;word-break:keep-all;overflow-wrap:break-word;font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#23242b;">
-<tr><td style="padding:0 4px 14px;"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="vertical-align:middle;padding-right:12px;"><img src="{HUSKY_URL}" width="48" height="48" alt="트란시스" style="display:block;border:0;"></td>
+<tr><td style="padding:0 4px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td width="60" style="vertical-align:middle;"><img src="{HUSKY_URL}" width="48" height="48" alt="트란시스" style="display:block;border:0;"></td>
 <td style="vertical-align:middle;"><div style="font-size:12px;color:#7b7e8c;font-weight:700;">트란시스 아침 브리핑</div>
-<div style="font-size:21px;font-weight:800;line-height:1.3;">{md(t)} 챙길 일 {len(due)}건</div></td></tr></table></td></tr>
-<tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:10px;">오늘 챙길 일</div>{today_html}</td></tr>
-<tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
-<tr><td style="{panel}"><div style="font-size:15px;font-weight:800;margin-bottom:10px;">앞으로 7일</div>{week_strip(open_items, t)}{later_html}</td></tr>
-{unclear_html}
-<tr><td align="center" style="padding:16px 0 6px;"><a href="{e(url)}" style="display:inline-block;padding:12px 22px;border-radius:999px;background:#23242b;color:#ffffff;font-size:14px;font-weight:800;text-decoration:none;">트란시스 일정표 열기</a></td></tr>
-<tr><td align="center" style="padding:6px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.</td></tr>
+<div style="font-size:21px;font-weight:800;line-height:1.3;">{md(t)} 체크리스트</div></td>
+<td align="right" style="vertical-align:middle;"><a href="{e(url)}" style="display:inline-block;padding:9px 14px;border-radius:999px;background:#23242b;color:#ffffff;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap;">일정표 열기</a></td>
+</tr></table></td></tr>
+<tr><td style="{panel}">{today_html}</td></tr>
+{unclear_html}{later_html}
+<tr><td align="center" style="padding:16px 0 0;font-size:11.5px;color:#a0a3b1;line-height:1.6;">끝낸 일은 일정표에서 동그라미를 누르면 바로 빠지고, 내일 메일에도 안 나와요.<br>{e(cov_line) + '<br>' if cov_line else ''}트란시스가 contact@trendportal.kr 메일을 읽고 매일 아침 정리해요.<br>날짜가 틀려 보이면 원본 메일을 꼭 확인해 주세요.</td></tr>
 </table></td></tr></table></body></html>'''
 
-    text = [f'트란시스 아침 브리핑 - {md(t)} 챙길 일 {len(due)}건', '']
-    for x in due:
-        line = f"{x['no']}. ({NAME[x['type']]}) {x['title']} - {when(x)} - {dday(x, t)}"
-        if x.get('brand') and x['type'] != 'memo':
-            line = f"{x['no']}. [{x['brand']}] ({NAME[x['type']]}) {x['title']} - {when(x)} - {dday(x, t)}"
-        if x['type'] == 'pay' and x.get('payer'):
-            line += f" / 입금자명 {x['payer']}"
-        text.append(line)
+    text = [f'트란시스 아침 브리핑 - {md(t)} 체크리스트', f'일정표: {url}', '',
+            re.sub(r'<[^>]+>', '', summary)]
+    text += text_grouped(due, t)
     if not due:
-        text.append('오늘 챙길 일은 없어요.')
+        text.append('오늘 체크할 일은 없어요.')
     if tbd or unclear:
-        text += ['', '날짜를 확인해 주세요:'] + [f"- {x['no']}. [{x.get('brand')}] ({NAME[x['type']]}) {x['title']} - 일정 미정" for x in tbd] \
-            + [f"- {u.get('subject')} ({u.get('reason')})" for u in unclear]
-    text += ['', '끝낸 일은 트란시스 일정표에서 동그라미를 눌러 주세요.', f'일정표: {url}']
+        text += ['', f'날짜를 확인해 주세요 - {len(tbd) + len(unclear)}건'] + text_grouped(tbd, t, when=False) \
+            + ([''] if unclear else []) + [f"- {u.get('subject')} ({u.get('reason')})" for u in unclear]
+    text += ['', '끝낸 일은 트란시스 일정표에서 동그라미를 눌러 주세요.']
     if cov_line:
         text.append(cov_line)
     return subject, body, '\n'.join(text), due, later
