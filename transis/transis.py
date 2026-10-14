@@ -322,7 +322,7 @@ def render(items, unclear, t, url, coverage=None):
         cov_line = (f"지난 60일 협업 메일 {cov.get('candidates')}개 스레드 중 이번에 {cov.get('read')}개를 끝까지 읽었어요. "
                     + (f"남은 {left}개는 다음 실행에서 이어 읽어요(전체 확인 전)." if left else '이번으로 전체 확인을 마쳤어요.'))
     elif cov.get('candidates') is not None:
-        cov_line = f"최근 2일 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
+        cov_line = f"최근 하루 메일 {cov.get('candidates')}개 스레드를 찾아 {cov.get('read')}개를 끝까지 읽었어요."
     else:
         cov_line = ''
     panel = 'background:#ffffff;border-radius:18px;padding:16px;'
@@ -405,7 +405,7 @@ def render(items, unclear, t, url, coverage=None):
 
 
 def scan_mode(res):
-    """FULL = 지난 60일 전체 훑기 (처음, 그리고 30일마다), DAILY = 최근 2일 새 메일만 (아침·저녁 두 번 돌아서 한 번 실패해도 겹친다)"""
+    """FULL = 지난 60일 전체 훑기 (처음, 그리고 30일마다), DAILY = 최근 하루 새 메일만 (아침·저녁 두 번 돌아서 한 번 실패해도 겹치고, 저녁 완료 메일이 안 오면 실패를 알 수 있다)"""
     at = res.get('fullScanAt')
     if not at:
         return 'FULL'
