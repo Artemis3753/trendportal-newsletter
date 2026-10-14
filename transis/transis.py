@@ -405,7 +405,7 @@ def render(items, unclear, t, url, coverage=None):
 
 
 def scan_mode(res):
-    """FULL = 지난 60일 전체 훑기 (처음, 그리고 30일마다), DAILY = 최근 하루 새 메일만 (아침·저녁 두 번 돌아서 한 번 실패해도 겹치고, 저녁 완료 메일이 안 오면 실패를 알 수 있다)"""
+    """FULL = 지난 60일 전체 훑기 (처음, 그리고 30일마다), DAILY = 최근 하루 새 메일만 (아침·저녁 두 번 돌아서 한 번 실패해도 겹친다)"""
     at = res.get('fullScanAt')
     if not at:
         return 'FULL'
