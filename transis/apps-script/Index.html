@@ -220,7 +220,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     <li class="chip t-upload">업로드 · 하루 전 알림</li>
     <li class="chip t-draft">초안·기획안 · 3일 전</li>
     <li class="chip t-shoot">방문 촬영·오프라인 행사 · 3일 전</li>
-    <li class="chip t-pay">정산 · 입금 확인까지</li>
+    <li class="chip t-pay">정산 · 3일 전</li>
     <li class="chip t-memo">메모 · 완료할 때까지</li>
     <li class="chip t-tentative">점선 칸 · 확답 전</li>
   </ul>
@@ -280,7 +280,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 <script>
 (() => {
   let data = JSON.parse(document.getElementById('tpos-data').textContent);
-  const LEAD = { upload: 1, draft: 3, shoot: 3, pay: Infinity, memo: 1 };
+  // 정산도 3일 전부터 (메일과 같은 규칙, 10/14). 지난 정산은 n < 0이라 입금 확인될 때까지 계속 강조된다
+  const LEAD = { upload: 1, draft: 3, shoot: 3, pay: 3, memo: 1 };
   const NAME = { upload: '업로드', draft: '초안·기획안', shoot: '방문 촬영', pay: '정산', memo: '메모' };
   const DOW = ['일', '월', '화', '수', '목', '금', '토'];
   const MAX_EV = 5;

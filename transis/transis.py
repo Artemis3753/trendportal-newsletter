@@ -23,9 +23,10 @@ OUT = '/tmp/transis'
 SEOUL = dt.timezone(dt.timedelta(hours=9))
 DOW = '월화수목금토일'  # date.weekday(): 월=0
 NAME = {'upload': '업로드', 'draft': '초안·기획안', 'shoot': '방문 촬영', 'pay': '정산', 'memo': '메모'}
-# 성현 님이 정한 미리 알림: 업로드 하루 전, 초안·기획안 3일 전, 방문 촬영 3일 전, 정산은 입금 확인될 때까지 매일
+# 성현 님이 정한 미리 알림: 업로드 하루 전, 초안·기획안 3일 전, 방문 촬영 3일 전
+# 정산은 처음엔 매일이었는데 먼 입금 예정까지 쌓여 오늘 할 일이 묻혀서(10/14) 3일 전부터, 지나면 입금 확인될 때까지 매일
 # 메모(성현 님이 일정표에서 직접 적은 할 일)는 날짜가 있으면 하루 전부터, 없으면 완료할 때까지 매일
-LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'memo': 1}
+LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'pay': 3, 'memo': 1}
 # 전체 훑기(FULL)를 한 지 이만큼 지나면 다시 전체를 훑는다. 매일은 최근 메일만 읽으니, 한 달에 한 번 빠진 게 없는지 다시 확인
 FULL_EVERY_DAYS = 30
 # 전체 훑기는 한 번 실행에 이만큼씩만 읽는다. 400개를 한 번에 읽으려다 중간에 멈춘 적이 있어서(10/14) 나눠 읽고 이어 간다
@@ -102,8 +103,8 @@ def is_due(it, t):
     if not it.get('date'):
         return it['type'] == 'memo'  # 날짜 없는 메모는 매일. 일정 미정은 '날짜를 확인해 주세요' 칸에 따로
     n = (d_of(it['date']) - t).days
-    if it['type'] == 'pay' or n < 0:
-        return True  # 정산은 확인될 때까지, 지난 일은 끝낼 때까지 매일
+    if n < 0:
+        return True  # 지난 일은 끝낼 때까지(정산은 입금 확인될 때까지) 매일
     return n <= LEAD[it['type']]
 
 
