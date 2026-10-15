@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Meta Description
  * Description: 사람이 쓴 설명(SEO 설명·요약)이 없는 글의 검색 설명과 공유 미리보기 설명을, 라벨·프로필 카드·출처 줄을 뺀 본문으로 만든다. 공유 이미지가 사이트 아이콘으로 대신 들어가는 곳에는 1200×630 공유 이미지를 넣는다. 공유 이미지 대체 텍스트가 비어 있으면 제목으로 채운다.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Trendportal
  */
 
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Jetpack은 설명을 ① SEO 설명 칸 → ② 요약(excerpt) → ③ 본문 앞부분 순서로 고른다. 우리 글은 대부분 ③으로 가는데,
  * 본문을 태그만 지워서 쓰기 때문에
  *   - 주간 총정리: 맨 위 호수 줄이 붙는다 ("WEEKLY · 26.10 2주차 · 금요일 발행오늘은…")
- *   - 광고 글: 광고주 프로필 카드 글자가 섞인다 ("쉐어잇@shareit.kr프로필 보기")
+ *   - 광고 글: 광고 고지 문단과 광고주 프로필 카드 글자가 섞인다 ("[광고] 이 글은…", "쉐어잇@shareit.kr프로필 보기")
  *   - 줄바꿈(<br>)·문단 사이가 붙는다 ("다녀왔습니다.많은")
  * 검색 결과와 카톡 미리보기에 그대로 나와서, ①②가 비어 있을 때만 본문을 정리해 대신 넣는다.
  * 사람이 직접 쓴 설명은 항상 그대로 둔다.
@@ -69,6 +69,12 @@ function tp_md_build_description( $html ) {
 	}
 	foreach ( $xp->query( './/figure | .//script | .//style', $root ) as $node ) {
 		$remove[] = $node; // 사진 캡션·임베드는 설명이 아니다
+	}
+	// 광고 글 맨 위 고지 문단("[광고] 이 글은 유료 광고를…", 지침서 10번). 고지는 본문에 두고 설명은 내용으로 시작한다 (1.3.0)
+	foreach ( $xp->query( './/p', $root ) as $node ) {
+		if ( 0 === strpos( ltrim( $node->textContent ), '[광고]' ) ) {
+			$remove[] = $node;
+		}
 	}
 	foreach ( $remove as $node ) {
 		if ( $node->parentNode ) {
