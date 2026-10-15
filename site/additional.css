@@ -182,7 +182,8 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   .tp-ticker-track { animation: none; }
   .tp-ticker { overflow-x: auto; }
 }
-/* Ticker hidden until there are enough posts — delete this rule to bring it back */
+/* Ticker hidden until there are enough posts. TP Card Tone also stops printing its HTML (TP_CT_TICKER_ON);
+   to bring it back, set that to true and delete this rule */
 .tp-ticker { display: none !important; }
 
 /* ---------- Home intro (P1): black grain band ---------- */

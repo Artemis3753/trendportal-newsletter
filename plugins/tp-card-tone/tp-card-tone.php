@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Card Tone
- * Description: 글 목록 카드 표시를 돕는다. ① 카드마다 자기 대표 사진 주소를 CSS 변수 --tp-card-img로 넘긴다(사진을 흐려 카드 바탕에 까는 모양은 추가 CSS). ② 홈 시리즈 칸 제목을 주차/이름으로 나누고 첫 글에 NEW를 붙인다.
- * Version: 1.0.2
+ * Description: 글 목록 카드 표시를 돕는다. ① 카드마다 자기 대표 사진 주소를 CSS 변수 --tp-card-img로 넘긴다(사진을 흐려 카드 바탕에 까는 모양은 추가 CSS). ② 홈 시리즈 칸 제목을 주차/이름으로 나누고 첫 글에 NEW를 붙인다. ③ 숨겨 둔 홈 속보 띠는 HTML로도 내보내지 않는다.
+ * Version: 1.1.0
  * Author: Trendportal
  */
 
@@ -67,3 +67,19 @@ function tp_ct_footer() {
 	<?php
 }
 add_action( 'wp_footer', 'tp_ct_footer' );
+
+/*
+ * 1.1.0: 홈 속보 띠(.tp-ticker)는 글이 모일 때까지 숨겨 두기로 했다(9/26). 그동안 CSS로 화면에서만 가려서
+ * 같은 글 제목 링크 4벌(무한 흐름용 복제)이 HTML에 그대로 남아 검색엔진·화면 낭독기가 읽었다(10/15 보완점 7번).
+ * 숨기는 동안은 띠가 든 템플릿 파트를 아예 내보내지 않는다. 다시 켤 때는 true로 바꾸고,
+ * 복제된 3벌에 aria-hidden을 달 것.
+ */
+const TP_CT_TICKER_ON = false;
+
+function tp_ct_drop_ticker( $html ) {
+	if ( TP_CT_TICKER_ON || false === strpos( $html, 'tp-ticker' ) ) {
+		return $html;
+	}
+	return '';
+}
+add_filter( 'render_block_core/template-part', 'tp_ct_drop_ticker' );
