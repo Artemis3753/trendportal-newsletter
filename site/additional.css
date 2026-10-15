@@ -670,12 +670,12 @@ html:has(.tp-wk) { scroll-behavior: smooth; }
 .tp-wk figure.wp-block-image:has(+ .tp-wk-video) img { width: 240px; max-width: 70%; margin: 0 auto; }
 .wp-block-post-content .tp-wk p.tp-wk-video { margin-top: 10px; text-align: center; font-size: 13px; font-weight: 700; }
 .tp-wk-video a { color: #111; }
-/* The gap above "what happened" belongs to the h4, so cards without a source line get the same spacing */
+/* The gap above "what happened" belongs to the h3, so cards without a source line get the same spacing */
 .wp-block-post-content .tp-wk p.tp-wk-src { margin-top: 6px; font-size: 11px; line-height: 1.5; color: #999; }
-.wp-block-post-content .tp-wk h4 { margin: 24px 0 6px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; color: #888; }
+.wp-block-post-content .tp-wk h3 { margin: 24px 0 6px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; color: #888; }
 .wp-block-post-content .tp-wk-item > p:not(.tp-wk-num):not(.tp-wk-src):not(.tp-wk-video) { margin-bottom: 18px; }
 .wp-block-post-content .tp-wk .tp-wk-insight { padding: 18px 20px; background: #f1f1f1; border-radius: 12px; }
-.wp-block-post-content .tp-wk .tp-wk-insight h4 { margin-top: 0; color: #111; }
+.wp-block-post-content .tp-wk .tp-wk-insight h3 { margin-top: 0; color: #111; }
 /* Highlighter under the point text, same as the newsletter. Inline so the marker follows each line instead of filling the box */
 .wp-block-post-content .tp-wk .tp-wk-insight p {
   display: inline;

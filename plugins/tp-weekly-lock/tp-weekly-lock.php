@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Weekly Lock
  * Description: 주간 총정리 글(뉴스레터와 같은 포맷)에 카드 번호·목차·구독자 잠금을 자동으로 붙이고, 전용 글 템플릿(tp-weekly)으로 보여 주며, 편집기에 "주간 총정리 틀"을 등록한다.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Trendportal
  */
 
@@ -77,6 +77,10 @@ function tp_wk_transform( $html ) {
 		$html = preg_replace( '/<p\b[^>]*\bclass="[^"]*\btp-wk-issue\b[^"]*"[^>]*>.*?<\/p>/s', '', $html, 1 );
 	}
 
+	// 1.2.0: 카드 제목(H2) 바로 아래 "무슨 일이었나"·"주목 포인트"가 H4라 H3를 건너뛰었다(10/15 보완점 7번).
+	// 새 틀은 H3로 만들고, 이미 올라간 글(329·351·479)은 본문을 54군데 고치는 대신 내보낼 때 바꾼다
+	$html = preg_replace( '/<h4\b([^>]*)>(.*?)<\/h4>/s', '<h3$1>$2</h3>', $html );
+
 	// 카드 묶음의 여는 태그 위치를 모두 찾는다
 	preg_match_all( '/<div\b[^>]*\bclass="[^"]*\btp-wk-item\b[^"]*"[^>]*>/', $html, $m, PREG_OFFSET_CAPTURE );
 	$opens = $m[0];
@@ -112,7 +116,8 @@ function tp_wk_transform( $html ) {
 		if ( preg_match( '/<h2\b[^>]*>(.*?)<\/h2>/s', $card, $h ) ) {
 			$title = trim( wp_strip_all_tags( $h[1] ) );
 		}
-		$toc .= '<li><a href="#wk-' . $num . '"><span>' . $num . '</span>' . esc_html( $title ) . '</a></li>';
+		// 번호 뒤 공백: 화면은 flex 간격이라 그대로지만, 글자만 읽는 곳(검색엔진·화면 낭독기)에서 "01뉴발란스"로 붙지 않게
+		$toc .= '<li><a href="#wk-' . $num . '"><span>' . $num . '</span> ' . esc_html( $title ) . '</a></li>';
 	}
 
 	$open_cards   = array_slice( $cards, 0, TP_WK_OPEN_CARDS );
@@ -340,10 +345,10 @@ function tp_wk_card_markup( $title, $is_video ) {
 		. '<!-- wp:image {"sizeSlug":"large"} --><figure class="wp-block-image size-large"><img alt=""/></figure><!-- /wp:image -->'
 		. $video
 		. '<!-- wp:paragraph {"className":"tp-wk-src"} --><p class="tp-wk-src">© 출처 (없으면 이 줄 삭제)</p><!-- /wp:paragraph -->'
-		. '<!-- wp:heading {"level":4} --><h4 class="wp-block-heading">무슨 일이었나</h4><!-- /wp:heading -->'
+		. '<!-- wp:heading {"level":3} --><h3 class="wp-block-heading">무슨 일이었나</h3><!-- /wp:heading -->'
 		. '<!-- wp:paragraph --><p>카드뉴스 본문을 그대로 넣어요.</p><!-- /wp:paragraph -->'
 		. '<!-- wp:group {"className":"tp-wk-insight","layout":{"type":"default"}} --><div class="wp-block-group tp-wk-insight">'
-		. '<!-- wp:heading {"level":4} --><h4 class="wp-block-heading">💡 주목 포인트</h4><!-- /wp:heading -->'
+		. '<!-- wp:heading {"level":3} --><h3 class="wp-block-heading">💡 주목 포인트</h3><!-- /wp:heading -->'
 		. '<!-- wp:paragraph --><p>왜 이 이슈를 골랐는지 에디터의 한마디.</p><!-- /wp:paragraph -->'
 		. '</div><!-- /wp:group -->'
 		. '</div><!-- /wp:group -->';
