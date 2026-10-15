@@ -778,9 +778,6 @@ html:has(.tp-wk) { scroll-behavior: smooth; }
 
 /* Jetpack share buttons (X, Facebook) turn on for every new post; the Kakao button above replaces them */
 .sharedaddy { display: none !important; }
-/* Jetpack's subscribe pop-up after a reader comments signs people up to the WordPress.com list, not Stibee,
-   and skips the privacy and ad-consent checkboxes. All newsletter sign-ups go through the Stibee form */
-.jetpack-subscription-modal { display: none !important; }
 
 /* TP Related Posts: card row between the share button and comments (mockup E, 10/15).
    Phone: the row runs to the screen edge, two full cards plus about 40% of a third so it reads as swipeable
