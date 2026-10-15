@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Naver Verification
- * Description: 네이버 서치어드바이저 사이트 소유확인용 메타 태그, 연관 채널 마크업, 영문·한글 사이트 이름을 <head>에 넣는다.
- * Version: 1.2.0
+ * Description: 네이버 서치어드바이저 사이트 소유확인용 메타 태그와 연관 채널 마크업을 <head>에 넣고, 홈의 WebSite 구조화 데이터에 영문 이름(alternateName)을 더한다.
+ * Version: 1.3.0
  * Author: Trendportal
  */
 
@@ -51,15 +51,55 @@ function tp_naver_channel_jsonld() {
 }
 add_action( 'wp_head', 'tp_naver_channel_jsonld' );
 
-/**
- * 네이버가 사이트 이름 자리에 "트렌드포털" 대신 도메인을 띄워서, og:site_name을 영문+한글로 바꾼다.
- * 어피티("UPPITY 어피티")처럼 영문 검색어와 한글 이름을 한 줄에 같이 두려는 것.
+/*
+ * 사이트 이름 (1.3.0, 2026-10-15)
  *
- * 설정의 사이트 제목을 바꾸면 헤더 로고 글자와 브라우저 탭 제목까지 바뀌므로,
- * Jetpack이 내보내는 OG 태그 중 이 값 하나만 필터로 덮어쓴다.
+ * 구글·네이버가 검색 결과의 사이트 이름 자리에 "트렌드포털" 대신 도메인을 띄운다.
+ * 구글 안내는 ① 홈의 이름 신호를 일치시키고 ② WebSite 구조화 데이터에 alternateName을 더하라는 것.
+ *
+ * ① 1.2.0에서 og:site_name을 "TRENDPORTAL 트렌드포털"로 덮어썼는데, 그러면 WebSite 이름·<title>의
+ *    "트렌드포털"과 어긋난다. 덮어쓰던 필터를 지워 Jetpack 기본값(사이트 제목 "트렌드포털")으로 돌린다.
+ * ② 헤더 로고 글자는 "TRENDPORTAL"이라, 이것을 같은 사이트의 다른 이름으로 알린다.
+ *    구글은 WebSite 블록을 하나 더 만들지 말고 기존 것 안에 넣으라고 하는데, Jetpack의 WebSite 노드에는
+ *    값을 바꿀 필터가 없다(Jetpack 16.3.1 jetpack-seo 패키지 Website_Schema_Node 확인).
+ *    그래서 홈에서만 Jetpack이 wp_head 우선순위 5에 내보내는 출력을 4~6 사이에서 받아,
+ *    @graph 안의 WebSite 노드에 alternateName만 넣고 그대로 다시 내보낸다.
+ *    모양이 예상과 다르면(파싱 실패, @graph 없음, WebSite 없음) 받은 출력을 손대지 않고 내보낸다.
  */
-function tp_naver_og_site_name( $tags ) {
-	$tags['og:site_name'] = 'TRENDPORTAL 트렌드포털';
-	return $tags;
+function tp_site_name_capture_start() {
+	if ( is_front_page() ) {
+		ob_start();
+	}
 }
-add_filter( 'jetpack_open_graph_tags', 'tp_naver_og_site_name' );
+add_action( 'wp_head', 'tp_site_name_capture_start', 4 );
+
+function tp_site_name_capture_end() {
+	if ( ! is_front_page() ) {
+		return;
+	}
+	$html = ob_get_clean();
+	if ( false === $html ) {
+		return;
+	}
+	echo preg_replace_callback( '#<script type="application/ld\+json">(.*?)</script>#s', 'tp_site_name_add_alternate', $html ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Jetpack이 만든 출력을 그대로 돌려준다
+}
+add_action( 'wp_head', 'tp_site_name_capture_end', 6 );
+
+function tp_site_name_add_alternate( $match ) {
+	$doc = json_decode( $match[1], true );
+	if ( ! is_array( $doc ) || empty( $doc['@graph'] ) || ! is_array( $doc['@graph'] ) ) {
+		return $match[0];
+	}
+	$changed = false;
+	foreach ( $doc['@graph'] as $i => $node ) {
+		if ( is_array( $node ) && 'WebSite' === ( $node['@type'] ?? '' ) && empty( $node['alternateName'] ) ) {
+			$doc['@graph'][ $i ]['alternateName'] = 'TRENDPORTAL';
+			$changed = true;
+		}
+	}
+	if ( ! $changed ) {
+		return $match[0];
+	}
+	// Jetpack과 같은 방식으로 인코딩한다: 한글은 그대로, 슬래시는 이스케이프("</script>"로 블록이 끊기지 않게)
+	return '<script type="application/ld+json">' . wp_json_encode( $doc, JSON_UNESCAPED_UNICODE ) . '</script>';
+}
