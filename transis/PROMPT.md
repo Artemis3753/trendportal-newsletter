@@ -60,6 +60,7 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
    - **Skip work that is already over.** Do not create a new `upload`, `draft` or `shoot` item whose date is before today (Asia/Seoul): it has already happened. If the sheet already has that key, you may still send it to update it. A `pay` item is different: create it even when its date has passed, because 성현 must check the bank; skip it only when the thread says the money arrived (입금 완료, 입금 확인).
    - Never mark anything done. Only 성현 marks items done on the schedule page, even when the day has passed or our email shows the work was sent.
    - **Cancelled work.** When a thread you read in this run clearly says the collaboration or that schedule will not go ahead (for example 진행이 어렵게 되었다, 취소, 무산, 진행하지 않기로), send the sheet's existing items from that thread with their keys and `"cancelled": true`; the sheet takes them off the schedule and the next morning email lists them. A delay, 보류 or renegotiation is not a cancellation: keep the item and set `date` `""` as above. Cancellations by phone or KakaoTalk never reach the inbox, so never guess one from silence or from a missing reply. Do not create new items only to cancel them.
+   - Items whose key starts with `fixed-` (the Friday `주간 총정리 포스팅`) and `memo-` are not from email: the sheet makes the fixed ones every week and 성현 writes the memos. Never send, change or cancel them, and do not make another item for the same weekly post.
 
    Fields for each item:
 

@@ -27,6 +27,13 @@ const TYPES = ['upload', 'draft', 'shoot', 'pay'];
 // 메모: 성현 님이 일정표에서 직접 적는 할 일. 트란시스는 보내지도 바꾸지도 않는다(key가 'memo-'로 시작)
 const MEMO = 'memo';
 const TZ = 'Asia/Seoul';
+// 매주 돌아오는 고정 일정(10/15). 메일에서 오는 일이 아니라서 트란시스가 시트에 보낼 때(doPost) 여기서 직접 줄을 만든다.
+// key에 날짜를 붙여(fixed-weekly-2026-10-16) 날짜마다 한 번만 만든다 → 성현 님이 어떤 주를 지워도 다시 생기지 않는다
+// weekday: 1 = 월요일 … 7 = 일요일
+const FIXED = [
+  { key: 'fixed-weekly', weekday: 5, type: 'upload', brand: '주간 총정리', title: '주간 총정리 포스팅', time: '' },
+];
+const FIXED_DAYS = 14;  // 오늘부터 2주 안의 날짜까지 미리 만든다 (메일 맨 위 2주 달력에 보이게)
 
 /** 처음 한 번만 실행: 시트·머리줄·비밀 토큰·예시 일정을 만든다. 토큰은 실행 로그에 찍힌다 */
 function setup() {
@@ -108,6 +115,7 @@ function doPost(e) {
   lock.waitLock(20000);
   try {
     let items = body.reset ? [] : readItems_();
+    addFixed_(items);
     const byKey = {};
     items.forEach(it => { byKey[it.key] = it; });
     let maxNo = items.reduce((m, it) => Math.max(m, it.no), 0);
@@ -321,6 +329,25 @@ function publicData_() {
     return o;
   });
   return { updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')), items: items };
+}
+
+/** 앞으로 FIXED_DAYS 안에 고정 일정이 빠진 날이 있으면 items에 새 줄로 넣는다 */
+function addFixed_(items) {
+  const keys = {};
+  items.forEach(it => { keys[it.key] = true; });
+  let maxNo = items.reduce((m, it) => Math.max(m, it.no), 0);
+  for (let d = 0; d < FIXED_DAYS; d++) {
+    const day = new Date(Date.now() + d * 86400000);
+    const date = Utilities.formatDate(day, TZ, 'yyyy-MM-dd');
+    const weekday = Number(Utilities.formatDate(day, TZ, 'u'));
+    FIXED.forEach(f => {
+      const key = f.key + '-' + date;
+      if (f.weekday !== weekday || keys[key]) return;
+      items.push({ no: ++maxNo, key: key, type: f.type, brand: f.brand, title: f.title, date: date, time: f.time,
+                   done: false, doneAt: '', source: '', payer: '', amount: '', updatedAt: now_() });
+      keys[key] = true;
+    });
+  }
 }
 
 function isCancelled_(it) {
