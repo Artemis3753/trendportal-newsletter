@@ -260,7 +260,10 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   text-decoration: none;
   transition: background-color 0.2s, color 0.2s;
 }
+.tp-chips .wp-block-categories li { position: relative; }
 .tp-chips .wp-block-categories li a { color: inherit; text-decoration: none; }
+/* The post count "(1)" sits outside the link, so stretch the link over the whole chip */
+.tp-chips .wp-block-categories li a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
 .tp-chips .wp-block-categories li:hover,
 .tp-chips .tp-chip-all a:hover { background: rgba(255, 255, 255, 0.55); color: #111; }
 .tp-chips .wp-block-categories li.current-cat,
@@ -546,6 +549,10 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 }
 .wp-block-post-content p { text-align: center; text-wrap: balance; }
 .wp-block-post-content [id^="kboard"] p { text-align: left; }
+/* Privacy policy: long legal text reads better left-aligned (body class set by WordPress core) */
+.privacy-policy .wp-block-post-content h2 { margin-top: 2.4em !important; text-align: left !important; font-size: 1.25rem; }
+.privacy-policy .wp-block-post-content p { text-align: left; text-wrap: pretty; line-height: 1.75; }
+.privacy-policy .wp-block-post-content li { line-height: 1.75; margin-bottom: 0.4em; }
 .wp-block-post-content p.tp-source {
   width: fit-content;
   margin: 2rem auto 0;
