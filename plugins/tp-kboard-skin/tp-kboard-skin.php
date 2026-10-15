@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP KBoard Skin
- * Description: 트렌드포털 제보 게시판용 KBoard 스킨. default 스킨 복사본. 최신글 썸네일을 추가하고 추천(좋아요) 기능을 뺐다.
- * Version: 1.1.0
+ * Description: 트렌드포털 제보 게시판용 KBoard 스킨. default 스킨 복사본. 최신글 썸네일을 추가하고 추천(좋아요) 기능을 뺐다. 글쓰기 화면은 검색엔진에서 뺀다.
+ * Version: 1.2.0
  * Author: Trendportal
  */
 
@@ -20,4 +20,17 @@ add_filter('kboard_skin_list', function ($list) {
 	$skin->url  = plugins_url('skin/tp-default', __FILE__);
 	$list['tp-default'] = $skin;
 	return $list;
+});
+
+/*
+ * 1.2.0: 글쓰기 화면(/report/?mod=editor)은 빈 입력 칸뿐이라 검색 결과에 나올 이유가 없다(10/15 보완점 7번).
+ * 링크는 따라가도 되게(follow) 두고 색인만 막는다. 목록·제보 글 보기 화면은 그대로 색인된다.
+ */
+add_filter('wp_robots', function ($robots) {
+	$mod = isset($_GET['mod']) ? sanitize_key(wp_unslash($_GET['mod'])) : '';
+	if ('editor' === $mod) {
+		$robots['noindex'] = true;
+		$robots['follow']  = true;
+	}
+	return $robots;
 });
