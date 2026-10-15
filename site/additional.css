@@ -770,6 +770,9 @@ html:has(.tp-wk) { scroll-behavior: smooth; }
 
 /* Jetpack share buttons (X, Facebook) turn on for every new post; the Kakao button above replaces them */
 .sharedaddy { display: none !important; }
+/* Jetpack's subscribe pop-up after a reader comments signs people up to the WordPress.com list, not Stibee,
+   and skips the privacy and ad-consent checkboxes. All newsletter sign-ups go through the Stibee form */
+.jetpack-subscription-modal { display: none !important; }
 
 /* ---------- Newsletter ---------- */
 .tp-nl-wrap { background: #f4f4f4; padding: 3.5rem 1.5rem !important; margin-top: 0 !important; }
