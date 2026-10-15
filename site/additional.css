@@ -99,18 +99,21 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 
 /* Mobile menu: a white dropdown card under the header (C, 10/13). The header (logo, report link) stays visible,
    the page below it dims. With only two items a full-screen overlay looked empty.
-   If the menu grows, the "fill the menu" mockup (categories + newsletter button) is the next candidate */
+   If the menu grows, the "fill the menu" mockup (categories + newsletter button) is the next candidate.
+   --tp-menu-top is the header's top edge when the menu opened (TP Header Scroll): 46px under the logged-in admin bar
+   at the top of a phone page, 0px once that bar has scrolled away. Core's admin-bar margin on the dialog is replaced by it */
 .tp-header .wp-block-navigation__responsive-container.is-menu-open {
-  background: linear-gradient(transparent var(--tp-hdr), rgba(0, 0, 0, 0.32) var(--tp-hdr)) !important;
+  background: linear-gradient(transparent calc(var(--tp-menu-top, 0px) + var(--tp-hdr)), rgba(0, 0, 0, 0.32) calc(var(--tp-menu-top, 0px) + var(--tp-hdr))) !important;
   color: #111 !important;
   padding: 0 !important;
 }
+.tp-header .wp-block-navigation__responsive-container.is-menu-open .wp-block-navigation__responsive-dialog { margin-top: 0 !important; }
 /* The close button sits exactly where the menu button was (20px from the right, centred in the header),
    and the menu button hides while the menu is open so it does not show through */
 .tp-header:has(.is-menu-open) .wp-block-navigation__responsive-container-open { opacity: 0; }
 .tp-header .wp-block-navigation__responsive-container.is-menu-open .wp-block-navigation__responsive-container-close {
   position: fixed !important;
-  top: calc((var(--tp-hdr) - 25px) / 2) !important;
+  top: calc(var(--tp-menu-top, 0px) + (var(--tp-hdr) - 25px) / 2) !important;
   right: 20px !important;
   width: 24px;
   height: 24px;
@@ -118,7 +121,7 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 }
 .tp-header .wp-block-navigation__responsive-container.is-menu-open .wp-block-navigation__responsive-container-content {
   position: absolute !important;
-  top: calc(var(--tp-hdr) + 8px);
+  top: calc(var(--tp-menu-top, 0px) + var(--tp-hdr) + 8px);
   left: 12px;
   right: 12px;
   align-items: stretch !important;

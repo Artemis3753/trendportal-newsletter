@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Header Scroll
- * Description: 유리 헤더를 아래로 스크롤하면 숨기고, 위로 스크롤하면 다시 보여 준다(아이폰 사파리 주소창처럼). 숨김 모양은 추가 CSS의 .tp-hdr-hidden이 맡는다.
- * Version: 1.0.0
+ * Description: 유리 헤더를 아래로 스크롤하면 숨기고, 위로 스크롤하면 다시 보여 준다(아이폰 사파리 주소창처럼). 숨김 모양은 추가 CSS의 .tp-hdr-hidden이 맡는다. 폰 메뉴는 열 때 헤더 위치에 맞추고, 바깥을 누르면 닫는다.
+ * Version: 1.1.0
  * Author: Trendportal
  */
 
@@ -47,6 +47,29 @@ function tp_hs_footer() {
 	// 키보드로 헤더 안 링크에 들어오면 다시 보여 준다
 	header.addEventListener('focusin', function () {
 		header.classList.remove('tp-hdr-hidden');
+	});
+
+	/*
+	 * 폰 메뉴(드롭다운 카드). 로그인 상태 600px 이하에서는 관리 막대(46px)가 스크롤과 함께 사라져서,
+	 * 헤더 위치가 맨 위일 때 46px·스크롤 뒤 0px로 바뀐다. CSS만으로는 지금 어느 쪽인지 알 수 없으니
+	 * 메뉴를 여는 순간 헤더 위치를 재서 --tp-menu-top으로 넘긴다(✕·카드·어두운 막이 이 값을 쓴다).
+	 * 메뉴가 열려 있는 동안은 페이지 스크롤이 잠기므로 여는 순간 한 번만 재면 된다.
+	 */
+	var menu = header.querySelector('.wp-block-navigation__responsive-container');
+	var openBtn = header.querySelector('.wp-block-navigation__responsive-container-open');
+	if (!menu || !openBtn) return;
+	openBtn.addEventListener('click', function () {
+		// 헤더가 숨김·등장 애니메이션 중이면 transform만큼 밀려 있으니, 그 양을 빼서 원래 자리를 잰다
+		var shift = new DOMMatrix(getComputedStyle(header).transform).m42;
+		header.style.setProperty('--tp-menu-top', Math.round(header.getBoundingClientRect().top - shift) + 'px');
+	});
+	// 카드 바깥(어두운 곳·헤더 띠)을 누르면 ✕를 누른 것처럼 닫는다. 직접 닫지 않고 ✕를 누르는 건
+	// 워드프레스 메뉴 스크립트가 열림 상태·포커스·스크롤 잠금을 함께 정리하게 하려는 것이다.
+	menu.addEventListener('click', function (e) {
+		if (!menu.classList.contains('is-menu-open')) return;
+		if (e.target.closest('.wp-block-navigation__responsive-container-content, .wp-block-navigation__responsive-container-close')) return;
+		var closeBtn = menu.querySelector('.wp-block-navigation__responsive-container-close');
+		if (closeBtn) closeBtn.click();
 	});
 })();
 </script>
