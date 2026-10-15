@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Meta Description
- * Description: 사람이 쓴 설명(SEO 설명·요약)이 없는 글의 검색 설명과 공유 미리보기 설명을, 라벨·프로필 카드·출처 줄을 뺀 본문으로 만든다.
- * Version: 1.0.0
+ * Description: 사람이 쓴 설명(SEO 설명·요약)이 없는 글의 검색 설명과 공유 미리보기 설명을, 라벨·프로필 카드·출처 줄을 뺀 본문으로 만든다. 공유 이미지가 사이트 아이콘으로 대신 들어가는 곳에는 1200×630 공유 이미지를 넣는다.
+ * Version: 1.1.0
  * Author: Trendportal
  */
 
@@ -136,3 +136,39 @@ function tp_md_og_description( $tags ) {
 	return $tags;
 }
 add_filter( 'jetpack_open_graph_tags', 'tp_md_og_description' );
+
+/*
+ * 공유 이미지 (1.1.0, 2026-10-15)
+ *
+ * 대표 사진이 없는 페이지(홈·소개·문의·제보 등)는 Jetpack이 사이트 아이콘(512px 정사각형)을 공유 이미지로 쓴다.
+ * 카톡·검색 미리보기에서 작고 휑하게 나와서, 그 자리에만 1200×630 공유 이미지(미디어 594, 시안 B)를 넣는다.
+ * 대표 사진이 있는 글은 지금처럼 자기 사진을 쓴다. Jetpack의 트위터 카드 태그도 같은 필터에서 만들어지므로
+ * 그 뒤(우선순위 100)에 돌아야 아이콘이 남지 않는다.
+ */
+const TP_MD_SHARE_IMAGE_ID = 594;
+
+function tp_md_share_image( $tags ) {
+	$icon_id = (int) get_option( 'site_icon' );
+	$icon    = $icon_id ? wp_basename( (string) get_attached_file( $icon_id ) ) : '';
+	$image   = wp_get_attachment_image_src( TP_MD_SHARE_IMAGE_ID, 'full' );
+	if ( ! $image ) {
+		return $tags;
+	}
+	// 사이트 아이콘이거나 Jetpack의 빈 그림(blank.jpg)일 때만 바꾼다
+	$is_fallback = function ( $url ) use ( $icon ) {
+		$url = (string) $url;
+		return '' === $url || false !== strpos( $url, '/i/blank.jpg' ) || ( '' !== $icon && false !== strpos( $url, $icon ) );
+	};
+	if ( $is_fallback( $tags['og:image'] ?? '' ) ) {
+		$tags['og:image']        = $image[0];
+		$tags['og:image:width']  = $image[1];
+		$tags['og:image:height'] = $image[2];
+		$tags['og:image:alt']    = (string) get_post_meta( TP_MD_SHARE_IMAGE_ID, '_wp_attachment_image_alt', true );
+	}
+	if ( isset( $tags['twitter:image'] ) && $is_fallback( $tags['twitter:image'] ) ) {
+		$tags['twitter:image'] = $image[0];
+		$tags['twitter:card']  = 'summary_large_image';
+	}
+	return $tags;
+}
+add_filter( 'jetpack_open_graph_tags', 'tp_md_share_image', 100 );
