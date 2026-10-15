@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Meta Description
- * Description: 사람이 쓴 설명(SEO 설명·요약)이 없는 글의 검색 설명과 공유 미리보기 설명을, 라벨·프로필 카드·출처 줄을 뺀 본문으로 만든다. 공유 이미지가 사이트 아이콘으로 대신 들어가는 곳에는 1200×630 공유 이미지를 넣는다.
- * Version: 1.1.0
+ * Description: 사람이 쓴 설명(SEO 설명·요약)이 없는 글의 검색 설명과 공유 미리보기 설명을, 라벨·프로필 카드·출처 줄을 뺀 본문으로 만든다. 공유 이미지가 사이트 아이콘으로 대신 들어가는 곳에는 1200×630 공유 이미지를 넣는다. 공유 이미지 대체 텍스트가 비어 있으면 제목으로 채운다.
+ * Version: 1.2.0
  * Author: Trendportal
  */
 
@@ -172,3 +172,25 @@ function tp_md_share_image( $tags ) {
 	return $tags;
 }
 add_filter( 'jetpack_open_graph_tags', 'tp_md_share_image', 100 );
+
+/*
+ * 공유 이미지 대체 텍스트 (1.2.0, 2026-10-15)
+ *
+ * Jetpack은 og:image:alt를 대표 사진의 "대체 텍스트" 칸에서 가져오는데, 우리 글 사진은 그 칸이 비어 있어 alt=""로 나간다.
+ * 비어 있을 때만 공유 카드에 함께 보이는 제목(og:title, 없으면 글 제목)을 넣는다. 사진에 직접 쓴 대체 텍스트가 있으면 그대로 둔다.
+ * 위의 공유 이미지 교체가 자기 alt를 넣은 뒤에 돌아야 하므로 우선순위를 그보다 뒤로 둔다.
+ */
+function tp_md_share_image_alt( $tags ) {
+	if ( empty( $tags['og:image'] ) || '' !== trim( (string) ( $tags['og:image:alt'] ?? '' ) ) ) {
+		return $tags;
+	}
+	$title = trim( (string) ( $tags['og:title'] ?? '' ) );
+	if ( '' === $title && is_singular() ) {
+		$title = trim( wp_strip_all_tags( (string) get_post_field( 'post_title', get_queried_object_id() ) ) );
+	}
+	if ( '' !== $title ) {
+		$tags['og:image:alt'] = $title;
+	}
+	return $tags;
+}
+add_filter( 'jetpack_open_graph_tags', 'tp_md_share_image_alt', 110 );
