@@ -8,9 +8,11 @@
     python3 tools/cardnews/cardnews.py verify  <주문> [--against 글번호]
 
 주문 폴더:
-    order.json   주문서 (종류, 호수, 표지 사진, 카테고리·태그)
+    order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
+                 featured(대표 이미지), cover_photo(아카이빙 글자 없는 커버), categories, tags
     cards.json   카드 글자·사진 이름 (fetch 단계 결과 — 아직은 손으로/임시 스크립트로 만든다)
-    notes.json   Claude가 쓰는 칸만: 카드별 alt·💡
+                 글자 속 줄바꿈은 "\\n"으로 적는다 (<br>로 바뀜)
+    notes.json   Claude가 쓰는 칸만: 카드별 alt·💡(주간), cover_alt, poster_alt
     images/      사진·영상 파일
     media.json   publish가 채움: 파일 이름 → 미디어 번호·주소 (다시 돌려도 두 번 올리지 않게)
     post.html    build 결과 (블록 HTML)
@@ -22,8 +24,10 @@ import base64
 import html
 import json
 import mimetypes
+import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -85,11 +89,13 @@ def wp(path, data=None, headers=None, method=None):
 
 def esc(s):
     # 본문 글자: &, <, > 만 바꾼다 (WordPress 편집기가 저장하는 모양과 같게)
-    return html.escape(s, quote=False)
+    # json에서 줄바꿈("\n")으로 적은 곳은 <br>로 — 사람이 json을 고칠 때 태그를 안 써도 되게
+    return "<br>".join(html.escape(line, quote=False) for line in s.split("\n"))
 
 
 def attr(s):
-    return html.escape(s, quote=True)
+    # 속성은 큰따옴표로 감싸니 "만 더 바꾼다 (작은따옴표까지 바꾸면 편집기 저장본과 달라짐)
+    return html.escape(s, quote=False).replace('"', "&quot;")
 
 
 def para(text, cls=None):
@@ -127,12 +133,20 @@ class Media:
         return f"{{{{id:{fn}}}}}", f"{{{{url:{fn}}}}}"
 
 
-def image_block(media, fn, alt, wide):
+def image_block(media, fn, alt, wide=False, size="full", cls=None, link_none=False):
     mid, url = media.get(fn)
     # 가로 정지 화면(X·유튜브)은 tp-wk-wide를 붙여야 CSS가 240px로 줄이지 않는다
-    extra, cls = (',"className":"tp-wk-wide"', " tp-wk-wide") if wide else ("", "")
-    return (f'<!-- wp:image {{"id":{mid},"sizeSlug":"full"{extra}}} --><figure class="wp-block-image size-full{cls}">'
+    cls = "tp-wk-wide" if wide else cls
+    extra = ',"linkDestination":"none"' if link_none else ""
+    extra += f',"className":"{cls}"' if cls else ""
+    return (f'<!-- wp:image {{"id":{mid},"sizeSlug":"{size}"{extra}}} -->'
+            f'<figure class="wp-block-image size-{size}{" " + cls if cls else ""}">'
             f'<img src="{url}" alt="{attr(alt)}" class="wp-image-{mid}"/></figure><!-- /wp:image -->')
+
+
+def video_link(v, cls=None):
+    # 남의 영상: 정지 화면 아래 "▶ ○○에서 영상 보기" 한 줄 (영상 자체는 원본 계정에서)
+    return para(f'▶ <a href="{attr(v["url"])}" target="_blank" rel="noreferrer noopener">{esc(v["label"])}</a>', cls)
 
 
 def clip_block(media, fn, poster):
@@ -150,8 +164,7 @@ def card_block(media, card, note):
     if card.get("image"):
         out += image_block(media, card["image"], note.get("alt", ""), card.get("wide", False))
     if card.get("video"):
-        v = card["video"]
-        out += para(f'▶ <a href="{attr(v["url"])}" target="_blank" rel="noreferrer noopener">{esc(v["label"])}</a>', "tp-wk-video")
+        out += video_link(card["video"], "tp-wk-video")
     if card.get("src"):
         out += para("© " + esc(card["src"]), "tp-wk-src")
     out += h4("무슨 일이었나")
@@ -177,7 +190,7 @@ WEEKLY_TOC = ('<!-- wp:html --><nav class="tp-wk-tocbox"><!-- 목차·카드 번
 def build_weekly(order, cards, notes, media):
     if len(notes["cards"]) != len(cards["cards"]):
         sys.exit(f"카드 {len(cards['cards'])}장인데 notes는 {len(notes['cards'])}장이에요")
-    letter = "".join(para("<br>".join(esc(l) for l in lines)) for lines in cards["letter"])
+    letter = "".join(para(esc(p)) for p in cards["letter"])
     picks = "".join(f"<!-- wp:list-item --><li>{esc(p)}</li><!-- /wp:list-item -->" for p in cards["picks"])
     body = (
         para(f"WEEKLY · {esc(order['issue'])} · 금요일 발행", "tp-wk-issue")
@@ -191,16 +204,51 @@ def build_weekly(order, cards, notes, media):
     return group("tp-wk", body)
 
 
+# ── build: 아카이빙 틀 (기준 글 242) ─────────────────────
+# 글자 없는 커버 사진 → 인스타 캡션 앞부분 → 카드마다 사진 → (영상 링크) → H2 → 설명 → 출처 → 캡션 끝맺음
+
+def build_archive(order, cards, notes, media):
+    if len(notes["cards"]) != len(cards["cards"]):
+        sys.exit(f"카드 {len(cards['cards'])}장인데 notes는 {len(notes['cards'])}장이에요")
+    out = ""
+    if order.get("cover_photo"):
+        # TP Cover Photo가 이 이름표(tp-cover-photo) 사진을 글 머리 커버로 옮긴다
+        out += image_block(media, order["cover_photo"], notes.get("cover_alt", ""),
+                           size="large", cls="tp-cover-photo", link_none=True)
+    out += "".join(para(esc(p)) for p in cards["intro"])
+    for card, note in zip(cards["cards"], notes["cards"]):
+        if card.get("clip"):
+            out += clip_block(media, card["clip"], card["poster"])
+        if card.get("image"):
+            out += image_block(media, card["image"], note.get("alt", ""), size="large")
+        if card.get("video"):
+            out += video_link(card["video"])
+        out += h2(card["title"])
+        out += "".join(para(esc(p)) for p in card["what"])
+        if card.get("src"):
+            out += ('<!-- wp:paragraph {"className":"tp-source","fontSize":"small"} -->'
+                    f'<p class="tp-source has-small-font-size">© {esc(card["src"])}</p><!-- /wp:paragraph -->')
+    out += "".join(para(esc(p)) for p in cards.get("outro", []))
+    return out
+
+
 def title_of(order):
-    return order.get("title") or f"이번 주 일어난 마케팅 이슈 총정리 ({order['issue']})"
+    if order["kind"] == "weekly":
+        return order.get("title") or f"이번 주 일어난 마케팅 이슈 총정리 ({order['issue']})"
+    if not order.get("title"):
+        sys.exit("order.json에 title이 없어요 (아카이빙 제목은 사람이 골라서 적어요)")
+    return order["title"]
+
+
+BUILDERS = {"weekly": build_weekly, "archive": build_archive}
 
 
 def build(d, quiet=False):
     order, cards, notes = load(d, "order.json"), load(d, "cards.json"), load(d, "notes.json")
     media = Media(load(d, "media.json", {}))
-    if order["kind"] != "weekly":
-        sys.exit("아직 주간 총정리(weekly) 틀만 있어요")
-    out = build_weekly(order, cards, notes, media)
+    if order["kind"] not in BUILDERS:
+        sys.exit(f"모르는 종류예요: {order['kind']} (weekly / archive)")
+    out = BUILDERS[order["kind"]](order, cards, notes, media)
     (d / "post.html").write_text(out, encoding="utf-8")
     if not quiet:
         print(f"post.html {len(out):,}자 · 카드 {len(cards['cards'])}장 · 아직 안 올린 파일 {len(media.missing)}개")
@@ -222,8 +270,12 @@ def upload(d, fn, alt):
 
 def alts(d):
     # 사진 파일마다 alt: 카드 사진은 notes의 alt, 영상 포스터는 notes의 poster_alt
-    cards, notes = load(d, "cards.json"), load(d, "notes.json")
+    order, cards, notes = load(d, "order.json"), load(d, "cards.json"), load(d, "notes.json")
     out = {}
+    if order.get("cover_photo"):
+        out[order["cover_photo"]] = notes.get("cover_alt", "")
+    if order.get("featured"):
+        out.setdefault(order["featured"], notes.get("featured_alt", ""))
     for c, n in zip(cards["cards"], notes["cards"]):
         if c.get("image"):
             out[c["image"]] = n.get("alt", "")
@@ -236,9 +288,10 @@ def publish(d):
     order = load(d, "order.json")
     table = load(d, "media.json", {})
     _, missing = build(d, quiet=True)
-    cover = order.get("cover")
-    if cover and cover not in table:
-        missing.append(cover)
+    # 대표 이미지(목록·공유 미리보기에 쓰이는 사진)는 본문에 없을 수도 있어서 따로 챙긴다
+    featured = order.get("featured")
+    if featured and featured not in table and featured not in missing:
+        missing.append(featured)
     alt = alts(d)
     for fn in missing:
         # 하나 올릴 때마다 media.json에 적는다 — 중간에 끊겨도 다시 돌리면 이어서 올린다
@@ -257,8 +310,8 @@ def publish(d):
         "tags": order.get("tags", []),
         "jetpack_sharing_enabled": False,  # 글 스타일 규칙: 공유 버튼 끔
     }
-    if cover:
-        post["featured_media"] = table[cover]["id"]
+    if featured:
+        post["featured_media"] = table[featured]["id"]
     result = load(d, "result.json", {})
     if result.get("post_id"):
         # 이미 만든 초안이 있으면 새로 만들지 않고 그 초안을 고친다
@@ -293,14 +346,19 @@ def verify(d, against=None):
     for fn, m in load(d, "media.json", {}).items():
         if m["url"] in mine:
             try:
-                urllib.request.urlopen(urllib.request.Request(m["url"], method="HEAD"), timeout=30)
+                # 한글 파일 이름(예전 글의 '사이트1-2.jpg')은 주소에 그대로 못 실어서 %로 바꿔 보낸다
+                url = urllib.parse.quote(m["url"], safe=":/%?&=")
+                urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=30)
             except urllib.error.URLError as e:
                 problems.append(f"{fn} 주소가 안 열려요: {e}")
     if against:
         # 시험용: 손으로 만든 글과 똑같이 나오는지
+        # 블록 사이 공백·줄바꿈은 빼고 비교한다 (편집기에서 만든 글은 빈 줄 수가 제각각이고 화면엔 차이가 없다)
         ref = wp(f"posts/{against}?context=edit")
-        if ref["content"]["raw"] != live["content"]["raw"]:
-            i, a, b = first_diff(ref["content"]["raw"], live["content"]["raw"])
+        squeeze = lambda s: re.sub(r"\s*(<!-- /?wp:[^>]*-->)\s*", r"\1", s).strip()
+        a_raw, l_raw = squeeze(ref["content"]["raw"]), squeeze(live["content"]["raw"])
+        if a_raw != l_raw:
+            i, a, b = first_diff(a_raw, l_raw)
             problems.append(f"글 {against}와 본문이 달라요 ({i}번째 글자)\n  {against}: …{a}…\n  초안: …{b}…")
         for k in ("title", "featured_media", "categories", "tags"):
             rv = ref[k]["raw"] if k == "title" else ref[k]
