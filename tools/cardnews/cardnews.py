@@ -27,6 +27,7 @@ import json
 import mimetypes
 import re
 import shutil
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import urllib.error
@@ -261,8 +262,10 @@ def build(d, quiet=False):
 # ── fetch: 피그마 묶음 → cards.json (+ 커버·대표 사진, 영상 정지 화면) ──
 # 피그마는 1단계에선 MCP로 받는다(사용자 결정 A'). Claude가 MCP 결과를 figma/ 폴더에 파일로 두면 여기서 읽는다:
 #   figma/metadata.xml   get_metadata(묶음 노드) 결과 XML (MCP 결과 파일 통째로 둬도 됨)
-#   figma/cover-export.png, figma/cover-raw-1.*   download_assets(표지 프레임)의 export와 rawImages
-# 카드 사진은 사람이 글자 레이어를 숨기고 내보내서 images/02.jpg처럼 카드 번호로 넣는다(사용자 결정 A)
+#   figma/cover-export.png, figma/cover-raw-N.*   download_assets(표지 프레임)의 export와 rawImages
+#   figma/card02-raw-N.*                          download_assets(카드 프레임)의 rawImages — 카드 1장에 1회
+# 카드 사진은 사람이 내보낸 images/02.jpg가 있으면 그걸 쓰고, 없으면 rawImages에서 고른다
+# (사용자 결정 A + 10/16 328 시험: rawImages에 글자 없는 원래 사진이 통째로 들어 있었다)
 
 UA_FB = "facebookexternalhit/1.1"  # 인스타는 이 이름으로 물어야 미리보기 태그를 준다
 
@@ -291,22 +294,28 @@ def frame_no(fr, i):
     return int(m.group(1)) if m else i + 1
 
 
+# 출처 표기는 시기마다 다르다: 2026년 가을 카드는 "© 한국경제", 그 전 카드는 "출처ㅣVogue"
+SRC_MARK = re.compile(r"^\s*(?:©|ⓒ|출처\s*[ㅣ|:])\s*")
+
+
 def read_card(fr):
-    """카드 프레임 하나 → 제목·본문·출처. 글자 레이어 이름 = 카드에 적힌 글자 전체(10/16 242로 확인)."""
+    """카드 프레임 하나 → 제목·본문·출처. 글자 레이어 이름 = 카드에 적힌 글자 전체(10/16 242로 확인).
+    단 레이어 이름에서는 카드 속 줄바꿈이 띄어쓰기로 바뀌어 있다(328로 확인) — 끊어 읽기는 사람·Claude가 다듬는다."""
     texts = [t for t in fr.iter("text") if t.get("name", "").strip()]
-    src = [t for t in texts if t.get("name").startswith("©")]
-    if not src:
-        return None  # 표지·끝 카드에는 출처가 없다
+    if not texts:
+        return None
+    src = [t for t in texts if SRC_MARK.match(t.get("name"))]
     rest = [t for t in texts if t not in src]
+    if not rest:
+        return None
     body = max(rest, key=lambda t: len(t.get("name")))
     # 제목 = 큰 글씨 한 줄(높이 60~120). 두 줄 제목은 레이어가 둘로 나뉘어 있어 위에서부터 잇는다
     lines = sorted((t for t in rest if t is not body and 60 <= float(t.get("height")) <= 120), key=lambda t: float(t.get("y")))
     extra = [t.get("name") for t in rest if t is not body and t not in lines]
-    return {
-        "title": " ".join(t.get("name").strip() for t in lines),
-        "what": [body.get("name").strip()],
-        "src": src[0].get("name")[1:].strip(),
-    }, len(lines), extra
+    card = {"title": " ".join(t.get("name").strip() for t in lines), "what": [body.get("name").strip()]}
+    if src:
+        card["src"] = SRC_MARK.sub("", src[0].get("name")).strip()
+    return card, len(lines), extra
 
 
 def clean_link(url):
@@ -363,6 +372,42 @@ def jpeg_size(path):
     return None
 
 
+def png_info(path):
+    # PNG 머리(IHDR)에서 가로·세로·투명 여부만 읽는다. 색 형식 4·6 = 투명 칸이 있는 그림(로고·국기 오린 것)
+    data = path.read_bytes()[:32]
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        size = jpeg_size(path)
+        return (size[0], size[1], False) if size else (0, 0, False)
+    w, h = int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+    return w, h, data[25] in (4, 6)
+
+
+def pick_photo(paths):
+    """download_assets의 rawImages 중 진짜 사진 고르기: 투명 배경 없는 것 중 가장 큰 그림.
+    순서로는 못 고른다 — 328 표지는 첫 장이 그래프 그림, 사진은 둘째 장이었다(10/16)."""
+    info = [(p, *png_info(p)) for p in paths]
+    solid = [x for x in info if not x[3]] or info
+    return max(solid, key=lambda x: x[1] * x[2])[0] if solid else None
+
+
+def to_web(src, dst):
+    # 피그마 원본은 PNG 수 MB라 사이트용 JPEG(긴 변 2000px)로 줄인다. 맥 기본 sips가 없으면(클라우드 등) 그대로 복사
+    if shutil.which("sips"):
+        w, h, _ = png_info(src)
+        # 줄이기만 한다 — 작은 원본을 늘리면 용량만 커지고 더 흐려진다
+        resize = ["-Z", "2000"] if max(w, h) > 2000 else []
+        subprocess.run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "85", *resize,
+                        str(src), "--out", str(dst)], check=True, capture_output=True)
+        return dst.name
+    dst = dst.with_suffix(src.suffix)
+    shutil.copy(src, dst)
+    return dst.name
+
+
+def raws(d, prefix):
+    return sorted((d / "figma").glob(f"{prefix}-raw-*"))
+
+
 def read_caption(d):
     """인스타 캡션 → 앞부분(intro)·끝맺음(outro). 빈 줄로 문단을 나누고, 마지막 문단을 끝맺음으로 본다."""
     p = d / "caption.txt"
@@ -395,13 +440,19 @@ def fetch(d):
     frames = sorted((c for c in group if c.tag == "frame"), key=lambda e: float(e.get("x")))
     videos = {int(k): v for k, v in order.get("videos", {}).items()}
     cards, warn = [], []
-    for i, fr in enumerate(frames):
+    # 첫 장 = 표지, 마지막 장 = 끝 카드(계정 이름 + 제목 한 줄)라서 빼고, 그 사이가 내용 카드
+    for i, fr in enumerate(frames[1:-1], start=1):
         n = frame_no(fr, i)
         got = read_card(fr)
         if not got:
+            warn.append(f"{n}번 카드에서 글자를 못 찾았어요")
             continue
         card, nlines, extra = got
         card["no"] = n
+        if not card.get("title"):
+            warn.append(f"{n}번 제목을 못 찾았어요 (큰 글씨 한 줄이 없음)")
+        if not card.get("src"):
+            warn.append(f"{n}번 출처가 없어요")
         if nlines > 1:
             warn.append(f"{n}번 제목이 {nlines}줄이라 띄어쓰기로 이었어요 — 줄바꿈이 맞으면 cards.json에서 \\n으로")
         if extra:
@@ -417,24 +468,23 @@ def fetch(d):
             if note:
                 warn.append(f"{n}번 영상: {note}")
         else:
+            # 사람이 내보낸 사진(images/NN.*)이 먼저, 없으면 피그마 rawImages(figma/cardNN-raw-*)에서 고른다
             fn = find_image(d, n)
+            if not fn and raws(d, f"card{n:02d}"):
+                fn = to_web(pick_photo(raws(d, f"card{n:02d}")), d / "images" / f"{n:02d}.jpg")
             if fn:
                 card["image"] = fn
             else:
                 warn.append(f"{n}번 사진이 없어요 — images/{n:02d}.jpg로 내보내 주세요")
         cards.append(card)
 
-    # 표지: rawImages 첫 장 = 글자 없는 원본 사진(커버), export = 글자 있는 표지(대표 이미지)
-    raws = sorted((d / "figma").glob("cover-raw-*"), key=lambda p: int(re.search(r"(\d+)", p.stem.split("-")[-1]).group(1)))
-    if raws:
-        ext = raws[0].suffix or ".png"
-        shutil.copy(raws[0], d / "images" / f"cover{ext}")
-        order["cover_photo"] = f"cover{ext}"
+    # 표지: rawImages 중 진짜 사진 = 글자 없는 커버, export = 글자 있는 표지(대표 이미지)
+    if raws(d, "cover"):
+        order["cover_photo"] = to_web(pick_photo(raws(d, "cover")), d / "images" / "cover.jpg")
     else:
         warn.append("figma/cover-raw-1.* 가 없어요 (표지 프레임 download_assets의 rawImages)")
     if (d / "figma" / "cover-export.png").exists():
-        shutil.copy(d / "figma" / "cover-export.png", d / "images" / "featured.png")
-        order["featured"] = "featured.png"
+        order["featured"] = to_web(d / "figma" / "cover-export.png", d / "images" / "featured.jpg")
     else:
         warn.append("figma/cover-export.png 가 없어요 (표지 프레임 download_assets의 export)")
 
