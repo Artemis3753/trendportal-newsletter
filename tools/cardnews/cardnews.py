@@ -3,6 +3,7 @@
 
 주문 폴더 하나(local/cardnews/<주문>/)를 받아 단계별로 처리한다.
 
+    python3 tools/cardnews/cardnews.py fetch   <주문>     (아카이빙만, 피그마 MCP 결과 파일 필요)
     python3 tools/cardnews/cardnews.py build   <주문>
     python3 tools/cardnews/cardnews.py publish <주문>
     python3 tools/cardnews/cardnews.py verify  <주문> [--against 글번호]
@@ -25,7 +26,9 @@ import html
 import json
 import mimetypes
 import re
+import shutil
 import sys
+import xml.etree.ElementTree as ET
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -255,6 +258,199 @@ def build(d, quiet=False):
     return out, media.missing
 
 
+# ── fetch: 피그마 묶음 → cards.json (+ 커버·대표 사진, 영상 정지 화면) ──
+# 피그마는 1단계에선 MCP로 받는다(사용자 결정 A'). Claude가 MCP 결과를 figma/ 폴더에 파일로 두면 여기서 읽는다:
+#   figma/metadata.xml   get_metadata(묶음 노드) 결과 XML (MCP 결과 파일 통째로 둬도 됨)
+#   figma/cover-export.png, figma/cover-raw-1.*   download_assets(표지 프레임)의 export와 rawImages
+# 카드 사진은 사람이 글자 레이어를 숨기고 내보내서 images/02.jpg처럼 카드 번호로 넣는다(사용자 결정 A)
+
+UA_FB = "facebookexternalhit/1.1"  # 인스타는 이 이름으로 물어야 미리보기 태그를 준다
+
+
+def get(url, headers=None):
+    req = urllib.request.Request(url, headers=dict({"User-Agent": "Mozilla/5.0"}, **(headers or {})))
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return r.read()
+
+
+def figma_group(d, group_id):
+    raw = (d / "figma" / "metadata.xml").read_text(encoding="utf-8")
+    if raw.lstrip().startswith("["):
+        # MCP 결과 파일(JSON 목록) 그대로 둔 경우: XML 덩어리만 꺼낸다
+        raw = next(b["text"] for b in json.loads(raw) if b["text"].lstrip().startswith("<"))
+    root = ET.fromstring(raw)
+    g = next((e for e in root.iter() if e.get("id") == group_id), None)
+    if g is None:
+        sys.exit(f"metadata.xml에 묶음 {group_id}가 없어요")
+    return g
+
+
+def frame_no(fr, i):
+    # 프레임 이름 끝 번호("트렌드포털 802-3" → 3)가 카드 번호. 없으면 왼쪽부터 센 순서
+    m = re.search(r"-(\d+)\s*$", fr.get("name", ""))
+    return int(m.group(1)) if m else i + 1
+
+
+def read_card(fr):
+    """카드 프레임 하나 → 제목·본문·출처. 글자 레이어 이름 = 카드에 적힌 글자 전체(10/16 242로 확인)."""
+    texts = [t for t in fr.iter("text") if t.get("name", "").strip()]
+    src = [t for t in texts if t.get("name").startswith("©")]
+    if not src:
+        return None  # 표지·끝 카드에는 출처가 없다
+    rest = [t for t in texts if t not in src]
+    body = max(rest, key=lambda t: len(t.get("name")))
+    # 제목 = 큰 글씨 한 줄(높이 60~120). 두 줄 제목은 레이어가 둘로 나뉘어 있어 위에서부터 잇는다
+    lines = sorted((t for t in rest if t is not body and 60 <= float(t.get("height")) <= 120), key=lambda t: float(t.get("y")))
+    extra = [t.get("name") for t in rest if t is not body and t not in lines]
+    return {
+        "title": " ".join(t.get("name").strip() for t in lines),
+        "what": [body.get("name").strip()],
+        "src": src[0].get("name")[1:].strip(),
+    }, len(lines), extra
+
+
+def clean_link(url):
+    # 공유할 때 붙는 추적용 꼬리(?s=46, ?si=…, ?igsh=…)를 뗀다. 유튜브는 v= 만 남긴다
+    p = urllib.parse.urlsplit(url.strip())
+    q = urllib.parse.parse_qs(p.query)
+    query = urllib.parse.urlencode({"v": q["v"][0]}) if "v" in q else ""
+    return urllib.parse.urlunsplit((p.scheme, p.netloc, p.path, query, ""))
+
+
+def video_still(url, out):
+    """영상 주소 → (정지 화면 파일, 링크 문구). 세 곳 다 10/16 실측한 방법."""
+    host = urllib.parse.urlsplit(url).netloc
+    if "youtu" in host:
+        vid = re.search(r"(?:youtu\.be/|v=|/shorts/)([\w-]{11})", url).group(1)
+        meta = json.loads(get(f"https://www.youtube.com/oembed?url=https://youtu.be/{vid}&format=json"))
+        try:
+            img = get(f"https://img.youtube.com/vi/{vid}/maxresdefault.jpg")
+        except urllib.error.HTTPError:
+            img = get(f"https://img.youtube.com/vi/{vid}/hqdefault.jpg")
+        label = f"유튜브에서 영상 보기 ({meta['author_name']})"
+        note = "유튜브 썸네일은 양옆 검은 띠가 있을 수 있어요 — 눈으로 확인"
+    elif "x.com" in host or "twitter.com" in host:
+        user, sid = re.search(r"/([^/]+)/status/(\d+)", url).groups()
+        t = json.loads(get(f"https://api.fxtwitter.com/{user}/status/{sid}"))["tweet"]
+        m = t["media"]["all"][0]
+        img = get((m.get("thumbnail_url") or m["url"]) + "?name=orig")
+        label, note = f"X에서 영상 보기 (@{t['author']['screen_name']})", None
+    elif "instagram.com" in host:
+        page = get(url, {"User-Agent": UA_FB}).decode("utf-8", "replace")
+        og = lambda k: html.unescape(re.search(rf'property="og:{k}" content="([^"]+)"', page).group(1))
+        acct = urllib.parse.urlsplit(og("url")).path.strip("/").split("/")[0]
+        img = get(og("image"))
+        label = f"인스타그램에서 영상 보기 (@{acct})"
+        note = "인스타 정지 화면은 최대 640px이고 재생 버튼이 박혀 있을 수 있어요"
+    else:
+        sys.exit(f"모르는 영상 주소예요: {url}")
+    out.write_bytes(img)
+    return label, note
+
+
+def jpeg_size(path):
+    # 가로/세로만 알면 돼서 JPEG 머리만 읽는다 (사진 라이브러리 설치 없이)
+    data = path.read_bytes()
+    i = 2
+    while i < len(data):
+        if data[i] != 0xFF:
+            i += 1
+            continue
+        marker, length = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
+        if marker in (0xC0, 0xC1, 0xC2):
+            return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
+        i += 2 + length
+    return None
+
+
+def read_caption(d):
+    """인스타 캡션 → 앞부분(intro)·끝맺음(outro). 빈 줄로 문단을 나누고, 마지막 문단을 끝맺음으로 본다."""
+    p = d / "caption.txt"
+    if not p.exists():
+        return [], [], ["caption.txt가 없어요 (인스타 캡션을 붙여 넣어 주세요)"]
+    paras = []
+    for block in re.split(r"\n\s*\n", p.read_text(encoding="utf-8").strip()):
+        # 해시태그만 있는 줄은 사이트 글에 안 넣는다
+        lines = [l.strip() for l in block.splitlines() if l.strip() and not all(w.startswith("#") for w in l.split())]
+        if lines:
+            paras.append("\n".join(lines))
+    if len(paras) < 2:
+        return paras, [], []
+    return paras[:-1], paras[-1:], []
+
+
+def find_image(d, n):
+    for ext in ("jpg", "jpeg", "png", "webp"):
+        if (d / "images" / f"{n:02d}.{ext}").exists():
+            return f"{n:02d}.{ext}"
+    return None
+
+
+def fetch(d):
+    order = load(d, "order.json")
+    if order["kind"] != "archive":
+        sys.exit("fetch는 아직 아카이빙(archive)만 돼요")
+    (d / "images").mkdir(exist_ok=True)
+    group = figma_group(d, order["figma"]["group"])
+    frames = sorted((c for c in group if c.tag == "frame"), key=lambda e: float(e.get("x")))
+    videos = {int(k): v for k, v in order.get("videos", {}).items()}
+    cards, warn = [], []
+    for i, fr in enumerate(frames):
+        n = frame_no(fr, i)
+        got = read_card(fr)
+        if not got:
+            continue
+        card, nlines, extra = got
+        card["no"] = n
+        if nlines > 1:
+            warn.append(f"{n}번 제목이 {nlines}줄이라 띄어쓰기로 이었어요 — 줄바꿈이 맞으면 cards.json에서 \\n으로")
+        if extra:
+            warn.append(f"{n}번 카드의 꾸밈 글자는 뺐어요: {extra}")
+        if n in videos:
+            link = clean_link(videos[n])
+            fn = f"{n:02d}-video.jpg"
+            label, note = video_still(link, d / "images" / fn)
+            card.update(image=fn, video={"url": link, "label": label})
+            size = jpeg_size(d / "images" / fn)
+            if size and size[0] > size[1]:
+                card["wide"] = True  # 주간 틀에서만 쓰지만 같이 적어 둔다
+            if note:
+                warn.append(f"{n}번 영상: {note}")
+        else:
+            fn = find_image(d, n)
+            if fn:
+                card["image"] = fn
+            else:
+                warn.append(f"{n}번 사진이 없어요 — images/{n:02d}.jpg로 내보내 주세요")
+        cards.append(card)
+
+    # 표지: rawImages 첫 장 = 글자 없는 원본 사진(커버), export = 글자 있는 표지(대표 이미지)
+    raws = sorted((d / "figma").glob("cover-raw-*"), key=lambda p: int(re.search(r"(\d+)", p.stem.split("-")[-1]).group(1)))
+    if raws:
+        ext = raws[0].suffix or ".png"
+        shutil.copy(raws[0], d / "images" / f"cover{ext}")
+        order["cover_photo"] = f"cover{ext}"
+    else:
+        warn.append("figma/cover-raw-1.* 가 없어요 (표지 프레임 download_assets의 rawImages)")
+    if (d / "figma" / "cover-export.png").exists():
+        shutil.copy(d / "figma" / "cover-export.png", d / "images" / "featured.png")
+        order["featured"] = "featured.png"
+    else:
+        warn.append("figma/cover-export.png 가 없어요 (표지 프레임 download_assets의 export)")
+
+    intro, outro, w = read_caption(d)
+    warn += w
+    save(d, "cards.json", {"intro": intro, "cards": cards, "outro": outro})
+    save(d, "order.json", order)
+    # notes.json은 Claude가 채울 칸만 비워서 만든다 (이미 있으면 카드 수가 같을 때 그대로 둔다)
+    notes = load(d, "notes.json", {})
+    if len(notes.get("cards", [])) != len(cards):
+        notes = {"cover_alt": notes.get("cover_alt", ""), "cards": [{"alt": ""} for _ in cards]}
+        save(d, "notes.json", notes)
+    print(f"카드 {len(cards)}장 · 캡션 앞 {len(intro)}문단 · 끝 {len(outro)}문단")
+    print("\n".join("· " + w for w in warn) if warn else "확인할 것 없음")
+
+
 # ── publish: 사진 올리기 → 다시 build → 비공개 초안 ─────────
 
 def upload(d, fn, alt):
@@ -262,7 +458,9 @@ def upload(d, fn, alt):
     if not path.exists():
         sys.exit(f"{path} 가 없어요")
     ctype = mimetypes.guess_type(fn)[0] or "application/octet-stream"
-    m = wp("media", path.read_bytes(), {"Content-Type": ctype, "Content-Disposition": f'attachment; filename="{fn}"'})
+    # 올릴 때 이름 앞에 주문 이름을 붙인다 — "02.jpg"끼리 겹치면 WordPress가 02-1.jpg처럼 바꿔 버려서
+    name = f"{d.name}-{fn}"
+    m = wp("media", path.read_bytes(), {"Content-Type": ctype, "Content-Disposition": f'attachment; filename="{name}"'})
     if alt:
         wp(f"media/{m['id']}", {"alt_text": alt})
     return {"id": m["id"], "url": m["source_url"]}
@@ -371,12 +569,14 @@ def verify(d, against=None):
 
 
 def main(argv):
-    if len(argv) < 2 or argv[0] not in ("build", "publish", "verify"):
+    if len(argv) < 2 or argv[0] not in ("fetch", "build", "publish", "verify"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
     if not d.is_dir():
         sys.exit(f"주문 폴더가 없어요: {d}")
-    if argv[0] == "build":
+    if argv[0] == "fetch":
+        fetch(d)
+    elif argv[0] == "build":
         build(d)
     elif argv[0] == "publish":
         publish(d)
