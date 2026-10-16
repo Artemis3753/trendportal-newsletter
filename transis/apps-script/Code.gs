@@ -16,9 +16,12 @@ const SHEET = 'items';
 const META = 'meta';
 // key = 원본 메일 스레드 id. 같은 메일에서 뽑은 일정이 두 번 들어가지 않게 하는 이름표
 // 새 칸은 맨 뒤에만 붙인다 (이미 쌓인 시트의 칸 순서가 어긋나지 않게)
-const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt', 'doneBy', 'removed', 'tentative'];
+const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt', 'doneBy', 'removed', 'tentative', 'manual', 'mailDate', 'mailTime'];
 // tentative = 확답 전: 날짜는 제안됐지만 한쪽이 아직 확정하지 않은 일정. 빈 칸(옛 줄)은 확정으로 읽는다
-const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'doneBy', 'tentative'];
+// manual = 성현 님이 일정표에서 날짜·시각을 직접 바꾼 일. mailDate·mailTime = 그때 트란시스가 메일에서 읽었던 날짜·시각.
+// 트란시스가 같은 메일을 다시 읽어도 메일이 여전히 그 옛 날짜를 말하면 손으로 바꾼 날짜를 지키고,
+// 메일에 새 날짜가 나오면(새 정보) 그 날짜를 따른다 (10/17 사용자 A안)
+const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'doneBy', 'tentative', 'manual'];
 // 트란시스가 메일에서 취소를 확인해 뺀 일은 removed + doneBy 이름표로 구분한다 (성현 님이 지운 일은 doneBy가 사람 이름)
 // 취소된 일은 완료 칸에 줄 그은 채 남고, 휴지통을 누르면 이름표만 '지움'으로 바뀌어 화면에서 사라진다
 const CANCELLED = '트란시스(취소)';
@@ -129,7 +132,15 @@ function doPost(e) {
       }
       const old = byKey[it.key];
       if (old) {
-        ['type', 'brand', 'title', 'date', 'time', 'source', 'payer', 'amount', 'tentative'].forEach(f => { old[f] = it[f]; });
+        ['type', 'brand', 'title', 'source', 'payer', 'amount', 'tentative'].forEach(f => { old[f] = it[f]; });
+        // 손으로 바꾼 날짜는 메일 날짜가 그대로면 지키고, 메일 날짜가 달라졌으면 메일을 따른다(손 표시도 지움)
+        if (!(old.manual && it.date === old.mailDate && it.time === old.mailTime)) {
+          old.date = it.date;
+          old.time = it.time;
+          old.manual = false;
+          old.mailDate = '';
+          old.mailTime = '';
+        }
         if (raw.done === true && !old.done) { old.done = true; old.doneAt = now_(); }
         if (raw.cancelled === true && !old.done && !old.removed) { old.removed = true; old.doneBy = CANCELLED; old.doneAt = now_(); }
         old.updatedAt = now_();
@@ -203,6 +214,32 @@ function setCancelled(no, cancelled) {
       it.doneBy = CANCELLED;
       it.doneAt = now_();
     }
+  });
+}
+
+/**
+ * 일정표에서 날짜·시각 직접 바꾸기. date = '' 이면 일정 미정으로 돌린다.
+ * 처음 손댈 때 트란시스가 읽었던 날짜를 mailDate·mailTime에 남겨 두고(doPost가 비교용으로 씀),
+ * 다시 그 메일 날짜로 되돌리면 손 표시를 지운다.
+ * 메모·고정 일정은 트란시스가 건드리지 않는 줄이라 표시 없이 날짜만 바꾼다
+ */
+function setWhen(no, date, time) {
+  const d = String(date || '').trim();
+  const tm = String(time || '').trim();
+  if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error('bad date');
+  if (tm && !/^\d{2}:\d{2}$/.test(tm)) throw new Error('bad time');
+  return editItem_(no, it => {
+    if (it.done || it.removed) throw new Error('only open items can be moved');
+    const fromMail = it.type !== MEMO && String(it.key).indexOf('fixed-') !== 0;
+    if (fromMail && !it.manual) {
+      it.mailDate = it.date;
+      it.mailTime = it.time;
+    }
+    it.date = d;
+    it.time = d ? tm : '';
+    it.manual = fromMail && !(it.date === it.mailDate && it.time === it.mailTime);
+    if (!it.manual) { it.mailDate = ''; it.mailTime = ''; }
+    it.updatedAt = now_();
   });
 }
 
@@ -365,6 +402,7 @@ function readItems_() {
     o.done = isTrue_(o.done);
     o.removed = isTrue_(o.removed);
     o.tentative = isTrue_(o.tentative);
+    o.manual = isTrue_(o.manual);
     return o;
   });
 }
@@ -377,7 +415,7 @@ function writeItems_(items) {
   if (!items.length) return;
   items.sort((a, b) => a.no - b.no);
   const rows = items.map(it => FIELDS.map(f => {
-    if (f === 'done' || f === 'removed' || f === 'tentative') return it[f] ? 'true' : 'false';
+    if (f === 'done' || f === 'removed' || f === 'tentative' || f === 'manual') return it[f] ? 'true' : 'false';
     return it[f] === undefined || it[f] === null ? '' : String(it[f]);
   }));
   sh.getRange(2, 1, rows.length, FIELDS.length).setNumberFormat('@').setValues(rows);

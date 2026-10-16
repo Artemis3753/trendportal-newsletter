@@ -235,10 +235,16 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .who input { flex: 1; min-width: 0; padding: 0 12px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
 .who-row button { border: 0; padding: 0 14px; background: var(--ink); color: var(--card); font-weight: 700; cursor: pointer; }
 .toast button { border: 0; background: none; color: var(--today); font: inherit; font-weight: 800; cursor: pointer; padding: 4px; }
+/* 날짜 바꾸기 창: 할 일 줄(글자 부분)을 누르면 뜬다. 모양은 위 '누가 완료했나요?' 창을 그대로 쓴다 */
+.body[data-edit] { cursor: pointer; }
+.when-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.when-row input[type="date"] { flex: 1.4 1 0; }
+.who .when-note { display: block; margin: -4px 0 10px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.who .when-save { width: 100%; margin-bottom: 8px; border: 0; background: var(--ink); color: var(--card); font-weight: 700; cursor: pointer; }
 </style>
 </head>
 <body>
-<!-- 서버(Code.gs)가 공개해도 되는 칸만 넣어 준다: no, type, brand, title, date, time, done, doneAt, doneBy, tentative, cancelled -->
+<!-- 서버(Code.gs)가 공개해도 되는 칸만 넣어 준다: no, type, brand, title, date, time, done, doneAt, doneBy, tentative, manual, cancelled -->
 <script type="application/json" id="tpos-data"><?!= dataJson ?></script>
 
 <div class="wrap">
@@ -277,7 +283,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
         <button type="submit">추가</button>
       </form>
       <ul class="todo" id="todo"></ul>
-      <p class="reply">끝낸 일은 왼쪽 <b>동그라미를 누르면</b> 바로 완료로 옮겨져요. 다음 날 아침 리마인더에서도 빠져요.</p>
+      <p class="reply">끝낸 일은 왼쪽 <b>동그라미를 누르면</b> 바로 완료로 옮겨져요. 다음 날 아침 리마인더에서도 빠져요. 날짜가 바뀌었으면 <b>일을 누르면</b> 직접 고칠 수 있어요.</p>
     </section>
 
     <section class="panel cal-panel" aria-labelledby="cal-h">
@@ -314,6 +320,20 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     <p>누가 완료했나요?<small>이 기기에 기억해 두고, 완료 시각 옆에 이름을 남겨요</small></p>
     <div class="who-btns"><button value="성현">성현</button><button value="예진">예진</button></div>
     <div class="who-row"><input id="who-other" maxlength="20" placeholder="다른 이름" aria-label="다른 이름"><button value="other">확인</button></div>
+  </form>
+</dialog>
+
+<dialog class="who" id="when">
+  <form method="dialog">
+    <p>날짜 바꾸기<small id="when-name"></small></p>
+    <div class="when-row">
+      <input type="date" id="when-date" aria-label="날짜">
+      <input type="time" id="when-time" aria-label="시간 (없어도 돼요)">
+    </div>
+    <small class="when-note" id="when-note">직접 바꾼 날짜예요. 메일에 새 날짜가 오면 트란시스가 그 날짜로 바꿔요.</small>
+    <!-- 저장을 맨 앞에: 날짜 칸에서 Enter를 누르면 폼의 첫 버튼이 눌린다 -->
+    <button value="save" class="when-save">저장</button>
+    <div class="who-btns"><button value="tbd">날짜 미정으로</button><button value="close">닫기</button></div>
   </form>
 </dialog>
 
@@ -370,7 +390,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     return `<li class="item${alert ? ' alert' : ''}${off ? ' is-done' : ''}${saving.has(it.no) ? ' saving' : ''}"${alert ? ` style="color: var(--${it.type})"` : ''}>
       <button type="button" class="tick${it.cancelled ? ' cancel' : it.done ? ' on' : ''}" data-no="${it.no}" aria-label="${label}" aria-pressed="${off}"><span>${it.cancelled ? '✕' : '✓'}</span></button>
       <span class="no b-${it.type}" aria-hidden="true">${it.no}</span>
-      <span class="body"><b>${brandOf(it) ? `<span class="bn" style="--bn: var(--${it.type})">${esc(brandOf(it))}</span> ` : ''}${esc(titleRest(it))}</b><span>${NAME[it.type]} · ${when(it)}${it.tentative && !off ? ' · <mark class="tbd-date">확답 전</mark>' : ''}</span>${doneLine}</span>
+      <span class="body"${!off && it.no ? ` data-edit="${it.no}" role="button" tabindex="0" aria-label="${it.no}번 날짜 바꾸기"` : ''}><b>${brandOf(it) ? `<span class="bn" style="--bn: var(--${it.type})">${esc(brandOf(it))}</span> ` : ''}${esc(titleRest(it))}</b><span>${NAME[it.type]} · ${when(it)}${it.tentative && !off ? ' · <mark class="tbd-date">확답 전</mark>' : ''}${it.manual && !off ? ' · 직접 바꾼 날짜' : ''}</span>${doneLine}</span>
       ${!off && n === 0 ? `<span class="dday now"><i>${ddayText(it)}</i></span>` : `<span class="dday${late ? ' late' : ''}">${it.cancelled ? '취소' : it.done ? '완료' : ddayText(it)}</span>`}${off && it.no ? `
       <button type="button" class="del" data-del="${it.no}" aria-label="${it.no}번 지우기">${TRASH}</button>` : ''}</li>`;
   };
@@ -524,6 +544,45 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       .removeItem(no, removed);
   }
 
+  // 날짜 바꾸기: 할 일 줄을 누르면 창을 띄우고, 고른 값으로 moveItem
+  function openWhen(no) {
+    const it = data.items.filter(x => x.no === no)[0];
+    const dlg = $('when');
+    if (!it || saving.has(no) || !dlg.showModal) return;
+    $('when-name').textContent = `${no}번 · ${brandOf(it) ? brandOf(it) + ' ' : ''}${titleRest(it)}`;
+    $('when-date').value = it.date || '';
+    $('when-time').value = it.time || '';
+    // 정산은 시각 없이 '입금 예정'으로만 보여서 시간 칸을 숨긴다
+    $('when-time').hidden = it.type === 'pay';
+    $('when-note').hidden = !it.manual;
+    dlg.onclose = () => {
+      const v = dlg.returnValue;
+      if (v === 'save') moveItem(no, $('when-date').value, it.type === 'pay' ? '' : $('when-time').value);
+      else if (v === 'tbd') moveItem(no, '', '');
+    };
+    dlg.returnValue = '';
+    dlg.showModal();
+  }
+
+  // 화면을 먼저 옮기고(바로 반응) 시트 저장이 실패하면 되돌린다. 되돌리기 = 원래 날짜로 다시 옮기기
+  function moveItem(no, date, time) {
+    const it = data.items.filter(x => x.no === no)[0];
+    if (!it || saving.has(no)) return;
+    if (!date) time = '';  // 날짜 없는 시각은 달력에 둘 곳이 없어서 같이 비운다
+    const before = { date: it.date || '', time: it.time || '', manual: it.manual };
+    if (before.date === date && before.time === time) return;
+    it.date = date;
+    it.time = time;
+    saving.add(no);
+    render();
+    undoLast = () => moveItem(no, before.date, before.time);
+    toast(date ? `${no}번 날짜를 바꿨어요 · ${md(date)}${time ? ' ' + time : ''}` : `${no}번을 일정 미정으로 옮겼어요`, true);
+    google.script.run
+      .withSuccessHandler(fresh => { saving.delete(no); data = fresh; render(); })
+      .withFailureHandler(() => { saving.delete(no); Object.assign(it, before); render(); toast('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요', false); })
+      .setWhen(no, date, time);
+  }
+
   // 날짜·시각 칸이 비었는지 표시해 두면 CSS가 안내 글자를 보이거나 숨긴다
   const syncWhen = () => document.querySelectorAll('.memo-when').forEach(l => l.toggleAttribute('data-empty', !l.querySelector('input').value));
   ['memo-date', 'memo-time'].forEach(id => { $(id).addEventListener('input', syncWhen); $(id).addEventListener('change', syncWhen); });
@@ -551,6 +610,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     if (t) { const no = Number(t.dataset.no); const it = data.items.filter(x => x.no === no)[0]; if (it) it.cancelled ? setCancelled(no, false) : setDone(no, !it.done); return; }
     const del = e.target.closest('.del');
     if (del) { remove(Number(del.dataset.del), true); return; }
+    const ed = e.target.closest('[data-edit]');
+    if (ed) { openWhen(Number(ed.dataset.edit)); return; }
     if (e.target.closest('#me-change')) { askName(() => render()); return; }
     const b = e.target.closest('button[data-d]');
     if (b) { sel = b.dataset.d; render(); }
