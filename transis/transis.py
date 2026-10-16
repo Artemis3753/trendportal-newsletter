@@ -378,7 +378,7 @@ def render_evening(items, t, url):
     left = sorted([x for x in items if not x.get('removed') and not x['done'] and x.get('date') == t.isoformat()],
                   key=sort_key)
     subject = f'트란시스가 전하는 저녁 확인 · {md(t)}'  # 아침처럼 날짜를 붙여 Gmail이 한 대화로 묶지 않게
-    # 저녁 8시쯤 도착하니 오늘 밤 올릴 업로드는 아직일 수 있다 → '잊으셨다'고 단정하지 않는 말투로
+    # 밤 10시 전에 도착하니 오늘 밤 올릴 업로드는 아직일 수 있다 → '잊으셨다'고 단정하지 않는 말투로
     note = '끝냈다면 ✓ 완료를 눌러 주세요. 오늘 밤에 할 일이면 끝나고 눌러도 돼요.'
     body = shell(f'트란시스 저녁 확인 · {md(t)}', '오늘 잊으신 건 없으셨나요?', url,
                  f'<tr><td style="{PANEL}"><div style="font-size:14px;font-weight:700;">아직 완료 표시가 없는 오늘 일 {len(left)}건</div>'

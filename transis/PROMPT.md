@@ -6,7 +6,8 @@ The routine prompt tells you the **MODE**:
 
 - `DRAFT`: create a Gmail draft (for review). Do not send anything.
 - `SEND`: send the email.
-- `REFRESH`: the evening run. Update the sheet, then send only the short evening check, and only when work dated today is still not marked done (step 5). Never send the morning reminder in this mode.
+- `SYNC`: the early evening run (about 19:50). Update the sheet only. Never send any email in this mode.
+- `REFRESH`: the night run (about 21:50). Update the sheet, then send only the short evening check, and only when work dated today is still not marked done (step 5). Never send the morning reminder in this mode.
 
 ## Hard rules
 
@@ -26,7 +27,7 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
 
    a. **Search.** Use `search_threads`, `pageSize` 50, `view` `THREAD_VIEW_METADATA_ONLY`, and **follow `nextPageToken` until there is none** (pass the token's literal value, never a shell expression). When a result is too large and saved to a file, use `jq` to list each thread's id, message count, latest date and senders.
 
-      - `DAILY`, `FULL` START, and the **last** `FULL` batch (`state` says the threads left are no more than THIS BATCH): `newer_than:1d -in:drafts` (every thread with a message in the last day, no keyword filter). Runs are twice a day, morning and evening, so one day still covers a single failed run. A middle `FULL` batch skips this search: the runs are made back to back, so the previous run has just read those threads, and the last batch reads them again before the scan is finished.
+      - `DAILY`, `FULL` START, and the **last** `FULL` batch (`state` says the threads left are no more than THIS BATCH): `newer_than:1d -in:drafts` (every thread with a message in the last day, no keyword filter). Runs are three times a day (morning, early evening and night), so one day still covers a failed run. A middle `FULL` batch skips this search: the runs are made back to back, so the previous run has just read those threads, and the last batch reads them again before the scan is finished.
       - `FULL` with `full queue: none yet` (START) only: also `newer_than:60d -in:drafts (협업 OR 문의 OR 정산 OR 촬영 OR 행사 OR 취재 OR 입금 OR 초대 OR 방문 OR 광고 OR 업로드 OR 게시 OR 초안 OR 기획안 OR 일정 OR 가이드 OR 팝업 OR 가편 OR in:sent)`. `in:sent` is there on purpose: every thread we replied to is a candidate even without a keyword, because an agreed date needs our reply.
 
    b. **Candidates.** Drop a thread **only** if every message in it is from an automated sender (no-reply, noreply, notify, newsletter, mailer-daemon, or a platform such as LinkedIn, Reddit, Google, OpenAI) or it is a press release (보도자료) that we never replied to. Keep everything else, including threads you think are finished.
@@ -86,8 +87,9 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
 5. Send the email with the script (Bash timeout 600000 ms). Do not open, read or rewrite the HTML files; the script sends them as they are.
    - `DRAFT`: `python3 transis/transis.py send morning --preview` (a preview to 지환 only).
    - `SEND`: `python3 transis/transis.py send morning`.
+   - `SYNC`: send nothing, even when `evening_left_today` is not empty. The night run sends the evening check.
    - `REFRESH`: if `evening_left_today` is empty, send nothing. Otherwise `python3 transis/transis.py send evening`.
 
    Send at most one email per run. If the send command fails, wait 5 minutes and run it once more; that is safe, because the sender account drops a second copy of the same email on the same day.
 
-6. Finish with a short report: the scan mode, how many threads you scanned and read, the script's `full_queue_left`, each extracted item (number if known, type, brand, date, time; no payer or amount), the unclear list, the script's `due_today` list (in `REFRESH` mode, `evening_left_today` instead), and what the send command printed, if it ran.
+6. Finish with a short report: the scan mode, how many threads you scanned and read, the script's `full_queue_left`, each extracted item (number if known, type, brand, date, time; no payer or amount), the unclear list, the script's `due_today` list (in `SYNC` and `REFRESH` mode, `evening_left_today` instead), and what the send command printed, if it ran.
