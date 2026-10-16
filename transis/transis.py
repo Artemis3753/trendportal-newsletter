@@ -39,6 +39,9 @@ BATCH = 60
 # 메일 머리의 허스키(실제 인형 사진 + 오른쪽 위 ✨를 한 장으로 구운 투명 PNG, Gmail이 겹치기 위치 지정을 지워서).
 # 10/14엔 Gmail 커넥터 send_message가 <img>를 지워서 뺐다가, 발신함 웹앱(MailApp)으로 보내면서 되살렸다(10/15 받은편지함 확인)
 HUSKY_URL = 'https://trendportal.kr/wp-content/uploads/2026/10/mascot-mail.png'
+# 체크할 일이 없는 아침에만 나오는, 이불 덮고 쉬는 프란시스(같은 사진 + 이불·달·Zzz를 한 장으로 구움, 시안 1016-1 B1).
+# 400×300을 200×150으로 보여서 폰 화면에서도 선명하게
+REST_URL = 'https://trendportal.kr/wp-content/uploads/2026/10/mascot-rest.png'
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
@@ -427,7 +430,10 @@ def render(items, unclear, t, url, coverage=None):
         today_html = (f'<div style="font-size:14px;font-weight:700;padding:10px 12px;border-radius:12px;'
                       f'background-color:#f5f6fa;border:1px solid #e6e8ef;">{summary}</div>{grouped(due, t, link=True)}')
     else:
-        today_html = '<div style="font-size:14px;color:#7b7e8c;padding:4px 2px;">오늘 체크할 일은 없어요. 스토리만 올리면 끝! 🐺</div>'
+        today_html = (f'<div style="text-align:center;padding:4px 0 2px;">'
+                      f'<img src="{REST_URL}" width="200" height="150" alt="이불을 덮고 쉬는 프란시스" '
+                      f'style="display:block;margin:0 auto;border:0;">'
+                      f'<div style="font-size:15px;font-weight:700;margin-top:8px;">오늘은 정규 일정이 없어요.</div></div>')
 
     # 날짜를 확인해 주세요 = 일정 미정(시트에 남아 있음) + 이번에 읽다가 애매했던 메일
     # 전부 날짜 미정이라 날짜 칸은 빼고, 체크리스트처럼 종류(색)별로 묶는다.
@@ -470,7 +476,7 @@ def render(items, unclear, t, url, coverage=None):
     text.append(re.sub(r'<[^>]+>', '', summary))
     text += text_grouped(due, t)
     if not due:
-        text.append('오늘 체크할 일은 없어요.')
+        text.append('오늘은 정규 일정이 없어요.')
     if tbd or unclear:
         text += ['', f'날짜를 확인해 주세요 - {len(tbd) + len(unclear)}건'] + text_grouped(tbd, t, when=False) \
             + ([''] if unclear else []) + [f"- {u.get('subject')} ({u.get('reason')})" for u in unclear]
