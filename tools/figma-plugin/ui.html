@@ -1,0 +1,102 @@
+<!-- 트란시스 카드뉴스 읽기 — 플러그인 창(계산대). code.js가 읽어 온 결과를 zip으로 묶어 내려받게 한다 -->
+<style>
+  /* hidden이 아래 display:block에 덮이지 않게 (안 넣으면 내려받기 버튼이 처음부터 보임, 10/17) */
+  [hidden] { display: none !important; }
+  body { margin: 0; padding: 14px; font: 13px/1.5 -apple-system, "Apple SD Gothic Neo", sans-serif; color: #23242b; }
+  h1 { margin: 0 0 4px; font-size: 15px; }
+  p { margin: 0 0 10px; color: #7b7e8c; }
+  #sel { margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f5f6fa; color: #23242b; }
+  #sel.bad { background: #ffe2e5; }
+  button, a.dl { display: block; width: 100%; box-sizing: border-box; height: 36px; border: 0; border-radius: 8px; font: inherit; font-weight: 700; text-align: center; line-height: 36px; text-decoration: none; cursor: pointer; }
+  button { background: #23242b; color: #fff; }
+  button:disabled { opacity: 0.35; cursor: default; }
+  a.dl { margin-top: 8px; background: #1fa971; color: #fff; }
+  #out { margin-top: 10px; color: #7b7e8c; }
+</style>
+<h1>카드뉴스 읽기</h1>
+<p>카드 묶음을 선택하고 읽기를 누르면, 카드 글자를 zip 하나로 내려받아요.</p>
+<div id="sel">선택한 게 없어요</div>
+<button id="scan" disabled>선택한 묶음 읽기</button>
+<a class="dl" id="dl" hidden>zip 내려받기</a>
+<div id="out"></div>
+<script>
+const $ = id => document.getElementById(id);
+
+// ── zip 만들기: 압축 없이 담기만 하는 가장 단순한 zip (라이브러리 없이 — 플러그인은 인터넷을 안 쓰게 막아 둠) ──
+const CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+// files: [{ name: 'figma/scan.json', bytes: Uint8Array }]
+function makeZip(files) {
+  const enc = new TextEncoder();
+  const now = new Date();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  const parts = [], central = [];
+  let offset = 0;
+  files.forEach(f => {
+    const name = enc.encode(f.name), crc = crc32(f.bytes), size = f.bytes.length;
+    const head = new DataView(new ArrayBuffer(30));
+    // 0x0800 = 파일 이름이 UTF-8 (한글 이름이 맥·윈도에서 안 깨지게)
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, date, 2],
+     [14, crc, 4], [18, size, 4], [22, size, 4], [26, name.length, 2], [28, 0, 2]]
+      .forEach(([at, v, len]) => len === 4 ? head.setUint32(at, v, true) : head.setUint16(at, v, true));
+    const cd = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, time, 2], [14, date, 2],
+     [16, crc, 4], [20, size, 4], [24, size, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2],
+     [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, offset, 4]]
+      .forEach(([at, v, len]) => len === 4 ? cd.setUint32(at, v, true) : cd.setUint16(at, v, true));
+    parts.push(new Uint8Array(head.buffer), name, f.bytes);
+    central.push(new Uint8Array(cd.buffer), name);
+    offset += 30 + name.length + size;
+  });
+  const cdSize = central.reduce((s, b) => s + b.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2],
+   [12, cdSize, 4], [16, offset, 4], [20, 0, 2]]
+    .forEach(([at, v, len]) => len === 4 ? end.setUint32(at, v, true) : end.setUint16(at, v, true));
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+}
+
+$('scan').onclick = () => {
+  $('scan').disabled = true;
+  $('out').textContent = '읽는 중…';
+  $('dl').hidden = true;
+  parent.postMessage({ pluginMessage: { type: 'scan' } }, '*');
+};
+
+onmessage = e => {
+  const msg = e.data.pluginMessage;
+  if (!msg) return;
+  if (msg.type === 'selection') {
+    $('sel').classList.toggle('bad', !!msg.error);
+    $('sel').textContent = msg.error || `${msg.name} · 카드 ${msg.count}장`;
+    $('scan').disabled = !!msg.error;
+  } else if (msg.type === 'error') {
+    $('out').textContent = msg.error;
+    $('scan').disabled = false;
+  } else if (msg.type === 'scan') {
+    const s = msg.scan;
+    const json = new TextEncoder().encode(JSON.stringify(s, null, 1));
+    const blob = makeZip([{ name: 'figma/scan.json', bytes: json }]);
+    // 링크를 사람이 직접 누르게 한다 (플러그인 창에서 저절로 내려받기는 막힐 수 있어서)
+    const old = $('dl').href;
+    if (old) URL.revokeObjectURL(old);
+    $('dl').href = URL.createObjectURL(blob);
+    $('dl').download = `${s.group.name}.zip`;
+    $('dl').textContent = `${s.group.name}.zip 내려받기`;
+    $('dl').hidden = false;
+    const texts = s.frames.reduce((n, f) => n + f.texts.length, 0);
+    const imgs = s.frames.reduce((n, f) => n + f.images.length, 0);
+    $('out').textContent = `카드 ${s.frames.length}장 · 글자 ${texts}개 · 사진 레이어 ${imgs}개`;
+    $('scan').disabled = false;
+  }
+};
+</script>

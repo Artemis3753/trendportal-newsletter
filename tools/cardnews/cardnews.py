@@ -3,7 +3,7 @@
 
 주문 폴더 하나(local/cardnews/<주문>/)를 받아 단계별로 처리한다.
 
-    python3 tools/cardnews/cardnews.py fetch   <주문>     (아카이빙만, 피그마 MCP 결과 파일 필요)
+    python3 tools/cardnews/cardnews.py fetch   <주문>     (아카이빙만, 피그마 플러그인의 figma/scan.json 또는 MCP 결과 파일 필요)
     python3 tools/cardnews/cardnews.py build   <주문>
     python3 tools/cardnews/cardnews.py publish <주문>
     python3 tools/cardnews/cardnews.py verify  <주문> [--against 글번호]
@@ -288,6 +288,24 @@ def figma_group(d, group_id):
     return g
 
 
+def scan_group(d):
+    """피그마 플러그인(tools/figma-plugin)이 만든 figma/scan.json → figma_group과 같은 모양의 나무.
+    플러그인은 앱 안에서 직접 읽어서 MCP 월 20회 한도를 안 쓴다(10/17). 판단 규칙은 아래 그대로 쓰려고 모양만 맞춘다.
+    글자는 레이어 이름 대신 실제 글자(characters)를 쓴다. 카드 속 줄바꿈은 메타데이터 때처럼 띄어쓰기로 잇는다."""
+    s = load(d / "figma", "scan.json")
+    g = ET.Element("frame", id=s["group"]["id"], name=s["group"]["name"])
+    for f in s["frames"]:
+        fr = ET.SubElement(g, "frame", id=f["id"], name=f["name"], x=str(f["x"]), y=str(f["y"]))
+        for t in f["texts"]:
+            text = re.sub(r"\s*[\n]\s*", " ", t["characters"]).strip()
+            ET.SubElement(fr, "text", name=text, x=str(t["x"]), y=str(t["y"]),
+                          width=str(t["width"]), height=str(t["height"]))
+        for im in f["images"]:
+            ET.SubElement(fr, "rounded-rectangle", name=im["name"], x=str(im["x"]), y=str(im["y"]),
+                          width=str(im["width"]), height=str(im["height"]))
+    return g
+
+
 def frame_no(fr, i):
     # 프레임 이름 끝 번호("트렌드포털 802-3" → 3)가 카드 번호. 없으면 왼쪽부터 센 순서
     m = re.search(r"-(\d+)\s*$", fr.get("name", ""))
@@ -450,7 +468,11 @@ def fetch(d):
     if order["kind"] != "archive":
         sys.exit("fetch는 아직 아카이빙(archive)만 돼요")
     (d / "images").mkdir(exist_ok=True)
-    group = figma_group(d, order["figma"]["group"])
+    # 플러그인 결과가 있으면 그걸, 없으면 예전처럼 MCP 메타데이터를 읽는다
+    if (d / "figma" / "scan.json").exists():
+        group = scan_group(d)
+    else:
+        group = figma_group(d, order["figma"]["group"])
     frames = sorted((c for c in group if c.tag == "frame"), key=lambda e: float(e.get("x")))
     videos = {int(k): v for k, v in order.get("videos", {}).items()}
     cards, warn = [], []
