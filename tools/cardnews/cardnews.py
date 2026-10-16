@@ -424,11 +424,25 @@ def read_caption(d):
     return paras[:-1], paras[-1:], []
 
 
-def find_image(d, n):
-    for ext in ("jpg", "jpeg", "png", "webp"):
-        if (d / "images" / f"{n:02d}.{ext}").exists():
-            return f"{n:02d}.{ext}"
+def photo_layer(fr):
+    # 카드에 깔린 사진 = 카드 안에서 가장 넓은 "image …" 레이어 (그라데이션 판·국기·로고보다 크다)
+    imgs = [e for e in fr if e.get("name", "").startswith("image")]
+    return max(imgs, key=lambda e: float(e.get("width")) * float(e.get("height"))).get("name") if imgs else None
+
+
+def find_image(d, n, layer=None):
+    # 사람이 내보낸 사진: 카드 번호(02.jpg) 또는 피그마가 붙인 레이어 이름(image 4621.jpg) 그대로
+    # 레이어 이름을 받아 주면 여러 장을 한 번에 골라 내보내고 이름을 안 바꿔도 된다
+    for stem in filter(None, (f"{n:02d}", layer)):
+        for ext in ("jpg", "jpeg", "png", "webp"):
+            if (d / "images" / f"{stem}.{ext}").exists():
+                return f"{stem}.{ext}"
     return None
+
+
+def squash(s):
+    # 제목 비교용: 띄어쓰기·문장부호를 빼고 비교 ("2026 동계 올림픽, 나라별…" = "2026 동계 올림픽 나라별…")
+    return re.sub(r"[\W_]+", "", s)
 
 
 def fetch(d):
@@ -469,13 +483,13 @@ def fetch(d):
                 warn.append(f"{n}번 영상: {note}")
         else:
             # 사람이 내보낸 사진(images/NN.*)이 먼저, 없으면 피그마 rawImages(figma/cardNN-raw-*)에서 고른다
-            fn = find_image(d, n)
+            fn = find_image(d, n, photo_layer(fr))
             if not fn and raws(d, f"card{n:02d}"):
                 fn = to_web(pick_photo(raws(d, f"card{n:02d}")), d / "images" / f"{n:02d}.jpg")
             if fn:
                 card["image"] = fn
             else:
-                warn.append(f"{n}번 사진이 없어요 — images/{n:02d}.jpg로 내보내 주세요")
+                warn.append(f"{n}번 사진이 없어요 — 피그마 '{photo_layer(fr)}' 레이어를 images/에 내보내 주세요")
         cards.append(card)
 
     # 표지: rawImages 중 진짜 사진 = 글자 없는 커버, export = 글자 있는 표지(대표 이미지)
@@ -490,6 +504,11 @@ def fetch(d):
 
     intro, outro, w = read_caption(d)
     warn += w
+    # 캡션 첫 줄이 표지 제목과 같으면 뺀다 — 사이트에선 글 제목이 바로 위에 있어서 두 번 나온다
+    cover_text = " ".join(t.get("name", "") for t in frames[0].iter("text")) if frames else ""
+    if intro and "\n" not in intro[0] and squash(intro[0]) and squash(intro[0]) in squash(cover_text):
+        warn.append(f"캡션 첫 줄은 표지 제목과 같아서 뺐어요: {intro[0]}")
+        intro = intro[1:]
     save(d, "cards.json", {"intro": intro, "cards": cards, "outro": outro})
     save(d, "order.json", order)
     # notes.json은 Claude가 채울 칸만 비워서 만든다 (이미 있으면 카드 수가 같을 때 그대로 둔다)
