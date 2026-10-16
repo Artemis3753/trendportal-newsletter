@@ -3,6 +3,7 @@
 메일을 읽고 일정을 뽑는 일(판단이 필요한 일)은 트란시스(Claude)가 하고,
 이 스크립트는 그 결과를 받아 시트에 보내고, D-day로 고르고, 메일 HTML을 만든다.
 
+    python3 transis/transis.py since                 # 낮 동기화용: 지난 정리 이후를 찾는 Gmail 검색어 (after:<초>)
     python3 transis/transis.py state                 # 이번에 읽을 범위(FULL/DAILY) + 이번 묶음 스레드 + 시트의 지금 일정 (금액·입금자명은 뺌)
     python3 transis/transis.py queue ids.txt         # FULL 시작: 읽을 스레드 id 목록(한 줄에 하나)을 시트에 저장
     python3 transis/transis.py run extracted.json    # 시트에 보내기 → 다시 읽기 → 고르기 → /tmp/transis/에 메일 파일
@@ -495,6 +496,25 @@ def scan_mode(res):
     return 'FULL' if (today() - last).days >= FULL_EVERY_DAYS else 'DAILY'
 
 
+# 낮 동기화(SYNC, 12·16·20시)는 최근 하루가 아니라 지난 정리 이후 새 메일만 읽는다(10/17, 비용 절약).
+# 기준 = 시트의 마지막 정리 시각(updatedAt). 그 시각은 메일을 다 읽은 뒤(run) 찍혀서, 검색과 run 사이에 온 메일을
+# 놓치지 않게 30분을 겹쳐 잡는다. 실행 하나가 실패해도 다음 실행이 마지막 성공 시각부터 다시 찾는다
+SINCE_OVERLAP_MIN = 30
+
+
+def cmd_since():
+    res = api_get()
+    at = res.get('updatedAt')
+    if not at:
+        print('newer_than:1d')
+    else:
+        start = dt.datetime.fromisoformat(at) - dt.timedelta(minutes=SINCE_OVERLAP_MIN)
+        print(f'after:{int(start.timestamp())}')  # Gmail 검색은 초 단위 시각(epoch)을 받는다
+    # 30일마다 하는 전체 훑기는 여러 실행에 나눠 이어 가야 해서 낮 실행도 평소 순서대로 한다
+    if scan_mode(res) == 'FULL':
+        print('scan: FULL (ignore the line above and follow the steps as usual)')
+
+
 def cmd_state():
     res = api_get()
     mode = scan_mode(res)
@@ -597,6 +617,8 @@ def cmd_queue(path):
 if __name__ == '__main__':
     if len(sys.argv) >= 2 and sys.argv[1] == 'state':
         cmd_state()
+    elif len(sys.argv) >= 2 and sys.argv[1] == 'since':
+        cmd_since()
     elif len(sys.argv) >= 3 and sys.argv[1] == 'queue':
         cmd_queue(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == 'run':
