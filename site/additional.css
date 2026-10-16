@@ -675,6 +675,11 @@ html:has(.tp-wk) { scroll-behavior: smooth; }
 .tp-wk figure.wp-block-image img { display: block; width: 100%; height: auto; border-radius: 12px; }
 /* Video card: portrait thumbnail, then the "watch on Instagram" line */
 .tp-wk figure.wp-block-image:has(+ .tp-wk-video) img { width: 240px; max-width: 70%; margin: 0 auto; }
+/* Landscape stills (X, YouTube) would shrink to a strip at 240px, so they keep the full width */
+.tp-wk figure.tp-wk-wide:has(+ .tp-wk-video) img { width: 100%; max-width: none; }
+/* Our own clip: muted autoplay loop, sized like a portrait thumbnail */
+.wp-block-post-content .tp-wk figure.wp-block-video { max-width: none; margin: 0 !important; }
+.tp-wk figure.wp-block-video video { display: block; width: 240px; max-width: 70%; height: auto; margin: 0 auto; border-radius: 12px; }
 .wp-block-post-content .tp-wk p.tp-wk-video { margin-top: 10px; text-align: center; font-size: 13px; font-weight: 700; }
 .tp-wk-video a { color: #111; }
 /* The gap above "what happened" belongs to the h3, so cards without a source line get the same spacing */
