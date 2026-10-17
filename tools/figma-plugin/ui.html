@@ -98,8 +98,8 @@ onmessage = e => {
     const texts = s.frames.reduce((n, f) => n + f.texts.length, 0);
     const imgs = s.frames.reduce((n, f) => n + f.images.length, 0);
     const mb = (blob.size / 1048576).toFixed(1);
-    const photos = msg.files.filter(f => f.name.startsWith('figma/images/')).length;
-    $('out').textContent = `카드 ${s.frames.length}장 · 글자 ${texts}개 · 사진 레이어 ${imgs}개 · 사진 파일 ${photos}개 + 표지 + 미리보기 · ${mb}MB`;
+    const cuts = msg.files.filter(f => f.name.startsWith('figma/composites/')).length;
+    $('out').textContent = `카드 ${s.frames.length}장 · 글자 ${texts}개 · 사진 레이어 ${imgs}개 · 글자 뺀 카드 ${cuts}장 + 표지 + 미리보기 · ${mb}MB`;
     $('scan').disabled = false;
   }
 };

@@ -110,7 +110,7 @@ figma.ui.onmessage = async msg => {
   const frames = got.frames.map(readFrame);
   const scan = {
     tool: 'transis-cardnews-reader',
-    version: 3, // 3 = 사진이 여러 장인 카드에 composite(글자 뺀 카드 그림)
+    version: 3, // 3 = 카드마다 composite(글자 뺀 카드 JPG), 사진 원본은 표지 것만, 표지 export는 JPG
 
     scannedAt: new Date().toISOString(),
     file: figma.fileKey || null,  // 개발용 플러그인에서만 채워진다 (manifest의 enablePrivatePluginApi)
@@ -120,24 +120,27 @@ figma.ui.onmessage = async msg => {
   };
   const files = [];
   try {
-    // 사진 원본: 카드에서 잘라 보여 준 구도가 아니라 올린 파일 그대로 (사용자 결정 A, 10/17)
+    // 표지 = 책 읽는 순서의 첫 장 = 윗줄 맨 왼쪽 카드
+    // (764처럼 두 줄로 놓인 묶음은 맨 왼쪽만 보면 아랫줄 첫 장과 겹친다. fetch의 reading_order와 같은 기준)
+    const top = Math.min(...got.frames.map(f => box(f).y));
+    const cover = got.frames.filter(f => box(f).y - top < f.height / 2)
+      .reduce((a, b) => (box(b).x < box(a).x ? b : a));
+    // 사진 원본은 표지 것만 담는다: 글 머리 커버에 쓰는 "글자 없는 표지 사진"이라서.
+    // 카드 사진은 아래 "글자 뺀 카드"에서 잘라 쓴다(10/17 사용자 B — 수동 작업처럼 전부 JPEG, zip 16MB → 절반 이하).
     // 같은 사진이 여러 레이어에 쓰여도 hash가 같아서 한 번만 담는다
-    const hashes = Array.from(new Set([].concat(...frames.map(f => f.images.map(im => im.hash)))));
+    const coverScan = frames[got.frames.indexOf(cover)];
+    const hashes = Array.from(new Set(coverScan.images.map(im => im.hash)));
     for (let i = 0; i < hashes.length; i++) {
-      say(`사진 원본 꺼내는 중… ${i + 1}/${hashes.length}`);
+      say(`표지 사진 원본 꺼내는 중… ${i + 1}/${hashes.length}`);
       const img = figma.getImageByHash(hashes[i]);
       if (!img) continue;
       const bytes = await img.getBytesAsync();
       files.push({ name: `figma/images/${hashes[i]}.${ext(bytes)}`, bytes: bytes });
     }
-    // 대표 이미지 = 글자까지 다 있는 표지. 표지는 책 읽는 순서의 첫 장 = 윗줄 맨 왼쪽 카드
-    // (764처럼 두 줄로 놓인 묶음은 맨 왼쪽만 보면 아랫줄 첫 장과 겹친다. fetch의 reading_order와 같은 기준)
+    // 대표 이미지 = 글자까지 다 있는 표지 (목록·공유 미리보기용). 사이트에선 어차피 JPEG로 바뀌어서 처음부터 JPG로
     say('표지 내보내는 중…');
-    const top = Math.min(...got.frames.map(f => box(f).y));
-    const cover = got.frames.filter(f => box(f).y - top < f.height / 2)
-      .reduce((a, b) => (box(b).x < box(a).x ? b : a));
-    const png = await cover.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 1 } });
-    files.push({ name: 'figma/cover-export.png', bytes: png });
+    const coverJpg = await cover.exportAsync({ format: 'JPG', constraint: { type: 'SCALE', value: 1 } });
+    files.push({ name: 'figma/cover-export.jpg', bytes: coverJpg });
     // 카드 미리보기: 디자인을 보고 사이트 글을 맞추고, 사이트 화면과 나란히 대조하는 용도라 작게(가로 500px)
     for (let i = 0; i < got.frames.length; i++) {
       const fr = got.frames[i];
@@ -145,12 +148,12 @@ figma.ui.onmessage = async msg => {
       const jpg = await fr.exportAsync({ format: 'JPG', constraint: { type: 'WIDTH', value: 500 } });
       files.push({ name: `figma/cards/${fr.name}.jpg`, bytes: jpg });
     }
-    // 글자 뺀 카드: 사진이 여러 장 겹친 카드(말풍선·작은 사진·좌우 두 장)는 원본 한 장으론 카드 모습이 안 나온다.
-    // 10/16 주간 총정리 때 손으로 만든 "사진 칸 합성본"과 같은 것을 여기서 만든다(10/17 744: 2~6번이 다 콜라주였다).
+    // 글자 뺀 카드: 카드 사진은 전부 여기서 나온다. 10/16 주간 총정리 때 손으로 만든 "사진 칸 합성본"과 같은 것
+    // (말풍선·작은 사진·좌우 두 장이 카드 모습 그대로 — 10/17 744는 2~6번이 다 콜라주였다).
     // 원본 카드는 건드리지 않게 복사본에서 글자만 숨겨 내보내고 복사본은 바로 지운다. 사진 칸 자르기는 fetch가 한다
     for (let i = 0; i < got.frames.length; i++) {
       const fr = got.frames[i];
-      if (frames[i].images.length < 2) continue; // 사진 한 장짜리 카드는 원본이 더 선명해서 필요 없다
+      if (!frames[i].images.length) continue; // 사진이 없는 카드(글자만 있는 끝 카드 등)는 자를 것도 없다
       say(`글자 뺀 카드 ${i + 1}/${got.frames.length}…`);
       const copy = fr.clone();
       try {

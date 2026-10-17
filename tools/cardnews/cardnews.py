@@ -650,21 +650,22 @@ def fetch(d):
             if note:
                 warn.append(f"{n}번 영상: {note}")
         else:
-            # 사람이 내보낸 사진(images/NN.*)이 먼저 — 여러 장을 합친 카드(트윗 캡처 겹침 등)는 원본 한 장으론 안 돼서
-            # 없으면 플러그인 사진 원본, 그것도 없으면 MCP rawImages(figma/cardNN-raw-*)에서 고른다
+            # 사람이 내보낸 사진(images/NN.*)이 먼저, 없으면 글자 뺀 카드에서 자르기(플러그인 3판),
+            # 예전 zip이면 플러그인 사진 원본, 그것도 없으면 MCP rawImages(figma/cardNN-raw-*)에서 고른다
             el = photo_layer(fr, bg)
             layer = el.get("name") if el is not None else None
             fn = find_image(d, n, layer)
+            # 플러그인 3판: 글자 뺀 카드 그림에서 사진 칸을 잘라 쓴다 — 수동 작업 때처럼 카드에서 보던 구도 그대로,
+            # 말풍선·작은 사진·좌우 두 장까지(10/17 사용자 B). 사진 원본은 zip에 표지 것만 있다
+            layers = [e for e in fr if e.get("hash") and e.get("hash") not in bg]
+            if not fn and layers:
+                fn = composite_photo(d, fr, layers, d / "images" / f"{n:02d}.jpg")
             if not fn and scan_image(d, el):
-                # 사진 위에 다른 사진(말풍선·트윗 캡처·로고·좌우 두 장)이 겹친 카드는 원본 한 장으론 카드 모습이 안 나온다
-                # → 글자 뺀 카드 그림에서 사진 칸을 잘라 쓴다(10/17 744). 사진 한 장짜리는 원본이 더 선명해서 원본
-                layers = [e for e in fr if e.get("hash") and e.get("hash") not in bg]
+                # 예전 zip(플러그인 2판): 사진 원본. 사진 위에 다른 사진이 겹친 카드는 원본 한 장만 들어간다
+                fn = to_web(scan_image(d, el), d / "images" / f"{n:02d}.jpg")
                 deco = [e.get("name") for e in layers if e.get("hash") != el.get("hash")]
-                fn = composite_photo(d, fr, layers, d / "images" / f"{n:02d}.jpg") if deco else None
-                if not fn:
-                    fn = to_web(scan_image(d, el), d / "images" / f"{n:02d}.jpg")
-                    if deco:
-                        warn.append(f"{n}번 사진 위에 겹친 그림 {deco}은 빠져요 — 피그마 플러그인으로 zip을 다시 받거나, 카드에서 글자만 숨겨 images/{n:02d}.jpg로")
+                if deco:
+                    warn.append(f"{n}번 사진 위에 겹친 그림 {deco}은 빠져요 — 피그마 플러그인으로 zip을 다시 받거나, 카드에서 글자만 숨겨 images/{n:02d}.jpg로")
             if not fn and raws(d, f"card{n:02d}"):
                 fn = to_web(pick_photo(raws(d, f"card{n:02d}")), d / "images" / f"{n:02d}.jpg")
             if fn:
@@ -680,10 +681,12 @@ def fetch(d):
         order["cover_photo"] = to_web(pick_photo(cover_raws), d / "images" / "cover.jpg")
     else:
         warn.append("표지 사진 원본이 없어요 (플러그인 zip의 figma/images/, 또는 MCP figma/cover-raw-*)")
-    if (d / "figma" / "cover-export.png").exists():
-        order["featured"] = to_web(d / "figma" / "cover-export.png", d / "images" / "featured.jpg")
+    # 글자 있는 표지: 플러그인 3판은 JPG, 그 전 zip·MCP는 PNG
+    cover_export = next((p for p in (d / "figma" / "cover-export.jpg", d / "figma" / "cover-export.png") if p.exists()), None)
+    if cover_export:
+        order["featured"] = to_web(cover_export, d / "images" / "featured.jpg")
     else:
-        warn.append("figma/cover-export.png 가 없어요 (플러그인 zip, 또는 표지 프레임 download_assets의 export)")
+        warn.append("figma/cover-export.jpg 가 없어요 (플러그인 zip, 또는 표지 프레임 download_assets의 export)")
 
     intro, outro, w = read_caption(d)
     warn += w
