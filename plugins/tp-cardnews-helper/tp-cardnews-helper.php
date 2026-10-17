@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.18.0
+ * Version: 1.19.0
  * Author: Trendportal
  */
 
@@ -1255,7 +1255,14 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-chip { border: 2px solid currentColor; padding: 2px 10px; }
 .tpcn .tpcn-chip.is-pub { border-color: var(--ink); }
 .tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-revise button, .tpcn .tpcn-recall button { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
-.tpcn .tpcn-check { border: 2px solid var(--ink); box-shadow: 3px 3px 0 #f2cf7c; }
+.tpcn .tpcn-check { border: 2px solid var(--ink); box-shadow: 3px 3px 0 #f2cf7c; background: #fff; }
+/* 손본 것 강조(10/18 사용자, 시안 1018-10 1 색 띠): 노란 상자·버터색 카드 위에서 확인 항목이 묻혀서,
+   확인 항목은 어디서든(발행 전 상자·발행 뒤 목록·수정 기록) 한 줄씩 색 띠 + 왼쪽 굵은 선, 일반 기록은 흐린 회색으로 물린다 */
+.tpcn .tpcn-check ul, .tpcn .tpcn-body ul.tpcn-changes { list-style: none; padding-left: 0; display: grid; gap: 4px; }
+.tpcn .tpcn-check li.lv3, .tpcn .tpcn-body ul.tpcn-changes li.lv3 { padding: 5px 10px; border-radius: 8px; background: #ffdbe4; color: #9b1c3d; font-weight: 700; border-left: 5px solid #e5484d; }
+.tpcn .tpcn-check li.lv2, .tpcn .tpcn-body ul.tpcn-changes li.lv2 { padding: 5px 10px; border-radius: 8px; background: #fff1b8; color: #5c4400; font-weight: 700; border-left: 5px solid #e2b100; }
+.tpcn .tpcn-body ul.tpcn-changes li.lv1 { padding-left: 10px; color: #9a8f86; }
+.tpcn .tpcn-body ul.tpcn-changes li.lv1::before { content: "· "; }
 .tpcn .tpcn-revise textarea { border: 2px solid var(--ink); border-radius: 14px; background: #fff; }
 </style>
 
