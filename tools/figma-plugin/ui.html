@@ -14,7 +14,7 @@
   #out { margin-top: 10px; color: #7b7e8c; }
 </style>
 <h1>카드뉴스 읽기</h1>
-<p>카드 묶음을 선택하고 읽기를 누르면, 카드 글자·사진 원본·표지를 zip 하나로 내려받아요.</p>
+<p>카드 묶음을 선택하고 읽기를 누르면, 카드 글자·글자 뺀 카드 그림·표지를 zip 하나로 내려받아요.</p>
 <div id="sel">선택한 게 없어요</div>
 <button id="scan" disabled>선택한 묶음 읽기</button>
 <a class="dl" id="dl" hidden>zip 내려받기</a>
@@ -65,6 +65,27 @@ function makeZip(files) {
   return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
 }
 
+// ── 다시 압축: 피그마의 JPG 내보내기는 화질을 고를 수 없고 거의 최고 화질이라 카드 한 장이 3MB쯤 된다(10/17 744 = zip 27MB).
+// 이 창(웹 화면)의 canvas로 다시 저장하면 화질을 고를 수 있다. 85% = 사이트에 올릴 때(sips·ffmpeg) 쓰는 품질과 같다.
+// 다시 저장한 게 오히려 크면 원래 것을 그대로 둔다
+const RECOMPRESS = [['figma/composites/', 0.85], ['figma/cover-export.jpg', 0.85], ['figma/cards/', 0.8]];
+async function recompress(f) {
+  const rule = RECOMPRESS.find(([prefix]) => f.name.startsWith(prefix));
+  if (!rule) return f;
+  try {
+    const img = await createImageBitmap(new Blob([f.bytes], { type: 'image/jpeg' }));
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    c.getContext('2d').drawImage(img, 0, 0);
+    const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', rule[1]));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    return bytes.length < f.bytes.length ? { name: f.name, bytes: bytes } : f;
+  } catch (e) {
+    return f; // 못 줄이면 원래 것으로 — zip이 조금 클 뿐 결과는 같다
+  }
+}
+
 $('scan').onclick = () => {
   $('scan').disabled = true;
   $('out').textContent = '읽는 중…';
@@ -72,7 +93,7 @@ $('scan').onclick = () => {
   parent.postMessage({ pluginMessage: { type: 'scan' } }, '*');
 };
 
-onmessage = e => {
+onmessage = async e => {
   const msg = e.data.pluginMessage;
   if (!msg) return;
   if (msg.type === 'selection') {
@@ -87,7 +108,12 @@ onmessage = e => {
   } else if (msg.type === 'scan') {
     const s = msg.scan;
     const json = new TextEncoder().encode(JSON.stringify(s, null, 1));
-    const blob = makeZip([{ name: 'figma/scan.json', bytes: json }].concat(msg.files));
+    const files = [];
+    for (let i = 0; i < msg.files.length; i++) {
+      $('out').textContent = `용량 줄이는 중… ${i + 1}/${msg.files.length}`;
+      files.push(await recompress(msg.files[i]));
+    }
+    const blob = makeZip([{ name: 'figma/scan.json', bytes: json }].concat(files));
     // 링크를 사람이 직접 누르게 한다 (플러그인 창에서 저절로 내려받기는 막힐 수 있어서)
     const old = $('dl').href;
     if (old) URL.revokeObjectURL(old);
@@ -98,7 +124,7 @@ onmessage = e => {
     const texts = s.frames.reduce((n, f) => n + f.texts.length, 0);
     const imgs = s.frames.reduce((n, f) => n + f.images.length, 0);
     const mb = (blob.size / 1048576).toFixed(1);
-    const cuts = msg.files.filter(f => f.name.startsWith('figma/composites/')).length;
+    const cuts = files.filter(f => f.name.startsWith('figma/composites/')).length;
     $('out').textContent = `카드 ${s.frames.length}장 · 글자 ${texts}개 · 사진 레이어 ${imgs}개 · 글자 뺀 카드 ${cuts}장 + 표지 + 미리보기 · ${mb}MB`;
     $('scan').disabled = false;
   }
