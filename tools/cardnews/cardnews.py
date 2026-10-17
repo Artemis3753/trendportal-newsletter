@@ -8,7 +8,7 @@
     python3 tools/cardnews/cardnews.py build   <주문>
     python3 tools/cardnews/cardnews.py draft   <주문>     (사진 올리기 + 비공개 초안. 예전 이름 publish도 됨)
     python3 tools/cardnews/cardnews.py verify  <주문> [--against 글번호]
-    python3 tools/cardnews/cardnews.py report  <주문> [--fail "이유"]   (결과를 관리자 탭에 적는다)
+    python3 tools/cardnews/cardnews.py report  <주문> [--fail "이유" | --ask "질문"]   (결과·멈춘 이유·질문을 관리자 탭에 적는다)
     python3 tools/cardnews/cardnews.py css     <주문> <파일.css> | --remove  (새 디자인 CSS를 사이트에 붙이기·빼기)
     python3 tools/cardnews/cardnews.py still   <주문> <카드 번호> <초>        (영상 카드 정지 화면·포스터를 그 초 장면으로)
     python3 tools/cardnews/cardnews.py profile <주문> <대상 번호> [x y 한 변]  (인터뷰 대상 프로필 사진을 캡처에서 정사각형으로)
@@ -1353,10 +1353,26 @@ def css(d, src=None, remove=False):
 STATE_FILES = ("order.json", "cards.json", "notes.json", "media.json", "result.json", "published.json", "design.css", "body.html")
 
 
+def pull_people(d, o):
+    """인터뷰 대상 사진: 원본은 uploads/profile-N, 사이트용은 images/profile-N.jpg (cardnews.py profile이 원본에서 다시 자른다)"""
+    people = []
+    for i, p in enumerate(o.get("people") or [], start=1):
+        person = {"name": p["name"], "insta": p["insta"]}
+        if p.get("photo"):
+            (d / "uploads").mkdir(exist_ok=True)
+            src = d / "uploads" / f"profile-{i}"
+            src.write_bytes(wp(p["photo"], raw=True))
+            (d / "images").mkdir(exist_ok=True)
+            person["photo"] = to_web(src, d / "images" / f"profile-{i}.jpg")
+        people.append(person)
+    return people
+
+
 def pull():
     """접수된 주문 → local/cardnews/order-<번호>/, 탭 상태는 '요리 중'으로.
     새 주문: zip 풀기 + caption.txt + order.json. 수정 요청: 지난 작업 기록(state) + feedback.txt (+ 남아 있으면 zip)."""
-    orders = wp("orders?status=new", base=ORDER_API) + wp("orders?status=revise", base=ORDER_API)
+    orders = (wp("orders?status=new", base=ORDER_API) + wp("orders?status=revise", base=ORDER_API)
+              + wp("orders?status=answered", base=ORDER_API))
     if not orders:
         print("새 주문 없음")
         return
@@ -1364,6 +1380,7 @@ def pull():
         d = ORDERS / f"order-{o['id']}"
         d.mkdir(parents=True, exist_ok=True)
         revise = o["status"] == "revise"
+        answered = o["status"] == "answered"  # 셰프가 물어본 것에 사람이 답한 주문: 물을 때 맡긴 작업 기록에서 이어 간다
         if o.get("has_zip", True):
             z = d / "order.zip"
             z.write_bytes(wp(o["zip"], raw=True))
@@ -1382,7 +1399,21 @@ def pull():
             (d / "uploads").mkdir(exist_ok=True)
             (d / rel).write_bytes(wp(f["url"], raw=True))
             files[str(int(no))] = {"path": rel, "kind": f["kind"]}
-        if revise:
+        if answered:
+            state = {fn: text for fn, text in (o.get("state") or {}).items() if fn in STATE_FILES}
+            (d / "caption.txt").write_text(o["caption"] + "\n", encoding="utf-8")
+            for fn, text in state.items():
+                (d / fn).write_text(text, encoding="utf-8")
+            # 작업 기록엔 JSON만 있어서, 아직 안 올린 사진(카드에서 자른 것 등)은 zip에서 다시 만든 뒤 셰프가 고친 기록을 다시 덮는다
+            if (d / "figma" / "scan.json").exists():
+                fetch(d)
+                for fn, text in state.items():
+                    (d / fn).write_text(text, encoding="utf-8")
+            pull_people(d, o)  # 대상 사진 원본도 다시 받는다(자른 사진이 없으면 셰프가 profile로 다시 자른다)
+            (d / "answer.txt").write_text(f"질문: {o.get('question', '')}\n답: {o.get('answer', '')}\n", encoding="utf-8")
+            if o.get("feedback"):  # 수정 요청을 하다가 물은 것이면 그 요청도 다시 둔다
+                (d / "feedback.txt").write_text(o["feedback"] + "\n", encoding="utf-8")
+        elif revise:
             # 지난번 끝난 상태 그대로 되살린다 — fetch를 다시 돌리지 않아도 되고, 사진도 다시 올리지 않는다(media.json)
             for fn, text in (o.get("state") or {}).items():
                 if fn in STATE_FILES:
@@ -1397,31 +1428,33 @@ def pull():
             # 인터뷰 폼(탭 1.8.0): 형식은 주문한 사람이 고른 것 그대로, 대상 사진은 images/profile-N.jpg로
             if o.get("kind") == "interview":
                 order["layout"] = o.get("layout") or None
-                order["people"] = []
-                for i, p in enumerate(o.get("people") or [], start=1):
-                    person = {"name": p["name"], "insta": p["insta"]}
-                    if p.get("photo"):
-                        (d / "uploads").mkdir(exist_ok=True)
-                        src = d / "uploads" / f"profile-{i}"
-                        src.write_bytes(wp(p["photo"], raw=True))
-                        (d / "images").mkdir(exist_ok=True)
-                        person["photo"] = to_web(src, d / "images" / f"profile-{i}.jpg")
-                    order["people"].append(person)
+                order["people"] = pull_people(d, o)
             save(d, "order.json", order)
             if o.get("post_id") and not (d / "result.json").exists():
                 # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야
                 # draft가 새 초안을 또 만들지 않고 그 초안을 고친다
                 save(d, "result.json", {"post_id": o["post_id"]})
         wp(f"orders/{o['id']}", {"status": "working"}, base=ORDER_API)
-        what = f"수정 요청: {o['feedback']}" if revise else (f"메모: {o['memo']}" if o["memo"] else "")
+        what = (f"질문 답: {o.get('question', '')} → {o.get('answer', '')}" if answered
+                else f"수정 요청: {o['feedback']}" if revise else (f"메모: {o['memo']}" if o["memo"] else ""))
         print(f"주문 {o['id']} {o['group']} → {d.relative_to(ROOT)}" + (f"  · {what}" if what else ""))
 
 
-def report(d, fail=None):
-    """결과를 탭에 적는다: 초안 번호·제목·고친 것 목록(changes.json), 또는 멈춘 이유."""
+def report(d, fail=None, ask=None):
+    """결과를 탭에 적는다: 초안 번호·제목·고친 것 목록(changes.json), 또는 멈춘 이유, 또는 사람에게 묻는 질문.
+    질문(ask)일 땐 지금까지 한 작업 기록도 맡긴다 — 답이 오면 빈 컴퓨터에서 여기부터 이어 가려고(pull 참고)"""
     order = load(d, "order.json")
     if "order_id" not in order:
         sys.exit("탭에서 온 주문이 아니에요 (order.json에 order_id가 없음)")
+    if ask:
+        body = {"status": "question", "question": ask,
+                "state": {fn: (d / fn).read_text(encoding="utf-8") for fn in STATE_FILES if (d / fn).exists()}}
+        made = load(d, "result.json", {}).get("post_id")
+        if made:
+            body["post_id"] = made
+        o = wp(f"orders/{order['order_id']}", body, base=ORDER_API)
+        print(f"탭에 질문을 남겼어요: 주문 {o['id']} → {o['status']}")
+        return
     if fail:
         body = {"status": "failed", "error": fail}
         # 초안까지 만든 뒤 멈췄으면 그 번호도 남긴다 — 다시 요리할 때 같은 초안을 고치게(pull 참고)
@@ -1472,7 +1505,8 @@ def main(argv):
     elif argv[0] in ("draft", "publish"):
         publish(d)
     elif argv[0] == "report":
-        report(d, argv[argv.index("--fail") + 1] if "--fail" in argv else None)
+        report(d, argv[argv.index("--fail") + 1] if "--fail" in argv else None,
+               argv[argv.index("--ask") + 1] if "--ask" in argv else None)
     else:
         against = argv[argv.index("--against") + 1] if "--against" in argv else None
         verify(d, against)
