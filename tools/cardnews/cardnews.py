@@ -10,6 +10,7 @@
     python3 tools/cardnews/cardnews.py verify  <주문> [--against 글번호]
     python3 tools/cardnews/cardnews.py report  <주문> [--fail "이유"]   (결과를 관리자 탭에 적는다)
     python3 tools/cardnews/cardnews.py css     <주문> <파일.css> | --remove  (새 디자인 CSS를 사이트에 붙이기·빼기)
+    python3 tools/cardnews/cardnews.py still   <주문> <카드 번호> <초>        (영상 카드 정지 화면·포스터를 그 초 장면으로)
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
@@ -17,7 +18,8 @@
     cards.json   카드 글자·사진 이름 (fetch 단계 결과 — 아직은 손으로/임시 스크립트로 만든다)
                  글자 속 줄바꿈은 "\\n"으로 적는다 (<br>로 바뀜)
     notes.json   Claude가 쓰는 칸만: 카드별 alt·💡(주간), cover_alt, poster_alt
-    images/      사진·영상 파일
+    images/      사진·영상 파일 (사이트에 올릴 것)
+    uploads/     탭 영상 카드 칸에서 받은 원본 파일 (NN-src.*, 사이트에 그대로 올리지 않음)
     media.json   draft가 채움: 파일 이름 → 미디어 번호·주소 (다시 돌려도 두 번 올리지 않게)
     post.html    build 결과 (블록 HTML)
     result.json  draft·verify 결과 (초안 번호·미리보기 링크·대조 결과)
@@ -364,6 +366,10 @@ def scan_group(d):
         for im in f["images"]:
             ET.SubElement(fr, "rounded-rectangle", name=im["name"], hash=im["hash"], x=str(im["x"]), y=str(im["y"]),
                           width=str(im["width"]), height=str(im["height"]))
+        for v in f.get("videos", []):
+            # 영상이 채워진 칸(플러그인 1.6.0 무렵부터). 영상 자체는 플러그인이 못 꺼내서 칸 위치만 — 정지 화면 구도용
+            ET.SubElement(fr, "video", name=v["name"], x=str(v["x"]), y=str(v["y"]),
+                          width=str(v["width"]), height=str(v["height"]))
     return g
 
 
@@ -470,6 +476,144 @@ def video_still(url, out):
         sys.exit(f"모르는 영상 주소예요: {url}")
     out.write_bytes(img)
     return label, note
+
+
+# ── 영상 카드 (탭 1.6.0, 10/17 사용자 A) ─────────────────
+# 탭의 한 줄 = 카드 번호 + 파일(선택) + 원본 주소(선택). 할 일은 "주소가 있느냐"로 정한다:
+#   주소 있음 → 남의 영상: 정지 화면 + "▶ ○○에서 영상 보기" 링크(글 351 방식). 영상 자체는 사이트에 안 올린다
+#               정지 화면 = 영상 파일에서 뽑은 장면 > 사진 파일 > 원본 게시물의 정지 화면(video_still) 순
+#   주소 없음 → 영상 파일이면 우리가 찍은 영상(소리 빼고 자동 재생), 사진 파일이면 그 카드의 사진
+
+# 짧은 변 720px까지만 줄인다(늘리지 않음). -2 = 비율 유지하며 짝수로 (H.264는 짝수 크기만 받는다)
+SCALE_720 = "scale='if(gte(iw,ih),-2,trunc(min(720,iw)/2)*2)':'if(gte(iw,ih),trunc(min(720,ih)/2)*2,-2)'"
+
+
+def need_ffmpeg():
+    if not shutil.which("ffmpeg"):
+        sys.exit("영상 카드를 처리하려면 ffmpeg가 있어야 해요 (클라우드 환경은 설치 스크립트가 넣어요)")
+
+
+def video_layer_aspect(fr):
+    """피그마 카드에서 영상이 보이던 칸의 가로/세로 비율. 정지 화면을 카드에서 보던 구도로 자르는 데 쓴다.
+    플러그인이 영상 레이어(<video>)를 적어 줬으면 그 칸(카드 밖으로 나간 부분은 뺀다), 없으면 카드 전체
+    (레거시 영상 카드는 영상이 카드를 꽉 채운다고 보고). 피그마의 영상 채우기 기본값이 '가운데 맞춰 꽉 채우기'라 가운데를 자른다."""
+    fx, fy, fw, fh = (float(fr.get(k)) for k in ("x", "y", "width", "height"))
+    vids = [e for e in fr if e.tag == "video"]
+    if vids:
+        v = max(vids, key=lambda e: float(e.get("width")) * float(e.get("height")))
+        w = min(fx + fw, float(v.get("x")) + float(v.get("width"))) - max(fx, float(v.get("x")))
+        h = min(fy + fh, float(v.get("y")) + float(v.get("height"))) - max(fy, float(v.get("y")))
+        if w > 0 and h > 0:
+            return w / h
+    return fw / fh
+
+
+def video_frame(src, dst, aspect=None, at=None, scale="scale='min(2000,iw)':-2"):
+    """영상에서 장면 한 장 → JPEG. at(초)을 주면 그 장면, 아니면 ffmpeg thumbnail 필터가 앞 100장면 중
+    가장 '대표적인'(평균에 가까운) 장면을 고른다 — 시작의 검은 화면·전환 장면을 피하려고. 1초 뒤부터 본다."""
+    need_ffmpeg()
+    vf = [] if at is not None else ["thumbnail=100"]
+    if aspect:
+        # 가운데를 기준으로 aspect 비율만큼 잘라 낸다 (넘치는 쪽만 자르고 늘리지 않음)
+        vf.append(f"crop='trunc(min(iw,ih*{aspect:.4f})/2)*2':'trunc(min(ih,iw/{aspect:.4f})/2)*2'")
+    vf.append(scale)
+    seek = ["-ss", str(at)] if at is not None else ["-ss", "1"]
+    run = lambda s: subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *s, "-i", str(src), "-vf", ",".join(vf),
+                                    "-frames:v", "1", "-q:v", "3", str(dst)], capture_output=True)
+    if run(seek).returncode or not dst.exists():
+        # 1초보다 짧은 영상이면 처음부터
+        r = run([])
+        if r.returncode or not dst.exists():
+            sys.exit(f"{src.name}에서 장면을 못 뽑았어요: {r.stderr.decode('utf-8', 'replace')[-300:]}")
+    return dst.name
+
+
+def make_clip(src, dst):
+    # 우리 영상: 소리 빼고(-an, 자동 재생은 무음이어야 브라우저가 허락한다) H.264 720p, faststart = 받는 중에 바로 재생
+    need_ffmpeg()
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-an", "-vf", SCALE_720,
+                        "-c:v", "libx264", "-preset", "medium", "-crf", "24", "-pix_fmt", "yuv420p",
+                        "-movflags", "+faststart", str(dst)], capture_output=True)
+    if r.returncode:
+        sys.exit(f"{src.name}을 사이트용 영상으로 못 바꿨어요: {r.stderr.decode('utf-8', 'replace')[-300:]}")
+    return dst.name
+
+
+LINK_SITE = (("instagram.com", "인스타그램"), ("youtu", "유튜브"), ("x.com", "X"), ("twitter.com", "X"), ("tiktok.com", "틱톡"))
+
+
+def link_label(link, card):
+    # 원본 게시물을 못 읽었을 때 쓰는 문구: 사이트 이름 + 카드에 적힌 출처(계정)
+    host = urllib.parse.urlsplit(link).netloc
+    site = next((name for key, name in LINK_SITE if key in host), "원본")
+    return f"{site}에서 영상 보기" + (f" ({card['src']})" if card.get("src") else "")
+
+
+def video_card(d, n, card, fr, url, f):
+    """영상 카드 한 장을 채운다. 돌려주는 값 = 경고 목록."""
+    warn = []
+    src = d / f["path"] if f else None
+    if f and not src.exists():
+        return [f"{n}번 영상 카드 파일({f['path']})이 없어요"]
+    if not url:
+        if f["kind"] == "video":
+            card["clip"] = make_clip(src, d / "images" / f"{n:02d}-clip.mp4")
+            # 포스터는 재생 전 잠깐 보이는 첫 화면이라 영상과 같은 크기로
+            card["poster"] = video_frame(src, d / "images" / f"{n:02d}-poster.jpg", scale=SCALE_720)
+            mb = (d / "images" / card["clip"]).stat().st_size / 1048576
+            if mb > 15:
+                warn.append(f"{n}번 우리 영상이 {mb:.0f}MB예요 — 폰에서 늦게 뜰 수 있으니 짧게 잘라도 될지 확인")
+        else:
+            card["image"] = to_web(src, d / "images" / f"{n:02d}.jpg")
+        return warn
+    link = clean_link(url)
+    fn = f"{n:02d}-video.jpg"
+    try:
+        # 파일이 있어도 원본 게시물은 읽는다 — 링크 문구의 계정 이름(@…)을 거기서 가져와서
+        label, note = video_still(link, d / "images" / fn)
+    except (OSError, AttributeError, KeyError, ValueError, SystemExit) as e:  # OSError = 연결·시간 초과(URLError 포함)
+        if not f:
+            return [f"{n}번 영상 정지 화면을 원본에서 못 가져왔어요 ({e}) — 탭에서 그 장면 캡처나 영상 파일을 같이 넣어 주세요"]
+        label, note = link_label(link, card), None
+        warn.append(f"{n}번 원본 게시물을 못 읽어서 링크 문구를 카드 출처로 만들었어요: {label}")
+    if f and f["kind"] == "video":
+        fn = video_frame(src, d / "images" / f"{n:02d}-video.jpg", aspect=video_layer_aspect(fr))
+        note = None
+        warn.append(f"{n}번 정지 화면은 영상 파일에서 골랐어요 — 이상하면 `still` 명령으로 다른 초를 지정")
+    elif f:
+        fn = to_web(src, d / "images" / f"{n:02d}-video.jpg")
+        note = None
+    card.update(image=fn, video={"url": link, "label": label})
+    size = jpeg_size(d / "images" / fn)
+    if size and size[0] > size[1]:
+        card["wide"] = True  # 주간 틀에서만 쓰지만 같이 적어 둔다
+    if note:
+        warn.append(f"{n}번 영상: {note}")
+    return warn
+
+
+def still(d, n, at):
+    """정지 화면(또는 우리 영상의 포스터)을 영상 파일의 at초 장면으로 바꾼다. 수정 요청 "3번 정지 화면 5초 장면으로"용.
+    파일 이름에 초를 붙여 새 이름으로 만든다 — media.json에 옛 이름이 이미 올라가 있어서, 같은 이름이면 draft가 다시 안 올린다."""
+    order, cards = load(d, "order.json"), load(d, "cards.json")
+    f = order.get("files", {}).get(str(n))
+    if not f or f["kind"] != "video":
+        sys.exit(f"{n}번 카드엔 영상 파일이 없어요 (탭 영상 카드 칸에 파일을 넣은 카드만 돼요)")
+    card = next((c for c in cards["cards"] if c.get("no") == n), None)
+    if card is None:
+        sys.exit(f"cards.json에 {n}번 카드가 없어요")
+    tag = f"{at:g}s".replace(".", "_")
+    src = d / f["path"]
+    if card.get("clip"):
+        card["poster"] = video_frame(src, d / "images" / f"{n:02d}-poster-{tag}.jpg", at=at, scale=SCALE_720)
+    else:
+        group = scan_group(d) if (d / "figma" / "scan.json").exists() else None
+        fr = next((x for i, x in enumerate(reading_order([c for c in group if c.tag == "frame"]))
+                   if frame_no(x, i) == n), None) if group is not None else None
+        aspect = video_layer_aspect(fr) if fr is not None else None
+        card["image"] = video_frame(src, d / "images" / f"{n:02d}-video-{tag}.jpg", aspect=aspect, at=at)
+    save(d, "cards.json", cards)
+    print(f"{n}번 → {card.get('poster') if card.get('clip') else card['image']}")
 
 
 def jpeg_size(path):
@@ -620,6 +764,7 @@ def fetch(d):
         group = figma_group(d, order["figma"]["group"])
     frames = reading_order([c for c in group if c.tag == "frame"])
     videos = {int(k): v for k, v in order.get("videos", {}).items()}
+    files = {int(k): v for k, v in order.get("files", {}).items()}
     bg = background_hashes(frames[1:-1])
     cards, warn = [], []
     # 첫 장 = 표지, 마지막 장 = 끝 카드(계정 이름 + 제목 한 줄)라서 빼고, 그 사이가 내용 카드
@@ -639,16 +784,8 @@ def fetch(d):
             warn.append(f"{n}번 제목이 {nlines}줄이라 띄어쓰기로 이었어요 — 줄바꿈이 맞으면 cards.json에서 \\n으로")
         if extra:
             warn.append(f"{n}번 카드의 꾸밈 글자는 뺐어요: {extra}")
-        if n in videos:
-            link = clean_link(videos[n])
-            fn = f"{n:02d}-video.jpg"
-            label, note = video_still(link, d / "images" / fn)
-            card.update(image=fn, video={"url": link, "label": label})
-            size = jpeg_size(d / "images" / fn)
-            if size and size[0] > size[1]:
-                card["wide"] = True  # 주간 틀에서만 쓰지만 같이 적어 둔다
-            if note:
-                warn.append(f"{n}번 영상: {note}")
+        if n in videos or n in files:
+            warn += video_card(d, n, card, fr, videos.get(n), files.get(n))
         else:
             # 사람이 내보낸 사진(images/NN.*)이 먼저, 없으면 글자 뺀 카드에서 자르기(플러그인 3판),
             # 예전 zip이면 플러그인 사진 원본, 그것도 없으면 MCP rawImages(figma/cardNN-raw-*)에서 고른다
@@ -700,7 +837,9 @@ def fetch(d):
     # notes.json은 Claude가 채울 칸만 비워서 만든다 (이미 있으면 카드 수가 같을 때 그대로 둔다)
     notes = load(d, "notes.json", {})
     if len(notes.get("cards", [])) != len(cards):
-        notes = {"cover_alt": notes.get("cover_alt", ""), "cards": [{"alt": ""} for _ in cards]}
+        # 우리 영상 카드는 사진 대신 포스터(재생 전 첫 화면)라 alt 칸 이름이 다르다
+        notes = {"cover_alt": notes.get("cover_alt", ""),
+                 "cards": [{"poster_alt": ""} if c.get("clip") else {"alt": ""} for c in cards]}
         save(d, "notes.json", notes)
     print(f"카드 {len(cards)}장 · 캡션 앞 {len(intro)}문단 · 끝 {len(outro)}문단")
     print("\n".join("· " + w for w in warn) if warn else "확인할 것 없음")
@@ -969,6 +1108,14 @@ def pull():
                     wp(f"orders/{o['id']}", {"status": "failed", "error": f"zip 안 파일 이름이 이상해요: {bad[0]}"}, base=ORDER_API)
                     continue
                 zf.extractall(d)
+        # 영상 카드 파일(1.6.0): 수정 때도 받는다 — "3번 정지 화면 다른 장면으로"에 원본 영상이 필요해서. 발행하면 탭이 지운다
+        files = {}
+        for no, f in (o.get("files") or {}).items():
+            ext = Path(f["name"]).suffix.lower()
+            rel = f"uploads/{int(no):02d}-src{ext}"
+            (d / "uploads").mkdir(exist_ok=True)
+            (d / rel).write_bytes(wp(f["url"], raw=True))
+            files[str(int(no))] = {"path": rel, "kind": f["kind"]}
         if revise:
             # 지난번 끝난 상태 그대로 되살린다 — fetch를 다시 돌리지 않아도 되고, 사진도 다시 올리지 않는다(media.json)
             for fn, text in (o.get("state") or {}).items():
@@ -979,7 +1126,8 @@ def pull():
         else:
             (d / "caption.txt").write_text(o["caption"] + "\n", encoding="utf-8")
             order = load(d, "order.json", {})
-            order.update(kind="archive", order_id=o["id"], group=o["group"], videos=o["videos"], memo=o["memo"])
+            order.update(kind="archive", order_id=o["id"], group=o["group"], videos=o["videos"], files=files,
+                         memo=o["memo"])
             save(d, "order.json", order)
             if o.get("post_id") and not (d / "result.json").exists():
                 # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야
@@ -1015,11 +1163,15 @@ def report(d, fail=None):
 def main(argv):
     if argv[:1] == ["pull"]:
         return pull()
-    if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css"):
+    if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css", "still"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
     if not d.is_dir():
         sys.exit(f"주문 폴더가 없어요: {d}")
+    if argv[0] == "still":
+        if len(argv) < 4:
+            sys.exit("still <주문> <카드 번호> <초>")
+        return still(d, int(argv[2]), float(argv[3]))
     if argv[0] == "css":
         if "--remove" in argv:
             return css(d, remove=True)

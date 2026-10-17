@@ -35,6 +35,11 @@ function imageHash(n) {
   return f ? f.imageHash : null;
 }
 
+function hasVideo(n) {
+  if (!('fills' in n) || n.fills === figma.mixed) return false;
+  return n.fills.some(p => p.type === 'VIDEO' && p.visible !== false);
+}
+
 // 단색으로 칠한 레이어면 #rrggbb, 아니면(그라데이션·여러 색) null
 function solidColor(n) {
   if (!('fills' in n) || n.fills === figma.mixed) return null;
@@ -49,6 +54,7 @@ function readFrame(fr) {
   fr.children.forEach(c => walk(c, nodes));
   const texts = [];
   const images = [];
+  const videos = [];
   nodes.forEach(n => {
     if (n.type === 'TEXT') {
       // characters = 카드에 실제로 적힌 글자 (줄바꿈 그대로). 레이어 이름은 바뀌었을 수 있어서 따로 남긴다
@@ -61,8 +67,10 @@ function readFrame(fr) {
     }
     const hash = imageHash(n);
     if (hash) images.push(Object.assign({ id: n.id, name: n.name, hash: hash }, box(n)));
+    // 영상이 채워진 칸: 영상 파일은 플러그인이 꺼낼 수 없어서 위치만 적는다 — 셰프가 탭에서 받은 영상의 장면을 이 칸 비율로 자른다
+    if (hasVideo(n)) videos.push(Object.assign({ id: n.id, name: n.name }, box(n)));
   });
-  return Object.assign({ id: fr.id, name: fr.name }, box(fr), { texts: texts, images: images });
+  return Object.assign({ id: fr.id, name: fr.name }, box(fr), { texts: texts, images: images, videos: videos });
 }
 
 // 묶음 고르기: 묶음을 고르면 그대로, 카드 한 장을 고르면 그 카드가 든 묶음으로
