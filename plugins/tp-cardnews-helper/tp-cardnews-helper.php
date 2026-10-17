@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.12.0
+ * Version: 1.13.0
  * Author: Trendportal
  */
 
@@ -987,6 +987,7 @@ function tp_cn_page() {
 		array(
 			'face'   => plugins_url( 'mascot.jpg', __FILE__ ),
 			'rest'   => plugins_url( 'mascot-rest.png', __FILE__ ),
+			'pcap'   => plugins_url( 'profile-capture.gif', __FILE__ ),
 			'action' => admin_url( 'admin-post.php' ),
 			'nonce'  => wp_nonce_field( 'tp_cn_order', '_wpnonce', true, false ),
 			// 알림 A: 탭이 스스로 상태를 확인할 때 쓰는 주소와 로그인 확인 값(쿠키 인증에는 wp_rest nonce가 필요)
@@ -1085,6 +1086,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-how summary { display: inline-block; cursor: pointer; color: var(--fresh); font-weight: 700; }
 .tpcn-how ul { margin: 8px 0 0; padding: 10px 14px 10px 28px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); }
 .tpcn-how li { margin: 3px 0; }
+.tpcn-gif { display: block; width: 100%; max-width: 480px; height: auto; margin-top: 8px; border-radius: 12px; border: 1px solid var(--line); }
 .tpcn-how code { padding: 1px 6px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); font-size: 12px; }
 .tpcn textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; color: var(--ink); resize: vertical; }
 .tpcn textarea:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
@@ -1283,6 +1285,16 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				<button type="button" class="tpcn-vadd" id="tpcn-padd">+ 한 명 더</button>
 				<p class="tpcn-hint" id="tpcn-adhint" hidden>글 맨 위 <b>[광고] 표시 바로 아래와 글 끝</b>에 브랜드 프로필 카드가 들어가요. <b>인스타 주소는 꼭</b> 넣어 주세요. 프로필 사진은 브랜드 인스타 프로필 화면을 캡처해 그대로 올리면 셰프가 동그란 사진만 잘라서 써요</p>
 				<p class="tpcn-hint" id="tpcn-ivhint">글 <b>시작과 끝의 프로필 카드</b>에 들어가요. 프로필 사진은 인스타 프로필 화면을 캡처해 그대로 올려 주세요. 셰프가 동그란 프로필 사진만 잘라서 써요. 비우면 프로필 카드 없이 만들고 알려 드려요. 패널형은 카드에 계정·얼굴이 있어서 보통 비워도 돼요</p>
+				<?php // 10/18 사용자: 프로필 캡처를 어떻게 하는지 움직이는 그림으로. 인터뷰·광고 둘 다 같은 칸이라 여기 하나만 둔다 ?>
+				<details class="tpcn-how">
+					<summary>프로필 사진 캡처하는 법</summary>
+					<img class="tpcn-gif" src="<?php echo esc_url( $u['pcap'] ); ?>" width="640" height="298" loading="lazy" alt="인스타 프로필 화면에서 프로필 사진과 이름이 있는 윗부분을 상자로 표시하고 그 부분으로 확대하는 움직이는 그림">
+					<ul>
+						<li>인스타에서 그 계정의 <b>프로필 화면</b>을 열어요 (PC·폰 다 돼요)</li>
+						<li><b>프로필 사진이 보이게</b> 윗부분만 캡처해요. Mac은 <code>⌘ Shift 4</code>로 끌어서, 폰은 스크린샷 그대로 올려도 돼요</li>
+						<li>스토리 테두리(무지개 고리)가 있어도 괜찮아요. 셰프가 동그란 사진만 잘라서 써요</li>
+					</ul>
+				</details>
 			</div>
 		</div>
 		<div class="tpcn-field">
