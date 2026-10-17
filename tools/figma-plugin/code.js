@@ -35,6 +35,15 @@ function imageHash(n) {
   return f ? f.imageHash : null;
 }
 
+// 단색으로 칠한 레이어면 #rrggbb, 아니면(그라데이션·여러 색) null
+function solidColor(n) {
+  if (!('fills' in n) || n.fills === figma.mixed) return null;
+  const f = n.fills.find(p => p.type === 'SOLID' && p.visible !== false);
+  if (!f) return null;
+  const hex = v => Math.round(v * 255).toString(16).padStart(2, '0');
+  return `#${hex(f.color.r)}${hex(f.color.g)}${hex(f.color.b)}`;
+}
+
 function readFrame(fr) {
   const nodes = [];
   fr.children.forEach(c => walk(c, nodes));
@@ -43,8 +52,11 @@ function readFrame(fr) {
   nodes.forEach(n => {
     if (n.type === 'TEXT') {
       // characters = 카드에 실제로 적힌 글자 (줄바꿈 그대로). 레이어 이름은 바뀌었을 수 있어서 따로 남긴다
+      // 글꼴·색·정렬은 사이트 글을 원본 카드 디자인에 맞출 때 쓴다 (10/17 사용자: "원본 카드 디자인과 최대한 비슷하게")
       texts.push(Object.assign({ id: n.id, name: n.name, characters: n.characters,
-        fontSize: n.fontSize === figma.mixed ? null : n.fontSize }, box(n)));
+        fontSize: n.fontSize === figma.mixed ? null : n.fontSize,
+        font: n.fontName === figma.mixed ? null : n.fontName,
+        color: solidColor(n), align: n.textAlignHorizontal }, box(n)));
       return;
     }
     const hash = imageHash(n);
@@ -125,6 +137,13 @@ figma.ui.onmessage = async msg => {
       .reduce((a, b) => (box(b).x < box(a).x ? b : a));
     const png = await cover.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 1 } });
     files.push({ name: 'figma/cover-export.png', bytes: png });
+    // 카드 미리보기: 디자인을 보고 사이트 글을 맞추고, 사이트 화면과 나란히 대조하는 용도라 작게(가로 500px)
+    for (let i = 0; i < got.frames.length; i++) {
+      const fr = got.frames[i];
+      say(`카드 미리보기 ${i + 1}/${got.frames.length}…`);
+      const jpg = await fr.exportAsync({ format: 'JPG', constraint: { type: 'WIDTH', value: 500 } });
+      files.push({ name: `figma/cards/${fr.name}.jpg`, bytes: jpg });
+    }
   } catch (e) {
     figma.ui.postMessage({ type: 'error', error: `사진을 꺼내다 멈췄어요: ${e.message || e}` });
     return;
