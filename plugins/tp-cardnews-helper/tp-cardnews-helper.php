@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.4.0
+ * Version: 1.5.0
  * Author: Trendportal
  */
 
@@ -242,6 +242,51 @@ add_action(
 		}
 		wp_safe_redirect( add_query_arg( 'tp_cn_rev', $id, $back ) );
 		exit;
+	}
+);
+
+// "주문 지우기": 주문 + 그 임시글 + 셰프가 그 주문 때 올린 사진을 함께 버린다(10/17 사용자).
+// 발행된 글은 절대 안 지우고 주문 기록만 지운다. 요리 중인 주문은 셰프가 일하는 중이라 막는다
+add_action(
+	'admin_post_tp_cn_delete',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 지울 수 있어요' );
+		}
+		$id = (int) ( $_POST['order'] ?? 0 );
+		check_admin_referer( 'tp_cn_delete_' . $id );
+		$back = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		$say  = function ( $kind, $msg ) use ( $back ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_' . $kind, rawurlencode( $msg ), $back ) );
+			exit;
+		};
+		if ( TP_CN_TYPE !== get_post_type( $id ) ) {
+			$say( 'err', '없는 주문이에요' );
+		}
+		if ( 'working' === get_post_meta( $id, '_tp_cn_status', true ) ) {
+			$say( 'err', '셰프가 요리 중이라 지금은 못 지워요. 끝난 뒤에 지워 주세요' );
+		}
+		$draft = get_post( (int) get_post_meta( $id, '_tp_cn_post', true ) );
+		$note  = '';
+		if ( $draft && 'post' === $draft->post_type && 'publish' !== $draft->post_status ) {
+			// 셰프가 올린 사진 = 이 글이 쓰는 사진 중 파일 이름이 "order-<주문 번호>-"로 시작하는 것(cardnews.py upload가 붙이는 이름).
+			// 다른 글과 같이 쓰는 사진일 수 있는 나머지는 건드리지 않는다
+			preg_match_all( '/wp-image-(\d+)/', $draft->post_content, $m );
+			$media = array_unique( array_merge( array_map( 'intval', $m[1] ), array( (int) get_post_thumbnail_id( $draft ) ) ) );
+			$gone  = 0;
+			foreach ( $media as $mid ) {
+				$file = $mid ? get_attached_file( $mid ) : '';
+				if ( $file && 0 === strpos( wp_basename( $file ), "order-{$id}-" ) && wp_delete_attachment( $mid, true ) ) {
+					++$gone;
+				}
+			}
+			wp_delete_post( $draft->ID, true );
+			$note = " 임시글 {$draft->ID}과 사진 {$gone}장도 지웠어요.";
+		} elseif ( $draft && 'publish' === $draft->post_status ) {
+			$note = " 글 {$draft->ID}은 이미 발행돼서 그대로 뒀어요.";
+		}
+		wp_delete_post( $id, true ); // zip은 before_delete_post에서 같이 지워진다
+		$say( 'info', "주문 {$id}을 지웠어요.{$note}" );
 	}
 );
 
@@ -555,7 +600,8 @@ function tp_cn_page() {
 	if ( isset( $_GET['tp_cn_err'] ) ) {
 		$msg = array( 'bad', sanitize_text_field( wp_unslash( $_GET['tp_cn_err'] ) ) );
 	} elseif ( isset( $_GET['tp_cn_info'] ) ) {
-		$msg = array( 'ok', '초인종 설정을 저장했어요. 다음 주문부터 셰프가 바로 와요.' );
+		$info = sanitize_text_field( wp_unslash( $_GET['tp_cn_info'] ) );
+		$msg  = array( 'ok', 'bell' === $info ? '초인종 설정을 저장했어요. 다음 주문부터 셰프가 바로 와요.' : $info );
 	} elseif ( isset( $_GET['tp_cn_ok'] ) && 'new' === get_post_meta( (int) $_GET['tp_cn_ok'], '_tp_cn_status', true ) ) {
 		// 아직 접수 상태일 때만. 요리가 시작·끝난 뒤엔 목록이 상태를 말해 주니 "곧 시작해요"가 남아 있으면 헷갈린다
 		$msg = array( 'ok', '주문 받았어요! 셰프 트란시스가 곧 요리를 시작해요.' );
@@ -720,6 +766,10 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-bell summary small { margin-left: 6px; font-family: var(--font-body); font-size: 12px; color: var(--muted); }
 .tpcn-bell form { display: grid; gap: 12px; margin-top: 12px; }
 .tpcn-bell input[type=url], .tpcn-bell input[type=password] { width: 100%; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; }
+/* 주문 지우기: 눈에 덜 띄게 오른쪽 아래 작은 글씨 */
+.tpcn-del { margin-top: 8px; text-align: right; }
+.tpcn-del button { padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.tpcn-del button:hover { color: var(--failed); text-decoration: underline; }
 .tpcn-empty { display: grid; justify-items: center; gap: 6px; padding: 18px 0 8px; color: var(--muted); text-align: center; }
 .tpcn-empty img { width: 180px; height: auto; }
 @media (max-width: 782px) {
@@ -896,6 +946,14 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 					<button type="submit">🔔 셰프 다시 부르기</button>
 				</form>
 			<?php endif; ?>
+			<?php if ( 'working' !== $s ) : // 요리 중엔 못 지운다(셰프가 일하는 중) ?>
+				<form class="tpcn-del" method="post" action="<?php echo esc_url( $u['action'] ); ?>" onsubmit="return confirm('주문 <?php echo (int) $o['id']; ?>을 지울까요?\n아직 발행 안 한 임시글과 셰프가 올린 사진도 같이 지워져요. 되돌릴 수 없어요.');">
+					<input type="hidden" name="action" value="tp_cn_delete">
+					<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+					<?php wp_nonce_field( 'tp_cn_delete_' . (int) $o['id'] ); ?>
+					<button type="submit">🗑 주문 지우기</button>
+				</form>
+			<?php endif; ?>
 			</div>
 		</li>
 		<?php endforeach; ?>
@@ -959,7 +1017,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	const done = { done: '✅ 완성', failed: '⚠️ 주방 멈춤' };
 	const clean = location.pathname + '?page=<?php echo esc_js( TP_CN_SLUG ); ?>';
 	// 주문 직후 붙은 ?tp_cn_ok= 꼬리를 주소창에서 지운다 — 그대로 새로고침하면 "곧 시작해요" 알림이 또 뜨던 문제(10/17)
-	if (/[?&]tp_cn_(ok|err)=/.test(location.search)) history.replaceState(null, '', clean);
+	if (/[?&]tp_cn_(ok|err|info|rev)=/.test(location.search)) history.replaceState(null, '', clean);
 
 	// 새로고침 뒤: 무엇이 끝났는지 위에 띄우고, 다른 탭을 보고 있었다면 탭 제목으로도 알린다
 	try {
