@@ -1135,6 +1135,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-links a { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; }
 .tpcn-links a.main { background: var(--ink); border-color: var(--ink); color: #fff; }
 .tpcn-links a:hover { border-color: var(--muted); }
+.tpcn-chip.is-pub { background: #23242b; color: #fff; }
 .tpcn-publish { margin: 0; }
 .tpcn-publish button { padding: 5px 14px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 #b8401d; }
 .tpcn-publish button:hover { background: #ec6a43; }
@@ -1298,6 +1299,8 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		<?php
 		foreach ( $orders as $o ) :
 			$s = isset( TP_CN_STATUS[ $o['status'] ] ) ? $o['status'] : 'new';
+			// 발행된 주문은 '완성' 대신 '발행됨' 딱지(10/18 사용자). 화면 표시만 바꾸고 저장된 상태는 그대로 done
+			$pub = 'done' === $s && 'publish' === $o['post_status'];
 			?>
 		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
 			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
@@ -1305,7 +1308,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
 				<p class="tpcn-when"><?php echo esc_html( $fmt( $o['created'] ) ); ?> 주문</p>
 			</div>
-			<span class="tpcn-chip"><?php echo esc_html( TP_CN_STATUS[ $s ] ); ?></span>
+			<span class="tpcn-chip<?php echo $pub ? ' is-pub' : ''; ?>"><?php echo esc_html( $pub ? '발행됨' : TP_CN_STATUS[ $s ] ); ?></span>
 			<div class="tpcn-body">
 			<?php if ( 'new' === $s ) : ?>
 				<?php if ( null === tp_cn_recall_reason( $o, $u['now'] ) ) : // 초인종이 실패했으면 "곧 가져가요"는 틀린 말이라 아래 이유만 ?>
@@ -1386,7 +1389,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 					<?php endforeach; ?>
 				</ol>
 				<?php endif; ?>
-				<?php if ( $o['post_id'] ) : ?>
+				<?php if ( $o['post_id'] && ! $pub ) : // 발행된 글은 셰프가 고치지 않는다(draft의 guard가 막음) ?>
 				<?php // 10/17 사용자: Claude Code 없이 관리자 창에서 메모로 고치기. 셰프가 같은 초안을 고치고 위 기록에 쌓인다 ?>
 				<form class="tpcn-revise" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
 					<input type="hidden" name="action" value="tp_cn_revise">
