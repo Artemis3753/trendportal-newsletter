@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Trendportal
  */
 
@@ -435,6 +435,12 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-field label { display: block; margin-bottom: 6px; font-weight: 700; }
 .tpcn-field label em { margin-left: 4px; font-style: normal; font-weight: 500; font-size: 12px; color: var(--muted); }
 .tpcn-field .tpcn-hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.tpcn-field .tpcn-hint b { color: var(--ink); }
+.tpcn-how { margin-top: 6px; font-size: 12.5px; }
+.tpcn-how summary { display: inline-block; cursor: pointer; color: var(--fresh); font-weight: 700; }
+.tpcn-how ul { margin: 8px 0 0; padding: 10px 14px 10px 28px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); }
+.tpcn-how li { margin: 3px 0; }
+.tpcn-how code { padding: 1px 6px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); font-size: 12px; }
 .tpcn textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; color: var(--ink); resize: vertical; }
 .tpcn textarea:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
 /* zip 넣는 칸: 점선 상자. 고르면 파일 이름이 상자 안에 뜬다 */
@@ -530,8 +536,19 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-videos">영상 카드 <em>있을 때만</em></label>
-			<textarea id="tpcn-videos" name="videos" rows="2" placeholder="4 = https://www.instagram.com/reel/…"></textarea>
-			<p class="tpcn-hint">한 줄에 하나씩, 카드 번호 = 원본 영상 주소 (인스타·유튜브·X)</p>
+			<textarea id="tpcn-videos" name="videos" rows="3" placeholder="4 = https://www.instagram.com/reel/…&#10;7 = https://youtu.be/…"></textarea>
+			<p class="tpcn-hint">한 줄에 하나씩 <b>카드 번호 = 원본 영상 주소</b> · 영상 카드가 없으면 비워 두세요</p>
+			<?php // 10/17 사용자: 쓰는 법을 도우미 화면에서도 알 수 있게 — 평소엔 접어 두고 필요할 때 펼친다 ?>
+			<details class="tpcn-how">
+				<summary>자세히 보기</summary>
+				<ul>
+					<li><b>카드 번호</b> = 피그마 프레임 이름 끝 숫자예요. 예: <code>트렌드포털 802-4</code> → <b>4</b> (표지가 1번이라, 카드뉴스를 넘겨 보는 순서와 같아요)</li>
+					<li><b>주소</b> = 원래 영상이 올라간 곳의 주소. 인스타 릴스·게시물, 유튜브(일반·youtu.be·쇼츠), X를 받아요</li>
+					<li><code>4 = 주소</code> · <code>4 주소</code> · <code>4: 주소</code> · <code>4번 주소</code> 모두 괜찮아요</li>
+					<li>공유할 때 붙는 <code>?igsh=…</code> 같은 꼬리는 그대로 붙여 넣어도 알아서 떼요</li>
+					<li>우리가 직접 가진 영상 파일(mp4)은 아직 이 칸으로 못 받아요 — 메모에 적어 주세요</li>
+				</ul>
+			</details>
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-memo">메모 <em>선택</em></label>
