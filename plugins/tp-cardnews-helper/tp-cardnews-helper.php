@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.14.3
+ * Version: 1.15.0
  * Author: Trendportal
  */
 
@@ -988,6 +988,8 @@ function tp_cn_page() {
 			'face'   => plugins_url( 'mascot.jpg', __FILE__ ),
 			'rest'   => plugins_url( 'mascot-rest.png', __FILE__ ),
 			'pcap'   => plugins_url( 'profile-capture.mp4', __FILE__ ),
+			// 피그마 플러그인(tools/figma-plugin)을 묶은 zip. 플러그인을 고치면 이 zip도 다시 묶는다
+			'fplug'  => plugins_url( 'transis-figma-plugin.zip', __FILE__ ),
 			'action' => admin_url( 'admin-post.php' ),
 			'nonce'  => wp_nonce_field( 'tp_cn_order', '_wpnonce', true, false ),
 			// 알림 A: 탭이 스스로 상태를 확인할 때 쓰는 주소와 로그인 확인 값(쿠키 인증에는 wp_rest nonce가 필요)
@@ -1092,6 +1094,11 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-how summary:focus-visible { outline: 2px solid var(--fresh); outline-offset: 2px; }
 .tpcn-how ul { margin: 8px 0 0; padding: 10px 14px 10px 28px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); }
 .tpcn-how li { margin: 3px 0; }
+.tpcn-plug { margin-top: 8px; padding: 10px 14px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); }
+.tpcn-plug ol { margin: 8px 0 0; padding-left: 18px; }
+.tpcn-plug li { margin: 3px 0; }
+.tpcn-dl { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--ink); color: #fff; font-weight: 700; text-decoration: none; }
+.tpcn-dl:hover, .tpcn-dl:focus { color: #fff; background: #5a4a42; }
 .tpcn-cap { display: flex; gap: 14px; align-items: center; margin-top: 10px; padding: 10px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); font-size: 12.5px; }
 .tpcn-capvid { flex: none; width: 150px; height: 150px; border-radius: 10px; background: #0d1014; }
 .tpcn-cap ol { margin: 4px 0 0; padding-left: 18px; }
@@ -1270,6 +1277,19 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				<div><b id="tpcn-zipname">zip을 여기에 끌어다 놓거나 눌러서 고르기</b><span>'트란시스 카드뉴스 읽기'에서 받은 파일 그대로</span></div>
 				<input type="file" id="tpcn-zip" name="zip" accept=".zip,application/zip" required title=""><?php // title을 비워야 브라우저 기본 말풍선("No file chosen")이 안 뜬다 ?>
 			</div>
+			<?php // 10/18 사용자: 다른 컴퓨터(성현 님)에서도 피그마 플러그인을 쉽게 받게. 처음 한 번만 필요해서 접어 둔다 ?>
+			<details class="tpcn-how">
+				<summary>피그마 플러그인이 없다면</summary>
+				<div class="tpcn-plug">
+					<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 플러그인 받기 (zip)</a>
+					<ol>
+						<li>받은 zip을 더블클릭해서 압축을 풀어요 → <code>transis-cardnews-reader</code> 폴더가 생겨요. 지우지 말고 둬요</li>
+						<li><b>피그마 데스크톱 앱</b>에서 아무 디자인 파일이나 열어요 (웹 브라우저 피그마에선 안 돼요)</li>
+						<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택</li>
+						<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 읽기</b>로 zip을 받아 여기에 올려요</li>
+					</ol>
+				</div>
+			</details>
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-caption">인스타 캡션 <em class="tpcn-must">필수</em></label>
