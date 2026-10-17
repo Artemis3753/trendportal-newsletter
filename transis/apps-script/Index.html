@@ -66,15 +66,26 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .head #updated .dot { display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 1px; border-radius: 50%; background: var(--fresh); box-shadow: 0 0 0 3px var(--fresh-soft); }
 .head #updated.stale b { color: var(--ink); }
 .head #updated.stale .dot { background: var(--muted); box-shadow: 0 0 0 3px var(--line); }
-/* 최근 바뀐 일정: 갱신 줄 바로 아래 작은 접기. 펼치면 시각 · 무엇이 · 어떻게 한 줄씩 */
+/* 최근 바뀐 일정: 갱신 줄 바로 아래 작은 접기. 펼치면 정리한 시각별로 묶고, 항목마다 종류 색 옅은 칸(10/18 사용자 시안 1018-3 C).
+   날짜만 있는 항목은 한 줄(날짜 오른쪽 끝), 날짜 변경은 두 줄(옛 날짜 줄긋기 → 새 날짜) */
 .changes { margin-top: 3px; font-size: 12.5px; color: var(--muted); }
 /* 펼치면 머리가 길어져서, 인형 얼굴이 가운데로 내려가지 않고 제목 옆에 남게 */
 .head:has(.changes[open]) { align-items: flex-start; }
 .changes summary { cursor: pointer; color: var(--fresh); font-weight: 700; width: max-content; }
-.changes ul { margin: 6px 0 0; padding: 8px 10px; list-style: none; border-radius: 12px; background: var(--card); border: 1px solid var(--line); display: grid; gap: 4px; }
-.changes li { color: var(--ink); line-height: 1.45; }
-.changes li time { color: var(--muted); margin-right: 6px; font-variant-numeric: tabular-nums; }
-.changes li em { font-style: normal; font-weight: 700; margin-right: 4px; }
+.changes .ch-box { margin-top: 6px; padding: 8px 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.changes .ch-at { margin: 8px 0 3px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.changes .ch-at:first-child { margin-top: 0; }
+.changes ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.changes li { padding: 5px 8px; border-radius: 9px; background: var(--soft); color: var(--ink); line-height: 1.45; }
+.changes li.one { display: flex; align-items: baseline; gap: 8px; }
+.changes li.one .what { flex: 1; min-width: 0; }
+.changes li .when { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+.changes li.two .when { display: block; }
+.changes li em { font-style: normal; font-weight: 700; margin-right: 4px; color: var(--c); }
+.changes li s { color: var(--muted); font-weight: 400; }
+.changes li.x { background: var(--bg); }
+.changes li.x em { color: var(--muted); }
+.changes li.x .what, .changes li.x .when { text-decoration: line-through; color: var(--muted); font-weight: 400; }
 /* 프란시스 이야기 + 만든 사람: 평소엔 숨겨 두고, 인형 얼굴을 누르면 얼굴 아래 말풍선으로 (머리를 깔끔하게 두려고) */
 .head { position: relative; }
 .face-btn { position: relative; flex: none; border: 0; padding: 0; background: none; border-radius: 50%; cursor: pointer; }
@@ -264,7 +275,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       <h1>트란시스 일정표<span class="sample" id="sample" hidden>예시 데이터</span></h1>
       <p id="updated">불러오는 중</p>
       <!-- 최근 24시간 동안 트란시스가 바꾼 것 (10/17 사용자). 평소엔 접어 두고 건수만 -->
-      <details class="changes" id="changes" hidden><summary></summary><ul></ul></details>
+      <details class="changes" id="changes" hidden><summary></summary><div class="ch-box"></div></details>
     </div>
     <button type="button" class="theme" id="theme"></button>
     <!-- 마스코트 인형의 원래 이름은 프란시스, 트렌드포털의 '트'를 따서 트란시스가 됐다 -->
@@ -433,12 +444,22 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       const hm = at => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: 'numeric', minute: '2-digit' }).format(new Date(at));
       const KIND = { new: '새 일정', date: '날짜 변경', confirmed: '확정', cancelled: '취소' };
       $('changes').querySelector('summary').textContent = `최근 24시간 바뀐 일정 ${recent.length}건`;
-      $('changes').querySelector('ul').innerHTML = recent.map(c => {
-        const what = `${esc(c.brand)} ${esc(c.title)}`;
-        const how = c.k === 'date' ? `${esc(when(c.from, c.fromTime))} → ${esc(when(c.date, c.time))}`
-          : c.k === 'cancelled' ? '' : esc(when(c.date, c.time));
-        return `<li><time>${esc(hm(c.at))}</time><em style="color: var(--${esc(c.type)})">${KIND[c.k] || ''}</em>${what}${how ? ' · ' + how : ''}</li>`;
-      }).join('');
+      // 한 번 정리할 때 바뀐 것들은 같은 시각(at)을 받으니, 이어진 같은 시각끼리 묶는다
+      const byAt = [];
+      recent.forEach(c => {
+        if (!byAt.length || byAt[byAt.length - 1].at !== c.at) byAt.push({ at: c.at, list: [] });
+        byAt[byAt.length - 1].list.push(c);
+      });
+      const li = c => {
+        const what = `<span class="what"><em>${KIND[c.k] || ''}</em>${esc(c.brand)} ${esc(c.title)}</span>`;
+        const color = `--c: var(--${esc(c.type)}); --soft: var(--${esc(c.type)}-soft)`;
+        if (c.k === 'date') {
+          return `<li class="two" style="${color}">${what}<span class="when"><s>${esc(when(c.from, c.fromTime))}</s> → ${esc(when(c.date, c.time))}</span></li>`;
+        }
+        return `<li class="one${c.k === 'cancelled' ? ' x' : ''}" style="${color}">${what}<span class="when">${esc(when(c.date, c.time))}</span></li>`;
+      };
+      $('changes').querySelector('.ch-box').innerHTML = byAt.map(g =>
+        `<p class="ch-at">${esc(hm(g.at))} 정리</p><ul>${g.list.map(li).join('')}</ul>`).join('');
     }
     // 날짜가 아직 안 정해진 일정은 '날짜 확인 필요' 칸으로 따로 뺀다 (날짜 없는 메모는 다가오는 일 맨 위에 그대로)
     const tbd = open.filter(i => !i.date && i.type !== 'memo');
