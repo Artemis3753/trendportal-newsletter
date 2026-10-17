@@ -681,7 +681,9 @@ def publish(d):
         post["featured_media"] = table[featured]["id"]
     result = load(d, "result.json", {})
     if result.get("post_id"):
-        # 이미 만든 초안이 있으면 새로 만들지 않고 그 초안을 고친다
+        # 이미 만든 초안이 있으면 새로 만들지 않고 그 초안을 고친다.
+        # 상태는 안 보낸다 — 사람이 발행한 뒤 고쳐 올려도 다시 초안으로 내려가지 않게
+        post.pop("status")
         p = wp(f"posts/{result['post_id']}", post)
     else:
         p = wp("posts", post)
