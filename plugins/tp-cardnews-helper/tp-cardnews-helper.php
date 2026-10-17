@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.14.2
+ * Version: 1.14.3
  * Author: Trendportal
  */
 
@@ -1139,7 +1139,8 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-prow input:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
 .tpcn-tag { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 11px; font-weight: 700; vertical-align: 2px; }
 .tpcn-tag.is-iv { background: #fde9e2; border-color: #f4b8a5; color: #a8401f; }
-.tpcn-tag.is-ad { background: #e6effd; border-color: #a9c4f2; color: #1f4fa8; }
+/* 광고 딱지 이름표는 is-ad를 쓰면 안 된다: 광고 차단기(EasyList ##.is-ad)가 숨겨 버린다(10/18 896 주문에서 딱지가 안 보임) */
+.tpcn-tag.is-sponsor { background: #e6effd; border-color: #a9c4f2; color: #1f4fa8; }
 .tpcn-go { justify-self: start; padding: 11px 22px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font-family: var(--font-display); font-size: 17px; cursor: pointer; box-shadow: 0 4px 0 #b8401d; }
 .tpcn-go:hover { background: #ec6a43; }
 .tpcn-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #b8401d; }
@@ -1380,7 +1381,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $pub ? ' is-pub' : ''; ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
 			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
 			<div>
-				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php elseif ( 'ad' === $o['kind'] ) : ?><span class="tpcn-tag is-ad">📢 광고</span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
+				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php elseif ( 'ad' === $o['kind'] ) : ?><span class="tpcn-tag is-sponsor">📢 광고</span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
 				<p class="tpcn-when"><?php echo esc_html( $fmt( $o['created'] ) ); ?> 주문</p>
 			</div>
 			<span class="tpcn-chip<?php echo $pub ? ' is-pub' : ''; ?>"><?php echo esc_html( $pub ? '발행됨' : TP_CN_STATUS[ $s ] ); ?></span>
