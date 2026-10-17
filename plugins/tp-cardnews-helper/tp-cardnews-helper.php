@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.9.0
+ * Version: 1.10.0
  * Author: Trendportal
  */
 
@@ -387,6 +387,40 @@ add_action(
 	}
 );
 
+// 발행: 셰프가 만든 초안을 탭에서 바로 공개한다(10/18 사용자 — 편집기에서 열어 발행하던 걸 버튼 하나로).
+// 발행되면 원래 있던 transition_post_status 훅이 zip·영상·대상 사진을 지운다
+add_action(
+	'admin_post_tp_cn_publish',
+	function () {
+		$id = (int) ( $_POST['order'] ?? 0 );
+		check_admin_referer( 'tp_cn_publish_' . $id );
+		$back  = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		$draft = (int) get_post_meta( $id, '_tp_cn_post', true );
+		$fail  = function ( $msg ) use ( $back ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( $msg ), $back ) );
+			exit;
+		};
+		if ( TP_CN_TYPE !== get_post_type( $id ) || ! $draft || 'post' !== get_post_type( $draft ) ) {
+			$fail( '발행할 초안을 찾지 못했어요' );
+		}
+		if ( ! current_user_can( 'publish_post', $draft ) ) {
+			$fail( '이 계정은 글을 발행할 권한이 없어요' );
+		}
+		if ( 'publish' === get_post_status( $draft ) ) {
+			$fail( '이미 발행된 글이에요' );
+		}
+		if ( in_array( get_post_meta( $id, '_tp_cn_status', true ), array( 'working', 'revise', 'answered' ), true ) ) {
+			$fail( '셰프가 이 초안을 고치는 중이에요. 끝난 뒤에 발행해 주세요' );
+		}
+		$r = wp_update_post( array( 'ID' => $draft, 'post_status' => 'publish' ), true );
+		if ( is_wp_error( $r ) ) {
+			$fail( '발행하지 못했어요: ' . $r->get_error_message() );
+		}
+		wp_safe_redirect( add_query_arg( 'tp_cn_info', '발행했어요! 사이트에 공개됐어요.', $back ) );
+		exit;
+	}
+);
+
 // 셰프의 질문에 답하기: 답을 남기고 셰프를 다시 부른다. 셰프는 질문할 때 맡긴 작업 기록을 되살려 이어서 만든다
 add_action(
 	'admin_post_tp_cn_answer',
@@ -653,6 +687,8 @@ function tp_cn_order( $post, $with_state = false ) {
 		'people'  => tp_cn_people_list( $id ),
 		'zip'     => rest_url( "tp-cardnews/v1/orders/{$id}/zip" ),
 		'post_id' => $draft ?: null,
+		// 초안이 발행됐는지(탭에 발행 버튼 대신 '글 보기'를 보이려고). 지워진 초안이면 빈 값
+		'post_status' => $draft ? (string) get_post_status( $draft ) : '',
 		'title'   => get_post_meta( $id, '_tp_cn_title', true ),
 		'changes' => is_array( $changes ) ? $changes : array(),
 		'error'   => get_post_meta( $id, '_tp_cn_error', true ),
@@ -1099,6 +1135,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-links a { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; }
 .tpcn-links a.main { background: var(--ink); border-color: var(--ink); color: #fff; }
 .tpcn-links a:hover { border-color: var(--muted); }
+.tpcn-publish { margin: 0; }
+.tpcn-publish button { padding: 5px 14px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 #b8401d; }
+.tpcn-publish button:hover { background: #ec6a43; }
 .tpcn-body details { margin-top: 8px; }
 .tpcn-body summary { cursor: pointer; color: var(--fresh); font-weight: 700; }
 .tpcn-body details ul { margin: 6px 0 0; padding-left: 18px; }
@@ -1308,8 +1347,18 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				<?php endif; ?>
 				<?php if ( $o['post_id'] ) : ?>
 				<div class="tpcn-links">
+					<?php if ( 'publish' === $o['post_status'] ) : ?>
+					<a class="main" href="<?php echo esc_url( get_permalink( (int) $o['post_id'] ) ); ?>" target="_blank" rel="noopener">✅ 발행됨 · 글 보기</a>
+					<?php else : ?>
 					<a class="main" href="<?php echo esc_url( home_url( '/?p=' . (int) $o['post_id'] . '&preview=true' ) ); ?>" target="_blank" rel="noopener">미리보기</a>
-					<a href="<?php echo esc_url( admin_url( 'post.php?post=' . (int) $o['post_id'] . '&action=edit' ) ); ?>">편집기에서 열기 · 발행</a>
+					<?php // 10/18 사용자: 편집기를 거치지 않고 탭에서 바로 발행. 누르기 전에 한 번 묻는다 ?>
+					<form class="tpcn-publish" method="post" action="<?php echo esc_url( $u['action'] ); ?>" onsubmit="return confirm('이 초안을 사이트에 발행할까요? 발행하면 바로 공개돼요.');">
+						<input type="hidden" name="action" value="tp_cn_publish">
+						<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+						<?php wp_nonce_field( 'tp_cn_publish_' . (int) $o['id'] ); ?>
+						<button type="submit">🚀 발행</button>
+					</form>
+					<?php endif; ?>
 				</div>
 				<?php endif; ?>
 				<?php if ( $o['changes'] ) : ?>
