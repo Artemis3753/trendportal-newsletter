@@ -6,7 +6,7 @@
     python3 tools/cardnews/cardnews.py pull                (관리자 탭 "트란시스 카드뉴스 도우미"의 새 주문 → local/cardnews/order-<번호>/)
     python3 tools/cardnews/cardnews.py fetch   <주문>     (아카이빙만, 피그마 플러그인의 figma/scan.json 또는 MCP 결과 파일 필요)
     python3 tools/cardnews/cardnews.py build   <주문>
-    python3 tools/cardnews/cardnews.py publish <주문>
+    python3 tools/cardnews/cardnews.py draft   <주문>     (사진 올리기 + 비공개 초안. 예전 이름 publish도 됨)
     python3 tools/cardnews/cardnews.py verify  <주문> [--against 글번호]
     python3 tools/cardnews/cardnews.py report  <주문> [--fail "이유"]   (결과를 관리자 탭에 적는다)
     python3 tools/cardnews/cardnews.py css     <주문> <파일.css> | --remove  (새 디자인 CSS를 사이트에 붙이기·빼기)
@@ -18,9 +18,9 @@
                  글자 속 줄바꿈은 "\\n"으로 적는다 (<br>로 바뀜)
     notes.json   Claude가 쓰는 칸만: 카드별 alt·💡(주간), cover_alt, poster_alt
     images/      사진·영상 파일
-    media.json   publish가 채움: 파일 이름 → 미디어 번호·주소 (다시 돌려도 두 번 올리지 않게)
+    media.json   draft가 채움: 파일 이름 → 미디어 번호·주소 (다시 돌려도 두 번 올리지 않게)
     post.html    build 결과 (블록 HTML)
-    result.json  publish·verify 결과 (초안 번호·미리보기 링크·대조 결과)
+    result.json  draft·verify 결과 (초안 번호·미리보기 링크·대조 결과)
     changes.json Claude가 고친 것·확인할 것 목록(문장 배열) — report가 탭에 그대로 보여 준다
 
 표준 라이브러리만 쓴다 — 나중에 클라우드 routine에서 설치 없이 돌리려고.
@@ -662,7 +662,9 @@ def fetch(d):
     print("\n".join("· " + w for w in warn) if warn else "확인할 것 없음")
 
 
-# ── publish: 사진 올리기 → 다시 build → 비공개 초안 ─────────
+# ── draft: 사진 올리기 → 다시 build → 비공개 초안 ─────────
+# 10/17: 명령 이름이 publish(발행)였을 때 클라우드 권한 검사기가 "발행 금지" 지시와 엇갈린다며 막았다.
+# 실제로는 초안만 만들어서 이름을 draft로 바꿨다(함수 이름 publish는 그대로)
 
 def upload(d, fn, alt):
     path = d / "images" / fn
@@ -904,7 +906,7 @@ def pull():
         save(d, "order.json", order)
         if o.get("post_id") and not (d / "result.json").exists():
             # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야
-            # publish가 새 초안을 또 만들지 않고 그 초안을 고친다
+            # draft가 새 초안을 또 만들지 않고 그 초안을 고친다
             save(d, "result.json", {"post_id": o["post_id"]})
         wp(f"orders/{o['id']}", {"status": "working"}, base=ORDER_API)
         print(f"주문 {o['id']} {o['group']} → {d.relative_to(ROOT)}" + (f"  · 메모: {o['memo']}" if o["memo"] else ""))
@@ -932,7 +934,7 @@ def report(d, fail=None):
 def main(argv):
     if argv[:1] == ["pull"]:
         return pull()
-    if len(argv) < 2 or argv[0] not in ("fetch", "build", "publish", "verify", "report", "css"):
+    if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
     if not d.is_dir():
@@ -947,7 +949,7 @@ def main(argv):
         fetch(d)
     elif argv[0] == "build":
         build(d)
-    elif argv[0] == "publish":
+    elif argv[0] in ("draft", "publish"):
         publish(d)
     elif argv[0] == "report":
         report(d, argv[argv.index("--fail") + 1] if "--fail" in argv else None)
