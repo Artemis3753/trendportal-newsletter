@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.16.0
+ * Version: 1.17.0
  * Author: Trendportal
  */
 
@@ -1231,32 +1231,31 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
   .tpcn-prow input[type=url] { grid-column: 1 / -1; grid-row: 2; }
   .tpcn-layouts { grid-template-columns: 1fr; }
 }
-/* ── 영수증 테마(10/18 사용자, 시안 1018-8 B): 깅엄 식탁보 바탕 + 주문서는 줄 공책 + 주문은 아래가 지그재그로 찢긴 영수증.
-   앞의 기본 모양 위에 덮어쓰는 묶음이라 .tpcn을 앞에 붙여 이긴다(기본 규칙을 하나하나 고치지 않고 테마만 갈아 끼울 수 있게) ── */
-body.toplevel_page_tp-cardnews #wpcontent { background: repeating-linear-gradient(0deg, rgba(228, 87, 46, .13) 0 16px, transparent 16px 32px), repeating-linear-gradient(90deg, rgba(228, 87, 46, .13) 0 16px, transparent 16px 32px), #fff8ec; }
-.tpcn .tpcn-towel { display: none; }
-.tpcn .tpcn-head { background: var(--card); padding: 14px 18px; border-radius: 18px; box-shadow: 0 6px 18px rgba(59, 47, 42, .12); margin-top: 30px; }
-.tpcn .tpcn-panel { border: 0; border-radius: 8px; box-shadow: 0 10px 28px rgba(59, 47, 42, .16); }
-/* 주문서 = 줄 공책(30px 줄 + 왼쪽 빨간 이중 여백선) */
-.tpcn .tpcn-panel:has(#tpcn-form) { background: repeating-linear-gradient(var(--card) 0 29px, #f1e3cb 29px 30px); border-left: 6px double #f3a38c; }
-.tpcn .tpcn-panel h2 { font-size: 24px; text-decoration: underline wavy #f3a38c; text-underline-offset: 6px; }
-/* 주문 = 영수증: 위는 상태 색 띠, 아래는 지그재그(mask로 가장자리를 톱니 모양으로 잘라 낸다) */
-.tpcn .tpcn-list { gap: 16px; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .08)); }  /* 그림자는 부모에: mask가 카드 바깥 그림자를 잘라 내서 */
-.tpcn .tpcn-item { grid-template-columns: 64px 1fr auto; border: 0; border-top: 4px solid var(--s); border-radius: 4px 4px 0 0; background: linear-gradient(135deg, var(--s-soft), #fff 68%); padding: 16px 16px 30px; box-shadow: none;
-  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 16px 100%; mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 16px 100%; }
+/* ── 스티커 테마(10/18 사용자, 시안 1018-8 A + 주문 현황은 C): 땡땡이 바탕 + 굵은 갈색 테두리·블록 그림자 스티커 패널,
+   주문 카드만 시안 C처럼 말랑하게(상태 색 → 흰색 그라데이션, 둥근 모서리, 부드러운 그림자).
+   앞의 기본 모양 위에 덮어쓰는 묶음이라 .tpcn을 앞에 붙여 이긴다(테마만 통째로 갈아 끼울 수 있게) ── */
+body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(#ecd3b0 1.3px, transparent 1.5px) 0 0 / 18px 18px; }
+.tpcn .tpcn-towel { height: 16px; border: 2px solid var(--ink); }
+.tpcn .tpcn-panel { border: 2.5px solid var(--ink); border-radius: 26px; box-shadow: 6px 6px 0 var(--ink); background: var(--card); }
+.tpcn .tpcn-panel h2 { font-size: 25px; }
+.tpcn .tpcn-panel:has(#tpcn-form) h2::before { content: "🧾"; margin-right: 2px; }
+.tpcn .tpcn-panel:has(.tpcn-list) h2::before { content: "🍳"; margin-right: 2px; }
+.tpcn .tpcn-kind { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); background: #fff; }
+.tpcn .tpcn-kind input:checked + span { box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18); }
+.tpcn .tpcn-drop { border: 2.5px dashed var(--ink); background: #fff8ec; }
+.tpcn .tpcn-form textarea, .tpcn .tpcn-form input[type=text], .tpcn .tpcn-form input[type=url], .tpcn .tpcn-form input[type=number] { border: 2px solid var(--ink); border-radius: 14px; background: #fff; }
+.tpcn .tpcn-go { border: 2.5px solid var(--ink); border-radius: 16px; box-shadow: 5px 5px 0 var(--ink); }
+.tpcn .tpcn-go:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--ink); }
+.tpcn .tpcn-tag { border: 1.5px solid var(--ink); }
+/* 주문 현황(시안 C): 말랑한 카드 */
+.tpcn .tpcn-list { gap: 12px; }
+.tpcn .tpcn-item { border: 0; border-radius: 26px; background: linear-gradient(135deg, var(--s-soft), #fff 68%); box-shadow: 0 8px 20px rgba(59, 47, 42, .07); padding: 16px; }
 .tpcn .tpcn-item.is-pub { background: linear-gradient(135deg, #ffe7b3, #fff8ea 70%); }
-/* 10/18 사용자: 영수증 바탕에 시안 C의 상태 색 그라데이션(왼쪽 위 상태 색 → 오른쪽 아래 흰색)을 섞는다 */
-.tpcn .tpcn-item.is-fresh { box-shadow: inset 0 0 0 3px var(--s-soft); }  /* 방금 나온 주문: 바깥 고리는 mask에 잘려서 안쪽 고리로 */
-/* 주문 번호 = '#905' 점선 도장, 상태 딱지 = 살짝 기운 고무도장 */
-.tpcn .tpcn-no { display: flex; align-items: center; justify-content: center; min-width: 58px; white-space: nowrap; background: #fff; color: var(--s); border: 2px dashed var(--s); font-family: ui-monospace, Menlo, monospace; font-weight: 700; font-size: 14px; }
-.tpcn .tpcn-no::before { content: "#"; opacity: .6; }
-.tpcn .tpcn-chip { font-family: ui-monospace, Menlo, monospace; letter-spacing: .02em; transform: rotate(4deg); border: 2px solid currentColor; background: #fff; }
-.tpcn .tpcn-chip.is-pub { background: #c27c0e; color: #fff; border-color: #c27c0e; }
-.tpcn .tpcn-body { border-top: 1.5px dashed var(--line-strong); padding-top: 8px; margin-top: 6px; }
-.tpcn .tpcn-go { border-radius: 10px; }
-@media (max-width: 782px) {
-  .tpcn .tpcn-item { grid-template-columns: 64px 1fr; }
-}
+.tpcn .tpcn-item.is-fresh { box-shadow: 0 0 0 3px var(--s-soft), 0 8px 20px rgba(59, 47, 42, .07); }
+.tpcn .tpcn-no { height: 40px; border-radius: 18px 18px 18px 6px; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .15); }
+.tpcn .tpcn-chip { padding: 4px 12px; box-shadow: 0 3px 0 rgba(0, 0, 0, .08); }
+.tpcn .tpcn-links a, .tpcn .tpcn-publish button { border-radius: 16px; box-shadow: 0 4px 0 rgba(0, 0, 0, .18); }
+.tpcn .tpcn-check { border: 0; border-radius: 18px; box-shadow: inset 0 0 0 2px #f2cf7c; }
 </style>
 
 <div class="tpcn-towel" aria-hidden="true"></div>
