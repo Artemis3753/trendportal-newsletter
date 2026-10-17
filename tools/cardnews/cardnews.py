@@ -33,6 +33,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 import zipfile
 import urllib.error
@@ -93,13 +94,21 @@ def wp(path, data=None, headers=None, method=None, base=API, raw=False):
         data = json.dumps(data).encode()
         h["Content-Type"] = "application/json"
     url = path if path.startswith("https://") else base + path
-    req = urllib.request.Request(url, data=data, headers=h, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=300) as r:
-            return r.read() if raw else json.load(r)
-    except urllib.error.HTTPError as e:
-        # 응답 본문 앞부분만 보여 준다 (덩어리 전체를 찍으면 읽기도 어렵고 길다)
-        sys.exit(f"WordPress 오류 {e.code} {path}: {e.read()[:300].decode('utf-8', 'replace')}")
+    # 429(요청이 너무 많음)·5xx는 잠깐 기다렸다 다시 — 클라우드에서 첫 요청이 429로 막힌 적이 있다(10/17 환경 시험).
+    # 429는 서버가 아무것도 안 하고 돌려보낸 것이라 다시 보내도 안전하다. 5xx는 드물게 저장은 된 채 오류만 올 수 있어
+    # 사진·초안이 하나 더 생길 수 있지만, 주문이 통째로 멈추는 것보다 낫다
+    for wait in (10, 30, 60, None):
+        req = urllib.request.Request(url, data=data, headers=h, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=300) as r:
+                return r.read() if raw else json.load(r)
+        except urllib.error.HTTPError as e:
+            if wait and (e.code == 429 or e.code >= 500):
+                print(f"WordPress {e.code} — {wait}초 뒤 다시 해요", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            # 응답 본문 앞부분만 보여 준다 (덩어리 전체를 찍으면 읽기도 어렵고 길다)
+            sys.exit(f"WordPress 오류 {e.code} {path}: {e.read()[:300].decode('utf-8', 'replace')}")
 
 
 # ── build: 주간 총정리 틀 ───────────────────────────────
