@@ -7,7 +7,7 @@ Reference posts are on trendportal.kr as `/archives/<id>/`.
 ## Every post
 
 **Title**
-- Start from the cover text. Put the nouns a reader would search for at the front (brand, product, place, person), then the cover's tone, for example `일본 카피에는 울림이 있다 — 포카리스웨트·칼로리메이트 등 광고 카피 15선`.
+- Start from the cover text and put the nouns a reader would search for (brand, product, place, person) into it, so they come early. **Write one natural line: no dash between two parts** (`—`, `–`, ` - `; site owner, 10/18). Join with words or a comma instead, for example `포카리스웨트·칼로리메이트까지, 울림 있는 일본 광고 카피 15선` or `발가락 양말부터 카프리 팬츠까지, 요즘 촌스러움이 유행하는 이유`, not `일본 카피에는 울림이 있다 — 포카리스웨트·칼로리메이트 등 광고 카피 15선`. Keep it to about two phone lines (30 Korean characters).
 - On a phone the title wraps at about 15 Korean characters. Join a short phrase that belongs together with no-break spaces (U+00A0), but only a few: binding long runs pushes whole chunks to the next line.
 - Weekly roundups keep their issue title (`… (26.10 3주차)`).
 
