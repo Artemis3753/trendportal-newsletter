@@ -8,7 +8,7 @@ Reference posts are on trendportal.kr as `/archives/<id>/`.
 
 **Title**
 - Start from the cover text and put the nouns a reader would search for (brand, product, place, person) into it, so they come early. **Write one natural line: no dash between two parts** (`—`, `–`, ` - `; site owner, 10/18). Join with words or a comma instead, for example `포카리스웨트·칼로리메이트까지, 울림 있는 일본 광고 카피 15선` or `발가락 양말부터 카프리 팬츠까지, 요즘 촌스러움이 유행하는 이유`, not `일본 카피에는 울림이 있다 — 포카리스웨트·칼로리메이트 등 광고 카피 15선`. Keep it to about two phone lines (30 Korean characters).
-- On a phone the title wraps at about 15 Korean characters. Join a short phrase that belongs together with no-break spaces (U+00A0), but only a few: binding long runs pushes whole chunks to the next line.
+- On a phone the title wraps at about 15 Korean characters. Join a short phrase that belongs together with no-break spaces (U+00A0), but only a few: binding long runs pushes whole chunks to the next line. The middle dot `·` is also a break point, on both sides: keep `인스타·스레드` together with a word joiner (U+2060, `\u2060` in JSON) before and after the dot. Check the title at phone width (`shot`, or 360/390/430px) and bind only where a phrase splits, as was done for posts 729, 763 and 857 on 10/18.
 - Weekly roundups keep their issue title (`… (26.10 3주차)`).
 
 **Category** (exactly one)
