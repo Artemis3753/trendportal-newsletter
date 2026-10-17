@@ -326,9 +326,11 @@ def qa_cards(media, cards, notes):
     return out
 
 
-def profile_cards(media, people):
+def profile_cards(media, people, sponsored=False):
     """인터뷰 대상 프로필 카드(498·광고 글 439와 같은 마크업). 인스타 주소가 있는 사람만 — 카드 전체가 그 링크라서.
-    사진은 이름 옆 꾸밈이라 alt를 비운다(이름이 바로 옆에 글자로 있다)"""
+    사진은 이름 옆 꾸밈이라 alt를 비운다(이름이 바로 옆에 글자로 있다).
+    광고 글의 브랜드 카드는 돈 받은 링크라 rel에 sponsored를 단다(439와 같다, 구글이 유료 링크에 요구하는 표시)"""
+    rel = "noreferrer noopener sponsored" if sponsored else "noreferrer noopener"
     out = ""
     for p in people:
         if not p.get("insta"):
@@ -341,7 +343,7 @@ def profile_cards(media, people):
             avatar = f'<span class="tp-ad-avatar"><img src="{src}" alt=""></span>'
         name = p.get("name") or handle
         out += ('<!-- wp:html -->'
-                f'<a class="tp-ad-profile" href="{attr(url)}" target="_blank" rel="noreferrer noopener">{avatar}'
+                f'<a class="tp-ad-profile" href="{attr(url)}" target="_blank" rel="{rel}">{avatar}'
                 f'<span class="tp-ad-name"><b>{esc(name)}</b><small>@{esc(handle)}</small></span>'
                 '<span class="tp-ad-btn">프로필 보기</span></a><!-- /wp:html -->')
     return out
@@ -358,8 +360,14 @@ def build_archive(order, cards, notes, media):
     intro = [para(esc(p)) for p in cards["intro"]]
     # 인터뷰 프로필 카드: 시작 카드는 첫 줄 "[ 트포 인터뷰 : … ]" 바로 아래(광고 글 439의 [광고] 줄 자리와 같다), 끝 카드는 맨 끝
     # 패널형은 대상을 판 안 얼굴로 쓰니 프로필 카드를 따로 안 넣는다(panel_cards 참고)
-    profiles = "" if order.get("layout") == "panel" else profile_cards(media, order.get("people") or [])
-    if profiles:
+    ad = bool(order.get("ad"))
+    profiles = "" if order.get("layout") == "panel" else profile_cards(media, order.get("people") or [], sponsored=ad)
+    if ad:
+        # 광고 폼(탭 1.11.0, 10/18 사용자): 맨 위에 439와 같은 [광고] 표시 줄 → 바로 아래 브랜드 카드, 끝에 한 번 더.
+        # 표시 줄은 캡션에 없더라도 늘 넣는다(유료 광고는 글 첫머리에서 밝혀야 해서)
+        intro.insert(0, para("<strong>[광고]</strong> 이 글은 유료 광고를 포함하고 있습니다."))
+        intro.insert(1, profiles)
+    elif profiles:
         at = 1 if cards["intro"] and cards["intro"][0].lstrip().startswith("[") else 0
         intro.insert(at, profiles)
     out += "".join(intro)
@@ -788,7 +796,7 @@ def profile(d, n, box=None):
     order = load(d, "order.json")
     people = order.get("people") or []
     if not 1 <= n <= len(people):
-        sys.exit(f"인터뷰 대상은 {len(people)}명이에요 (1부터)")
+        sys.exit(f"프로필 대상(인터뷰 대상·광고 브랜드)은 {len(people)}개예요 (1부터)")
     src = d / "uploads" / f"profile-{n}"
     if not src.exists():
         sys.exit(f"{n}번 대상은 받은 프로필 사진이 없어요")
@@ -1493,6 +1501,11 @@ def pull():
             if o.get("kind") == "interview":
                 order["layout"] = o.get("layout") or None
                 order["people"] = pull_people(d, o)
+            # 광고 폼(탭 1.11.0): 광고 브랜드도 같은 people 칸으로 온다. 광고 폼으로 온 주문이 곧 유료 광고라 카테고리는 광고로 둔다
+            elif o.get("kind") == "ad":
+                order["ad"] = True
+                order["people"] = pull_people(d, o)
+                order["categories"] = [18540]
             save(d, "order.json", order)
             if o.get("post_id") and not (d / "result.json").exists():
                 # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야

@@ -79,6 +79,12 @@ One question answered by many people. **Reference: post 843** (approved, made in
 - The script reads `@account / name` from the card (`cards.json` → `who`).
 - Not the dark card-shaped panels (`.tp-pn-card`) tried first: the site owner chose the 843 look instead.
 
+### Paid ad (post 439) — 광고 form
+Built as standard, plus:
+- First paragraph: `<strong>[광고]</strong> 이 글은 유료 광고를 포함하고 있습니다.` A caption line that is only an ad marker (`[광고]`, `#광고`, `AD`) is left out, because this line replaces it.
+- Right under it, and again after the last paragraph: the advertiser's profile card (`tp-ad-profile`, as in the interview), with `rel="noreferrer noopener sponsored"` because it is a paid link. Name, Instagram account and profile photo come from the 광고 form (Instagram link required), never guessed. The photo is cropped like the interview one.
+- Category 광고 (18540).
+
 ### Weekly roundup
 Built by hand, not by the helper: newsletter layout (`tp-wk`), subscriber lock from card 02, the "매주 금요일…" paragraph at the very end.
 
@@ -93,14 +99,16 @@ Posts the site owner approved as the model for their format. When writing a post
 | copy collection | 729 |
 | interview Q&A | 498 |
 | interview panel | 843 |
+| paid ad | 439 (one profile card at the top; new ad posts also get one at the end) |
 
 When a format decision changes in a conversation, update this file in the same session, and add the approved post here. A decision that lives only in someone's notes or a chat does not reach the helper.
 
 ## Order forms
 
-The helper tab (트란시스 카드뉴스 도우미) takes two kinds of orders. Weekly roundups are not ordered there.
+The helper tab (트란시스 카드뉴스 도우미) takes three kinds of orders. Weekly roundups are not ordered there.
 - **카드뉴스**: Figma zip, Instagram caption, video cards, memo. Built as standard.
 - **인터뷰**: the same, plus the interview format (질문 여러 개 = `qa` / 패널 = `panel`, chosen by the person who orders) and the interviewees (name, Instagram link, profile photo, all optional) for the profile cards.
+- **광고**: the same as 카드뉴스, plus the advertiser (name, Instagram link required, profile photo) for the profile cards at the top and the end.
 
 ## Order memo and revision requests
 
