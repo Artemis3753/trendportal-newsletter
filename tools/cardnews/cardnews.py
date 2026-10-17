@@ -71,12 +71,17 @@ def save(d, fn, data):
 # ── WordPress REST ─────────────────────────────────────
 
 def auth_header():
-    # 값에 공백이 있어서(애플리케이션 비밀번호) 셸 source 대신 직접 읽는다
+    # 이 맥: local/cardnews.env / 클라우드 routine: 비밀번호가 환경의 "network secret"에 있어서
+    # 요청이 VM을 나간 뒤 Anthropic 쪽 프록시가 붙여 준다 — 그래서 여기선 아무것도 안 붙인다(셰프가 값을 못 보게)
     env = {}
-    for line in ENV.read_text(encoding="utf-8").splitlines():
-        if "=" in line and not line.lstrip().startswith("#"):
-            k, v = line.split("=", 1)
-            env[k.strip()] = v.strip()
+    if ENV.exists():
+        # 값에 공백이 있어서(애플리케이션 비밀번호) 셸 source 대신 직접 읽는다
+        for line in ENV.read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip()
+    if not env.get("WP_USER"):
+        return {}
     token = base64.b64encode(f"{env['WP_USER']}:{env['WP_APP_PASSWORD']}".encode()).decode()
     return {"Authorization": "Basic " + token}
 
@@ -474,13 +479,20 @@ def pick_photo(paths):
 
 
 def to_web(src, dst):
-    # 피그마 원본은 PNG 수 MB라 사이트용 JPEG(긴 변 2000px)로 줄인다. 맥 기본 sips가 없으면(클라우드 등) 그대로 복사
+    # 피그마 원본은 PNG 수 MB라 사이트용 JPEG(긴 변 2000px)로 줄인다.
+    # 이 맥은 기본 sips, 클라우드(우분투)는 환경 설치 스크립트로 넣은 ffmpeg. 둘 다 없으면 그대로 복사
+    w, h, _ = png_info(src)
     if shutil.which("sips"):
-        w, h, _ = png_info(src)
         # 줄이기만 한다 — 작은 원본을 늘리면 용량만 커지고 더 흐려진다
         resize = ["-Z", "2000"] if max(w, h) > 2000 else []
         subprocess.run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "85", *resize,
                         str(src), "--out", str(dst)], check=True, capture_output=True)
+        return dst.name
+    if shutil.which("ffmpeg"):
+        # 긴 변이 2000을 넘을 때만 그 변을 2000으로(-2 = 비율 유지·짝수). q:v 3 ≈ sips 품질 85 정도
+        scale = ["-vf", "scale=2000:-2" if w >= h else "scale=-2:2000"] if max(w, h) > 2000 else []
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), *scale, "-q:v", "3", str(dst)],
+                       check=True, capture_output=True)
         return dst.name
     dst = dst.with_suffix(src.suffix)
     shutil.copy(src, dst)
@@ -770,6 +782,10 @@ def pull():
         order = load(d, "order.json", {})
         order.update(kind="archive", order_id=o["id"], group=o["group"], videos=o["videos"], memo=o["memo"])
         save(d, "order.json", order)
+        if o.get("post_id") and not (d / "result.json").exists():
+            # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야
+            # publish가 새 초안을 또 만들지 않고 그 초안을 고친다
+            save(d, "result.json", {"post_id": o["post_id"]})
         wp(f"orders/{o['id']}", {"status": "working"}, base=ORDER_API)
         print(f"주문 {o['id']} {o['group']} → {d.relative_to(ROOT)}" + (f"  · 메모: {o['memo']}" if o["memo"] else ""))
 
@@ -781,6 +797,10 @@ def report(d, fail=None):
         sys.exit("탭에서 온 주문이 아니에요 (order.json에 order_id가 없음)")
     if fail:
         body = {"status": "failed", "error": fail}
+        # 초안까지 만든 뒤 멈췄으면 그 번호도 남긴다 — 다시 요리할 때 같은 초안을 고치게(pull 참고)
+        made = load(d, "result.json", {}).get("post_id")
+        if made:
+            body["post_id"] = made
     else:
         result = load(d, "result.json")
         body = {"status": "done", "post_id": result["post_id"], "title": title_of(order),
