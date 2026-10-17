@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Trendportal
  */
 
@@ -26,10 +26,10 @@ const TP_CN_MAX  = 200 * 1024 * 1024; // zip 상한. 764(카드 17장)가 16MB�
 
 // 상태 이름은 영어로 저장하고, 화면에는 한국어로 (REST로 오가는 값이 글자 깨짐 걱정 없게)
 const TP_CN_STATUS = array(
-	'new'     => '접수',
-	'working' => '만드는 중',
-	'done'    => '초안 완료',
-	'failed'  => '멈춤',
+	'new'     => '주문 접수',
+	'working' => '요리 중',
+	'done'    => '완성',
+	'failed'  => '주방 멈춤',
 );
 
 add_action(
@@ -325,7 +325,7 @@ function tp_cn_page() {
 	if ( isset( $_GET['tp_cn_err'] ) ) {
 		$msg = array( 'bad', sanitize_text_field( wp_unslash( $_GET['tp_cn_err'] ) ) );
 	} elseif ( isset( $_GET['tp_cn_ok'] ) ) {
-		$msg = array( 'ok', '주문을 받았어요! 트란시스가 가져가서 초안으로 만들어 둘게요.' );
+		$msg = array( 'ok', '주문 받았어요! 셰프 트란시스가 곧 요리를 시작해요.' );
 	}
 	tp_cn_render(
 		tp_cn_orders(),
@@ -349,25 +349,33 @@ function tp_cn_render( $orders, $msg, $u ) {
 	?>
 <div class="tpcn">
 <style>
-/* 일정표(transis/apps-script/Index.html)와 같은 말투: 둥근 패널, 파스텔 칩, Jua 제목. 관리자 화면 기본 글꼴 위에 덮어쓴다 */
-.tpcn { --bg: #f5f6fa; --card: #fff; --ink: #23242b; --muted: #7b7e8c; --line: #e6e8ef;
-  --new: #3a86ff; --new-soft: #dde9ff; --working: #c49a1c; --working-soft: #f6edd0;
-  --done: #1fa971; --done-soft: #d9f3e7; --failed: #ec4a5a; --failed-soft: #ffe2e5; --fresh: #7a5af8; --fresh-soft: #e8e2ff;
+/* 셰프 트란시스의 주방(10/17 사용자: "요리사 컨셉, 빵모자, 테마·배경도"). 둥근 패널·파스텔 칩·Jua 제목은 일정표와 같은 말투,
+   색은 주방 쪽으로: 크림 바탕, 갈색 글자, 상태 = 주문서 파랑 · 버터(요리 중) · 바질(완성) · 토마토(멈춤) */
+body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfooter { background: #fbf4e6; }
+.tpcn { --bg: #fdf8ee; --card: #fffdf8; --ink: #3b2f2a; --muted: #8c7f73; --line: #efe3cf; --line-strong: #dcc9ab;
+  --new: #3a86ff; --new-soft: #dde9ff; --working: #d08c12; --working-soft: #fbedc9;
+  --done: #2f9e6b; --done-soft: #d9f1e3; --failed: #e4572e; --failed-soft: #fde3da; --fresh: #b8572e; --fresh-soft: #fbe6da;
+  --tomato: #e4572e;
   --font-display: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   max-width: 980px; margin: 18px 20px 40px 0; display: grid; gap: 18px; color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.55; word-break: keep-all; }
 .tpcn * { box-sizing: border-box; }
 .tpcn [hidden] { display: none !important; }
-.tpcn-head { position: relative; display: flex; align-items: center; gap: 12px; }
+/* 맨 위 행주 띠: 토마토색 깅엄 체크 */
+.tpcn-towel { height: 12px; border-radius: 999px; opacity: .85;
+  background: repeating-linear-gradient(90deg, rgba(228, 87, 46, .55) 0 12px, transparent 12px 24px), repeating-linear-gradient(0deg, rgba(228, 87, 46, .55) 0 6px, #fff6ea 6px 12px); }
+.tpcn-head { position: relative; display: flex; align-items: center; gap: 14px; padding-top: 18px; }
 .tpcn-face { position: relative; flex: none; border: 0; padding: 0; background: none; border-radius: 50%; cursor: pointer; }
-.tpcn-face img { display: block; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.tpcn-face img { display: block; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 3px var(--card), 0 4px 12px rgba(59, 47, 42, .18); }
 .tpcn-face:focus-visible { outline: 2px solid var(--new); outline-offset: 2px; }
+/* 셰프 모자: 사진은 그대로 두고 그림을 머리 위에 얹는다 */
+.tpcn-hat { position: absolute; left: 6px; top: -30px; width: 46px; height: auto; transform: rotate(-10deg); pointer-events: none; filter: drop-shadow(0 2px 2px rgba(59, 47, 42, .15)); }
 /* 오른쪽 위 반짝이: 눌러 볼 수 있다는 작은 신호(일정표와 같음) */
-.tpcn-spark { position: absolute; top: -6px; right: -8px; font-size: 17px; line-height: 1; pointer-events: none; }
+.tpcn-spark { position: absolute; top: 0; right: -10px; font-size: 16px; line-height: 1; pointer-events: none; }
 .tpcn-head h1 { margin: 0; padding: 0; font-family: var(--font-display); font-weight: 400; font-size: 27px; line-height: 1.15; color: var(--ink); }
 .tpcn-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 /* 얼굴을 누르면 쓰는 법이 말풍선으로 */
-.tpcn-bubble { position: absolute; z-index: 5; top: 64px; left: 0; width: min(380px, 100%); margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); font-size: 13px; box-shadow: 0 8px 24px rgba(20, 22, 40, .18); }
+.tpcn-bubble { position: absolute; z-index: 5; top: 86px; left: 0; width: min(380px, 100%); margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); font-size: 13px; box-shadow: 0 8px 24px rgba(20, 22, 40, .18); }
 .tpcn-bubble::before { content: ""; position: absolute; top: -7px; left: 20px; width: 12px; height: 12px; background: var(--card); border: solid var(--line); border-width: 1px 0 0 1px; transform: rotate(45deg); border-radius: 2px; }
 .tpcn-bubble ol { margin: 0; padding-left: 18px; }
 .tpcn-bubble li { margin: 2px 0; }
@@ -380,7 +388,7 @@ function tp_cn_render( $orders, $msg, $u ) {
 .tpcn-msg { margin: 0; padding: 12px 16px; border-radius: 14px; font-weight: 700; }
 .tpcn-msg.ok { background: var(--done-soft); color: #13784f; }
 .tpcn-msg.bad { background: var(--failed-soft); color: #b42333; }
-.tpcn-panel { background: var(--card); border-radius: 22px; padding: 18px; box-shadow: 0 1px 2px rgba(20, 22, 40, .04), 0 8px 24px rgba(20, 22, 40, .05); min-width: 0; }
+.tpcn-panel { background: var(--card); border-radius: 22px; padding: 18px; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(59, 47, 42, .04), 0 8px 24px rgba(59, 47, 42, .06); min-width: 0; }
 .tpcn-panel h2 { margin: 0 0 14px; font-family: var(--font-display); font-weight: 400; font-size: 20px; display: flex; align-items: baseline; gap: 8px; color: var(--ink); }
 .tpcn-panel h2 small { font-family: var(--font-body); font-size: 12px; color: var(--muted); font-weight: 500; }
 .tpcn-form { display: grid; gap: 14px; }
@@ -390,15 +398,16 @@ function tp_cn_render( $orders, $msg, $u ) {
 .tpcn textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; color: var(--ink); resize: vertical; }
 .tpcn textarea:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
 /* zip 넣는 칸: 점선 상자. 고르면 파일 이름이 상자 안에 뜬다 */
-.tpcn-drop { position: relative; display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px dashed #c9ccda; border-radius: 16px; background: var(--bg); cursor: pointer; }
+.tpcn-drop { position: relative; display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px dashed var(--line-strong); border-radius: 16px; background: var(--bg); cursor: pointer; }
 .tpcn-drop:hover, .tpcn-drop.is-over { border-color: var(--new); background: var(--new-soft); }
 .tpcn-drop.has-file { border-style: solid; border-color: var(--done); background: var(--done-soft); }
 .tpcn-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .tpcn-drop .tpcn-ico { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--card); font-size: 20px; }
 .tpcn-drop b { display: block; font-size: 14px; }
 .tpcn-drop span { font-size: 12px; color: var(--muted); }
-.tpcn-go { justify-self: start; padding: 11px 22px; border: 0; border-radius: 999px; background: var(--ink); color: #fff; font-family: var(--font-display); font-size: 17px; cursor: pointer; }
-.tpcn-go:hover { background: #3a3c48; }
+.tpcn-go { justify-self: start; padding: 11px 22px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font-family: var(--font-display); font-size: 17px; cursor: pointer; box-shadow: 0 4px 0 #b8401d; }
+.tpcn-go:hover { background: #ec6a43; }
+.tpcn-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #b8401d; }
 .tpcn-go:disabled { opacity: .5; cursor: wait; }
 .tpcn-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
 .tpcn-item { display: grid; grid-template-columns: 44px 1fr auto; gap: 4px 12px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 16px; }
@@ -432,19 +441,22 @@ function tp_cn_render( $orders, $msg, $u ) {
 }
 </style>
 
+<div class="tpcn-towel" aria-hidden="true"></div>
 <header class="tpcn-head">
 	<button type="button" class="tpcn-face" id="tpcn-face" aria-label="쓰는 법 보기" aria-controls="tpcn-bubble">
-		<img src="<?php echo esc_url( $u['face'] ); ?>" width="52" height="52" alt="트란시스 마스코트, 허스키 인형"><span class="tpcn-spark" aria-hidden="true">✨</span>
+		<img src="<?php echo esc_url( $u['face'] ); ?>" width="56" height="56" alt="셰프 모자를 쓴 트란시스 마스코트, 허스키 인형">
+		<svg class="tpcn-hat" viewBox="0 0 64 50" aria-hidden="true"><path d="M15 35C4 35 2 20 13 18 12 6 27 2 32 10c5-8 21-5 19 8 11 2 9 17-2 17Z" fill="#fff" stroke="#dcc9ab" stroke-width="2.2" stroke-linejoin="round"/><rect x="15" y="32" width="34" height="13" rx="3.5" fill="#fff" stroke="#dcc9ab" stroke-width="2.2"/><path d="M24 34v9M32 34v9M40 34v9" stroke="#efe3cf" stroke-width="2.2" stroke-linecap="round"/></svg>
+		<span class="tpcn-spark" aria-hidden="true">✨</span>
 	</button>
 	<div>
 		<h1>트란시스 카드뉴스 도우미</h1>
-		<p>피그마 zip을 넣어 주면 사이트 초안으로 만들어 둘게요</p>
+		<p>피그마 zip을 주문서로 넣어 주면, 셰프 트란시스가 사이트 초안으로 요리해 둘게요</p>
 	</div>
 	<div class="tpcn-bubble" id="tpcn-bubble" role="status" hidden>
 		<ol>
 			<li>피그마에서 카드 묶음을 선택하고 플러그인 <b>트란시스 카드뉴스 읽기</b> → zip 내려받기</li>
 			<li>여기에 zip · 인스타 캡션 · (있으면) 영상 주소 넣고 <b>주문 넣기</b></li>
-			<li><b>초안 완료</b>가 뜨면 미리보기 보고, 고친 것 목록 확인한 뒤 발행!</li>
+			<li><b>완성</b>이 뜨면 미리보기로 맛보고, 셰프가 손본 것 확인한 뒤 발행!</li>
 		</ol>
 	</div>
 </header>
@@ -454,7 +466,7 @@ function tp_cn_render( $orders, $msg, $u ) {
 	<?php endif; ?>
 
 <section class="tpcn-panel">
-	<h2>새 주문 <small>카드뉴스 하나 = 주문 하나</small></h2>
+	<h2>새 주문서 <small>카드뉴스 하나 = 주문 하나</small></h2>
 	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data">
 		<input type="hidden" name="action" value="tp_cn_order">
 		<?php echo $u['nonce']; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_nonce_field 결과 ?>
@@ -484,11 +496,11 @@ function tp_cn_render( $orders, $msg, $u ) {
 </section>
 
 <section class="tpcn-panel">
-	<h2>주문 목록 <small>최근 30개</small></h2>
+	<h2>주문 현황 <small>최근 30개</small></h2>
 	<?php if ( ! $orders ) : ?>
 	<div class="tpcn-empty">
 		<img src="<?php echo esc_url( $u['rest'] ); ?>" width="180" alt="쉬고 있는 트란시스">
-		<p>아직 주문이 없어요. 트란시스는 쉬는 중!</p>
+		<p>아직 주문이 없어요. 셰프 트란시스는 쉬는 중!</p>
 	</div>
 	<?php else : ?>
 	<ol class="tpcn-list">
@@ -505,11 +517,11 @@ function tp_cn_render( $orders, $msg, $u ) {
 			<span class="tpcn-chip"><?php echo esc_html( TP_CN_STATUS[ $s ] ); ?></span>
 			<div class="tpcn-body">
 			<?php if ( 'new' === $s ) : ?>
-				<p>트란시스가 곧 가져가요.</p>
+				<p>셰프 트란시스가 곧 주문서를 가져가요.</p>
 			<?php elseif ( 'working' === $s ) : ?>
-				<p>사진을 고르고 글을 짜는 중이에요.</p>
+				<p>사진을 고르고 글을 굽는 중이에요.</p>
 			<?php elseif ( 'failed' === $s ) : ?>
-				<p><?php echo esc_html( $o['error'] ?: '이유를 남기지 못하고 멈췄어요.' ); ?></p>
+				<p><?php echo esc_html( $o['error'] ?: '이유를 남기지 못하고 주방이 멈췄어요.' ); ?></p>
 			<?php else : ?>
 				<?php if ( $o['title'] ) : ?>
 				<p class="tpcn-title"><?php echo esc_html( $o['title'] ); ?></p>
@@ -522,7 +534,7 @@ function tp_cn_render( $orders, $msg, $u ) {
 				<?php endif; ?>
 				<?php if ( $o['changes'] ) : ?>
 				<details>
-					<summary>트란시스가 고친 것 <?php echo count( $o['changes'] ); ?>건</summary>
+					<summary>셰프가 손본 것 <?php echo count( $o['changes'] ); ?>건</summary>
 					<ul>
 						<?php foreach ( $o['changes'] as $c ) : ?>
 						<li><?php echo esc_html( $c ); ?></li>
