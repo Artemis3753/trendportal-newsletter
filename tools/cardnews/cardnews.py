@@ -9,6 +9,7 @@
     python3 tools/cardnews/cardnews.py publish <주문>
     python3 tools/cardnews/cardnews.py verify  <주문> [--against 글번호]
     python3 tools/cardnews/cardnews.py report  <주문> [--fail "이유"]   (결과를 관리자 탭에 적는다)
+    python3 tools/cardnews/cardnews.py css     <주문> <파일.css> | --remove  (새 디자인 CSS를 사이트에 붙이기·빼기)
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
@@ -260,7 +261,21 @@ def build_archive(order, cards, notes, media):
     if copy:
         out += "</div><!-- /wp:group -->"
     out += "".join(para(esc(p)) for p in cards.get("outro", []))
+    if order.get("design"):
+        # 셰프가 새 디자인을 만든 글: 커버 뒤 본문 전체를 이름표 하나로 감싼다.
+        # `css` 명령은 이 이름표로 시작하는 규칙만 받아서, 새 CSS가 다른 글에 닿지 않는다(10/17 사용자: 새 규칙은 새 class 안에만)
+        cls = design_class(order)
+        cover = image_block(media, order["cover_photo"], notes.get("cover_alt", ""), size="large",
+                            cls="tp-cover-photo", link_none=True) if order.get("cover_photo") else ""
+        out = cover + group(cls, out[len(cover):])
     return out
+
+
+def design_class(order):
+    cls = order["design"]
+    if not re.fullmatch(r"tp-fmt-[a-z0-9-]+", cls):
+        sys.exit(f"design 이름표는 tp-fmt-영문소문자 모양이어야 해요: {cls}")
+    return cls
 
 
 def title_of(order):
@@ -757,6 +772,102 @@ def verify(d, against=None):
     print("\n".join(problems) if problems else f"초안 {result['post_id']}: 차이 없음")
 
 
+# ── css: 새 디자인 CSS를 사이트 추가 CSS 맨 끝에 붙이기 ──────────
+# 10/17 사용자: 클라우드 셰프도 필요하면 CSS를 바꿔도 된다. 대신 안전장치를 사람 손이 아니라 이 명령이 지킨다:
+# ① 규칙마다 선택자가 그 주문의 이름표(order.json design, 예: .tp-fmt-shop-grid)로 시작해야 한다 → 다른 글엔 안 닿음
+# ② 주문 번호 표시로 감싸서 붙인다 → 다시 돌리면 그 덩어리만 바뀌고, --remove로 뺄 수 있다
+# ③ 저장한 뒤 라이브를 다시 읽어 대조한다
+# 저장소의 site/additional.css는 클라우드에서 커밋할 수 없으니 다음 로컬 세션에서 라이브와 맞춘다
+
+def css_rules(css):
+    """CSS → [(선택자 머리, 몸통)]. @media·@supports 안쪽까지 내려간다. 괄호가 어긋나면 ("?", 이유)."""
+    out, i = [], 0
+    while i < len(css):
+        j = css.find("{", i)
+        if j < 0:
+            if css[i:].strip():
+                out.append(("?", f"규칙 밖 글자: {css[i:].strip()[:40]}"))
+            break
+        depth, k = 1, j + 1
+        while k < len(css) and depth:
+            depth += {"{": 1, "}": -1}.get(css[k], 0)
+            k += 1
+        if depth:
+            out.append(("?", "괄호가 안 닫혔어요"))
+            break
+        head, body = css[i:j].strip(), css[j + 1:k - 1]
+        if re.match(r"@(media|supports)\b", head):
+            out += css_rules(body)
+        else:
+            out.append((head, body))
+        i = k
+    return out
+
+
+def css_problems(css, cls):
+    bad = []
+    for head, body in css_rules(css):
+        if head == "?":
+            bad.append(body)
+        elif head.startswith("@"):
+            # 애니메이션 이름도 이름표로 시작해야 겹치지 않는다. @import·@font-face 등은 안 받는다(글꼴은 라이선스 확인이 먼저)
+            if not re.fullmatch(rf"@keyframes\s+{re.escape(cls)}[\w-]*", head):
+                bad.append(f"이 규칙은 못 받아요: {head[:40]}")
+        else:
+            for sel in head.split(","):
+                if not re.match(rf"\.{re.escape(cls)}(?![\w-])", sel.strip()):
+                    bad.append(f".{cls}로 시작하지 않는 선택자: {sel.strip()[:60]}")
+        for u in re.findall(r"url\(\s*['\"]?([^'\")]*)", body):
+            if not u.startswith("https://trendportal.kr/"):
+                bad.append(f"사이트 밖 그림 주소는 못 써요: {u[:60]}")
+    if "</" in css:
+        bad.append("</ 는 CSS에 쓸 수 없어요")
+    return bad
+
+
+def css_marks(order_id):
+    return f"/* cardnews order {order_id} start */", f"/* cardnews order {order_id} end */"
+
+
+def styles_url():
+    # 블록 테마의 "추가 CSS"는 전역 스타일 글(global-styles/<번호>)의 styles.css에 들어 있다(10/17 확인: 라이브 = site/additional.css)
+    theme = wp("themes?status=active&_fields=_links")[0]
+    return theme["_links"]["wp:user-global-styles"][0]["href"]
+
+
+def css(d, src=None, remove=False):
+    order = load(d, "order.json")
+    oid = order.get("order_id") or d.name
+    start, end = css_marks(oid)
+    url = styles_url()
+    g = wp(url + "?context=edit")
+    live = g["styles"].get("css", "")
+    # 이 주문이 전에 붙인 덩어리는 먼저 뺀다(다시 돌려도 두 번 붙지 않게)
+    base = re.sub(rf"\n*{re.escape(start)}.*?{re.escape(end)}\n?", "\n", live, flags=re.S).rstrip() + "\n"
+    if remove:
+        new = base
+    else:
+        cls = design_class(order)
+        # 주석은 뺀다: 표시 주석을 흉내 내는 글자를 막고, 한글 주석이 저장에서 문제를 일으킨 적이 있어서(9/20 MCP)
+        add = re.sub(r"/\*.*?\*/", "", Path(src).read_text(encoding="utf-8"), flags=re.S).strip()
+        bad = css_problems(add, cls)
+        if bad:
+            sys.exit("CSS를 붙이지 않았어요:\n" + "\n".join("· " + b for b in bad))
+        new = f"{base}\n{start}\n{add}\n{end}\n"
+        (d / "design.css").write_text(add + "\n", encoding="utf-8")
+    if new == live:
+        print("바뀐 것 없음")
+        return
+    styles = dict(g["styles"], css=new)  # styles는 통째로 덮어쓰므로 글꼴·색 설정도 그대로 같이 보낸다
+    wp(url, {"styles": styles})
+    after = wp(url + "?context=edit")["styles"].get("css", "")
+    if "".join(after.split()) != "".join(new.split()):
+        i, a, b = first_diff(new, after)
+        sys.exit(f"저장했는데 라이브가 달라요 ({i}번째 글자)\n  보낸 것: …{a}…\n  라이브: …{b}…")
+    done = f"추가 CSS에서 주문 {oid} 덩어리를 뺐어요" if remove else "추가 CSS 맨 끝에 붙였어요"
+    print(f"{done} · 라이브 대조 일치 ({len(after):,}자)")
+
+
 # ── pull·report: 관리자 탭(TP Cardnews Helper)과 주고받기 ────────
 # 탭은 주문을 받아 두기만 하고, 요리는 여기서 한다. 클라우드 routine도 같은 명령을 쓴다(10/17 사용자 결정 A)
 
@@ -812,11 +923,17 @@ def report(d, fail=None):
 def main(argv):
     if argv[:1] == ["pull"]:
         return pull()
-    if len(argv) < 2 or argv[0] not in ("fetch", "build", "publish", "verify", "report"):
+    if len(argv) < 2 or argv[0] not in ("fetch", "build", "publish", "verify", "report", "css"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
     if not d.is_dir():
         sys.exit(f"주문 폴더가 없어요: {d}")
+    if argv[0] == "css":
+        if "--remove" in argv:
+            return css(d, remove=True)
+        if len(argv) < 3:
+            sys.exit("css <주문> <파일.css> 또는 css <주문> --remove")
+        return css(d, argv[2])
     if argv[0] == "fetch":
         fetch(d)
     elif argv[0] == "build":
