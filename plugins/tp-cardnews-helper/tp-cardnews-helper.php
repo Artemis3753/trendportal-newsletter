@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.8.0
+ * Version: 1.8.1
  * Author: Trendportal
  */
 
@@ -183,8 +183,8 @@ function tp_cn_parse_video_rows( $cards, $urls, $files ) {
  * 카피 모음형 때처럼 카드 모양으로 자동으로 고르다 엉뚱한 틀이 붙는 일을 막으려고. 값은 cardnews.py의 order.json "layout"과 같다
  */
 const TP_CN_LAYOUTS = array(
-	'qa'    => '질문 여러 개 (498식)',
-	'panel' => '패널 (734식)',
+	'qa'    => '질문 여러 개',
+	'panel' => '패널',
 );
 
 /**
@@ -1136,8 +1136,8 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 			<div class="tpcn-field">
 				<label>인터뷰 형식 <em>필수</em></label>
 				<div class="tpcn-layouts">
-					<label><input type="radio" name="layout" value="qa"><span><b>질문 여러 개</b>한 브랜드·사람에게 여러 질문 (498 글처럼)</span></label>
-					<label><input type="radio" name="layout" value="panel"><span><b>패널</b>질문 하나에 여러 명이 답함 (734 글처럼)</span></label>
+					<label><input type="radio" name="layout" value="qa"><span><b>질문 여러 개</b>한 브랜드·사람에게 여러 질문</span></label>
+					<label><input type="radio" name="layout" value="panel"><span><b>패널</b>질문 하나에 여러 명이 답함</span></label>
 				</div>
 			</div>
 			<div class="tpcn-field">
@@ -1151,7 +1151,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 					</div>
 				</div>
 				<button type="button" class="tpcn-vadd" id="tpcn-padd">+ 한 명 더</button>
-				<p class="tpcn-hint">글 <b>시작과 끝의 프로필 카드</b>에 들어가요. 프로필 사진은 인스타 프로필을 캡처해 동그라미 부분만 잘라 주세요(네모여도 동그랗게 보여요). 비우면 프로필 카드 없이 만들고 알려 드려요. 패널형은 카드에 계정·얼굴이 있어서 보통 비워도 돼요</p>
+				<p class="tpcn-hint">글 <b>시작과 끝의 프로필 카드</b>에 들어가요. 프로필 사진은 인스타 프로필 화면을 캡처해 그대로 올려 주세요. 셰프가 동그란 프로필 사진만 잘라서 써요. 비우면 프로필 카드 없이 만들고 알려 드려요. 패널형은 카드에 계정·얼굴이 있어서 보통 비워도 돼요</p>
 			</div>
 		</div>
 		<div class="tpcn-field">
@@ -1193,7 +1193,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 					<li><b>디자인</b>: <code>카드 배경처럼 어둡게 물들여서</code>처럼 적으면 이 글에만 CSS를 입혀요. 셰프는 화면을 못 보니 미리보기로 확인해 주세요</li>
 					<li><b>제목·카테고리</b>: <code>제목에 '팝업' 넣어 주세요</code>, <code>카테고리는 브랜드</code></li>
 					<li><b>카드에 없는 사실</b>: 인스타 계정, 바른 이름처럼 셰프가 알 수 없는 것</li>
-					<li>아직 못 하는 것: 카피 모음형(729 글 전용)</li>
+					<li>아직 못 하는 것: 카피 모음형 디자인(지금은 일본 카피 글에만 써요)</li>
 					<li>완성 뒤 고칠 것은 "고쳐 주세요"에 같은 식으로 적으면 돼요</li>
 				</ul>
 			</details>
