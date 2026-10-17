@@ -1086,7 +1086,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-how summary { display: inline-block; cursor: pointer; color: var(--fresh); font-weight: 700; }
 .tpcn-how ul { margin: 8px 0 0; padding: 10px 14px 10px 28px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); }
 .tpcn-how li { margin: 3px 0; }
-.tpcn-gif { display: block; width: 100%; max-width: 480px; height: auto; margin-top: 8px; border-radius: 12px; border: 1px solid var(--line); }
+.tpcn-gif { display: block; width: 100%; max-width: 260px; height: auto; margin-top: 8px; border-radius: 12px; border: 1px solid var(--line); }
 .tpcn-how code { padding: 1px 6px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); font-size: 12px; }
 .tpcn textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; color: var(--ink); resize: vertical; }
 .tpcn textarea:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
@@ -1288,10 +1288,10 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				<?php // 10/18 사용자: 프로필 캡처를 어떻게 하는지 움직이는 그림으로. 인터뷰·광고 둘 다 같은 칸이라 여기 하나만 둔다 ?>
 				<details class="tpcn-how">
 					<summary>프로필 사진 캡처하는 법</summary>
-					<img class="tpcn-gif" src="<?php echo esc_url( $u['pcap'] ); ?>" width="640" height="298" loading="lazy" alt="인스타 프로필 화면에서 프로필 사진과 이름이 있는 윗부분을 상자로 표시하고 그 부분으로 확대하는 움직이는 그림">
+					<img class="tpcn-gif" src="<?php echo esc_url( $u['pcap'] ); ?>" width="400" height="400" loading="lazy" alt="인스타 프로필 화면에서 동그란 프로필 사진에 상자를 치고 그 사진으로 확대하는 움직이는 그림">
 					<ul>
 						<li>인스타에서 그 계정의 <b>프로필 화면</b>을 열어요 (PC·폰 다 돼요)</li>
-						<li><b>프로필 사진이 보이게</b> 윗부분만 캡처해요. Mac은 <code>⌘ Shift 4</code>로 끌어서, 폰은 스크린샷 그대로 올려도 돼요</li>
+						<li><b>동그란 프로필 사진만 나오면 돼요.</b> Mac은 <code>⌘ Shift 4</code>로 원 둘레를 끌어서, 폰은 스크린샷 그대로 올려도 돼요</li>
 						<li>스토리 테두리(무지개 고리)가 있어도 괜찮아요. 셰프가 동그란 사진만 잘라서 써요</li>
 					</ul>
 				</details>
