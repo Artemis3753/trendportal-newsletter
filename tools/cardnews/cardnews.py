@@ -221,7 +221,15 @@ def build_archive(order, cards, notes, media):
         out += image_block(media, order["cover_photo"], notes.get("cover_alt", ""),
                            size="large", cls="tp-cover-photo", link_none=True)
     out += "".join(para(esc(p)) for p in cards["intro"])
+    # 카피 모음형(카드마다 "-브랜드-" 줄이 있는 764식)은 원본처럼 어두운 전시장 띠 하나에 카드를 이어 붙인다
+    # (사용자 결정 C, 10/17 — 시안 docs/트렌드포털-시안비교/1017-1-*). 모양은 additional.css의 .tp-copy-stage
+    copy = bool(cards["cards"]) and all(c.get("brand") for c in cards["cards"])
+    if copy:
+        out += ('<!-- wp:group {"align":"full","className":"tp-copy-stage","layout":{"type":"default"}} -->'
+                '<div class="wp-block-group alignfull tp-copy-stage">')
     for card, note in zip(cards["cards"], notes["cards"]):
+        if copy:
+            out += '<!-- wp:group {"className":"tp-copy","layout":{"type":"default"}} --><div class="wp-block-group tp-copy">'
         if card.get("clip"):
             out += clip_block(media, card["clip"], card["poster"])
         if card.get("image"):
@@ -230,13 +238,16 @@ def build_archive(order, cards, notes, media):
             out += video_link(card["video"])
         out += h2(card["title"])
         if card.get("brand"):
-            # 카피 모음형: 카드처럼 카피(제목) 바로 아래 브랜드를 작게 (사용자 결정 B, 10/17)
-            out += ('<!-- wp:paragraph {"className":"tp-brand","fontSize":"small"} -->'
-                    f'<p class="tp-brand has-small-font-size">{esc(card["brand"])}</p><!-- /wp:paragraph -->')
+            # 카피 모음형: 카드처럼 카피(제목) 바로 아래 브랜드 (사용자 결정 B, 10/17). 앞뒤 "—"는 CSS가 붙인다
+            out += para(esc(card["brand"]), "tp-brand")
         out += "".join(para(esc(p)) for p in card["what"])
         if card.get("src"):
             out += ('<!-- wp:paragraph {"className":"tp-source","fontSize":"small"} -->'
                     f'<p class="tp-source has-small-font-size">© {esc(card["src"])}</p><!-- /wp:paragraph -->')
+        if copy:
+            out += "</div><!-- /wp:group -->"
+    if copy:
+        out += "</div><!-- /wp:group -->"
     out += "".join(para(esc(p)) for p in cards.get("outro", []))
     return out
 
