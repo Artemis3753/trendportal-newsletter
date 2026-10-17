@@ -13,6 +13,7 @@
     python3 tools/cardnews/cardnews.py still   <주문> <카드 번호> <초>        (영상 카드 정지 화면·포스터를 그 초 장면으로)
     python3 tools/cardnews/cardnews.py profile <주문> <대상 번호> [x y 한 변]  (인터뷰 대상 프로필 사진을 캡처에서 정사각형으로)
     python3 tools/cardnews/cardnews.py ref     <글 번호>                     (정답 예시 글의 블록 원문 보기, 읽기만)
+    python3 tools/cardnews/cardnews.py shot    <주문>                        (초안이 폰·PC에서 어떻게 보이는지 찍기 → shots/)
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
@@ -33,6 +34,7 @@ import base64
 import html
 import json
 import mimetypes
+import os
 import re
 import shutil
 import subprocess
@@ -795,6 +797,76 @@ def profile(d, n, box=None):
     print(f"{n}번 → {dst.name}")
 
 
+SHELL_URL = "https://trendportal.kr/archives/242/"  # 찍을 때 빌리는 글 페이지(사이트 머리·글꼴·추가 CSS가 다 들어 있다)
+
+
+def browser():
+    """화면을 찍을 크롬. 이 맥은 설치된 크롬, 클라우드는 playwright가 받아 둔 chromium. 없으면 한 번 받는다(몇 분)"""
+    # 클라우드 환경은 PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers에 받는다(10/17 환경 시험: 우분투 24.04, 설치 46초)
+    roots = [Path(p) for p in (os.environ.get("PLAYWRIGHT_BROWSERS_PATH"), "/opt/pw-browsers", Path.home() / ".cache/ms-playwright") if p]
+    pats = ("chromium-*/chrome-linux*/chrome", "chromium_headless_shell-*/chrome-*/chrome-headless-shell",
+            "chromium_headless_shell-*/chrome-linux/headless_shell")
+    # 설치 뒤에 다시 찾아야 해서 부를 때마다 훑는다
+    found = lambda: next((str(p) for p in [os.environ.get("CHROME"), "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                                            shutil.which("google-chrome"), shutil.which("chromium"), shutil.which("chromium-browser"),
+                                            *[x for r in roots for pat in pats for x in sorted(r.glob(pat))]]
+                          if p and Path(p).exists()), None)
+    if not found():
+        print("화면 찍을 브라우저가 없어서 받는 중이에요 (처음 한 번, 몇 분)", file=sys.stderr)
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "playwright"], check=True)
+        subprocess.run([sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"], check=True,
+                       stdout=subprocess.DEVNULL)
+    return found()
+
+
+def shot(d, widths=(390, 1280)):
+    """셰프의 눈(10/17 사용자): 초안이 사이트에서 어떻게 보이는지 폰·PC로 찍어 shots/에 1600px 높이씩 나눠 둔다.
+    비공개 초안 미리보기는 로그인이 필요해서, 공개 글 페이지(SHELL_URL)를 빌려 본문 자리만 이 초안으로 바꿔 찍는다 —
+    Claude Code에서 시안을 찍던 방식과 같다. 머리·글꼴·추가 CSS는 라이브 그대로라 실제와 같게 보인다"""
+    order = load(d, "order.json")
+    out, _ = build(d, quiet=True)
+    out = re.sub(r"\{\{url:([^}]+)\}\}", lambda m: (d / "images" / m.group(1)).resolve().as_uri(), out)
+    out = re.sub(r"\{\{id:[^}]+\}\}", "0", out)
+    title = order.get("title") or ""
+    cat = {3663: "브랜드", 18233: "트렌드", 11788: "인터뷰", 18540: "광고"}.get((order.get("categories") or [0])[0], "")
+    page = get(SHELL_URL).decode("utf-8")
+    # 빌린 글의 제목·카테고리·커버 사진을 이 주문 것으로 바꾼다. 커버는 사이트에선 TP Cover Photo 플러그인이
+    # 본문 맨 위 .tp-cover-photo 사진을 머리(.tp-cover-bg)로 옮기는데, 여기선 그 일을 대신 한다(머리 물든 색은 빌린 글 것 그대로)
+    inject = (f"<script>addEventListener('DOMContentLoaded', () => {{"
+              f"const c = document.querySelector('.wp-block-post-content'); c.innerHTML = {json.dumps(out)};"
+              f"const t = document.querySelector('.wp-block-post-title'); if (t) t.textContent = {json.dumps(title)};"
+              f"const k = document.querySelector('.tp-cover .wp-block-post-terms a'); if (k && {json.dumps(cat)}) k.textContent = {json.dumps(cat)};"
+              f"const f = c.querySelector('figure.tp-cover-photo'), bg = document.querySelector('.tp-cover-bg img');"
+              f"if (f && bg) {{ bg.removeAttribute('srcset'); bg.src = f.querySelector('img').src; f.remove(); }}"
+              f"document.querySelectorAll('img[loading=lazy]').forEach(i => i.loading = 'eager');}});</script>")
+    sd = d / "shots"
+    sd.mkdir(exist_ok=True)
+    for old in sd.glob("*.png"):
+        old.unlink()
+    html_page = sd / "page.html"
+    html_page.write_text(page.replace("</head>", inject + "</head>", 1), encoding="utf-8")
+    chrome = browser()
+    need_ffmpeg()
+    made = []
+    for w in widths:
+        h = 7200 if w < 600 else 4800
+        win = max(w, 600)  # 헤드리스 크롬 창은 500px보다 좁게 안 그려서, 정확한 폭의 iframe을 넣고 가운데만 잘라 낸다
+        frame = sd / f"frame-{w}.html"
+        frame.write_text(f'<body style="margin:0;display:flex;justify-content:center"><iframe src="{html_page.resolve().as_uri()}" '
+                         f'style="width:{w}px;height:{h}px;border:0;display:block"></iframe>', encoding="utf-8")
+        raw = sd / f"raw-{w}.png"
+        subprocess.run([chrome, "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--allow-file-access-from-files",
+                        f"--window-size={win},{h}", "--virtual-time-budget=10000", f"--screenshot={raw}", frame.resolve().as_uri()],
+                       check=True, capture_output=True, timeout=180)
+        for k in range(h // 1600 + (1 if h % 1600 else 0)):
+            part = sd / f"{w}-{k + 1}.png"
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-vf",
+                            f"crop={w}:{min(1600, h - k * 1600)}:{(win - w) // 2}:{k * 1600}", str(part)], check=True)
+            made.append(part.relative_to(d).as_posix())
+        raw.unlink()
+    print("찍었어요 (위에서부터, 아래쪽 빈 화면은 글이 끝난 것):", " ".join(made))
+
+
 def ref(post_id):
     """정답 예시 글(docs/post-formats.md의 Reference posts)의 블록 원문을 보여 준다. 읽기만 한다.
     셰프가 틀에 없는 모양을 직접 짤 때 말 규칙보다 실제 마크업을 보고 따라 하라고(10/17 사용자: 대화 결과와 웹폼 결과를 같게)"""
@@ -1372,6 +1444,8 @@ def main(argv):
         return pull()
     if argv[:1] == ["ref"] and len(argv) == 2:
         return ref(int(argv[1]))
+    if argv[:1] == ["shot"] and len(argv) == 2:
+        return shot(order_dir(argv[1]))
     if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css", "still", "profile"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
