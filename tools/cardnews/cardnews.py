@@ -14,6 +14,7 @@
     python3 tools/cardnews/cardnews.py profile <주문> <대상 번호> [x y 한 변]  (인터뷰 대상 프로필 사진을 캡처에서 정사각형으로)
     python3 tools/cardnews/cardnews.py ref     <글 번호>                     (정답 예시 글의 블록 원문 보기, 읽기만)
     python3 tools/cardnews/cardnews.py shot    <주문>                        (초안이 폰·PC에서 어떻게 보이는지 찍기 → shots/)
+    python3 tools/cardnews/cardnews.py visual  <주문> <카드> <위%> <아래%>   (사진 없는 카드의 그림 칸을 카드 미리보기에서 다시 자르기)
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
@@ -567,6 +568,17 @@ def read_card(fr):
         # 플러그인 결과엔 글자 크기가 있다: 제목 = 가장 큰 글씨. 242(한 줄짜리 레이어 여럿)와
         # 764(두 줄 레이어 하나, 높이 210)가 둘 다 100이라 높이보다 이게 맞다(10/17)
         lines = [t for t in others if font(t) == top]
+        # 가장 큰 글씨가 여러 덩어리로 흩어져 있으면(845의 9번: 그림 속 01~05 목록이 제목과 같은 100) 맨 아래 덩어리가 제목이다.
+        # 위에서 아래로 그림 → 제목 → 본문 순서라서. 덩어리 = 위 줄과 줄 높이 반 이내로 붙어 있는 줄들
+        if len(lines) > 2:
+            lines.sort(key=lambda t: float(t.get("y")))
+            block = [lines[-1]]
+            for t in reversed(lines[:-1]):
+                if float(block[-1].get("y")) - (float(t.get("y")) + float(t.get("height"))) <= float(t.get("height")) / 2:
+                    block.append(t)
+                else:
+                    break
+            lines = block
     else:
         # MCP 메타데이터엔 글자 크기가 없어서: 큰 글씨 한 줄(높이 60~120)
         lines = [t for t in others if 60 <= float(t.get("height")) <= 120]
@@ -586,7 +598,9 @@ def read_card(fr):
         extra = [x for x in extra if not BRAND_LINE.match(x)]
     if src:
         card["src"] = SRC_MARK.sub("", src[0].get("name")).strip()
-    return card, len(lines), extra
+    # 제목 맨 윗줄 높이: 사진 레이어가 없는 카드(인포그래픽 등)는 카드 그림에서 이 위쪽을 잘라 쓴다(fetch 참고)
+    top = min((float(t.get("y")) for t in lines), default=None)
+    return card, len(lines), extra, top
 
 
 def clean_link(url):
@@ -963,6 +977,52 @@ def composite_photo(d, fr, layers, dst):
     return dst.name
 
 
+def card_visual(d, fr, title_top, dst):
+    """사진 레이어가 없는 카드: 플러그인의 카드 미리보기(글자 포함, 가로 500)에서 제목 위 영역을 잘라 쓴다.
+    10/18 주문 845: 3번(76%·75%·52% 동그라미)·9번(01~05 목록)이 글자와 도형으로 그린 인포그래픽이라 사진이 없었고,
+    배경 질감은 카드마다 같은 그림이라 배경으로 빠져서 '사진 없음'으로 주문이 멈췄다. 여기서라면 카드에서 그 부분을 잘라 썼을 것이라 그렇게 한다.
+    제목 위가 카드 높이의 20%도 안 되면 그림이 없는 글자 카드로 보고 None"""
+    prev = d / "figma" / "cards" / f"{fr.get('name')}.jpg"
+    if title_top is None or not prev.exists():
+        return None
+    size = jpeg_size(prev)
+    if not size:
+        return None
+    fy, fh = float(fr.get("y")), float(fr.get("height"))
+    k = size[1] / fh
+    h = int(((title_top - fy) - fh * 0.02) * k) // 2 * 2  # 제목 바로 위 여백 조금 남기고
+    if h < size[1] * 0.2:
+        return None
+    need_ffmpeg()
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(prev), "-vf", f"crop={size[0] // 2 * 2}:{h}:0:0",
+                    "-q:v", "2", str(dst)], check=True, capture_output=True)
+    return dst.name
+
+
+def visual(d, n, top, bottom):
+    """n번 카드의 그림 칸을 셰프가 정한 높이(카드 위에서부터 %)로 카드 미리보기에서 다시 자른다.
+    fetch의 자동 판별(가장 큰 글씨 = 제목)이 틀리는 카드용 — 845의 3번은 그림 속 숫자(52%·75%·76%)가 제목보다 컸다.
+    어디를 자를지는 셰프가 카드를 보고 정하고, 자르기는 여기서(profile·still과 같은 나눔). 새 이름으로 만든다(still과 같은 이유)"""
+    cards = load(d, "cards.json")
+    card = next((c for c in cards["cards"] if c.get("no") == n), None)
+    group = scan_group(d) if (d / "figma" / "scan.json").exists() else None
+    fr = next((x for i, x in enumerate(reading_order([c for c in group if c.tag == "frame"])) if frame_no(x, i) == n), None) if group is not None else None
+    prev = d / "figma" / "cards" / f"{fr.get('name')}.jpg" if fr is not None else None
+    if card is None or not prev or not prev.exists():
+        sys.exit(f"{n}번 카드나 그 미리보기(figma/cards/)가 없어요")
+    if not 0 <= top < bottom <= 100:
+        sys.exit("위·아래는 카드 높이의 %로, 0 ≤ 위 < 아래 ≤ 100")
+    w, h = jpeg_size(prev)
+    y0, y1 = int(h * top / 100) // 2 * 2, int(h * bottom / 100) // 2 * 2
+    dst = d / "images" / f"{n:02d}-visual-{round(top)}-{round(bottom)}.jpg"
+    need_ffmpeg()
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(prev), "-vf", f"crop={w // 2 * 2}:{y1 - y0}:0:{y0}", "-q:v", "2", str(dst)],
+                   check=True, capture_output=True)
+    card["image"] = dst.name
+    save(d, "cards.json", cards)
+    print(f"{n}번 → {dst.name}")
+
+
 def raws(d, prefix):
     return sorted((d / "figma").glob(f"{prefix}-raw-*"))
 
@@ -1033,7 +1093,7 @@ def fetch(d):
         if not got:
             warn.append(f"{n}번 카드에서 글자를 못 찾았어요")
             continue
-        card, nlines, extra = got
+        card, nlines, extra, title_top = got
         card["no"] = n
         if not card.get("title"):
             warn.append(f"{n}번 제목을 못 찾았어요 (큰 글씨 한 줄이 없음)")
@@ -1065,10 +1125,14 @@ def fetch(d):
                     warn.append(f"{n}번 사진 위에 겹친 그림 {deco}은 빠져요 — 피그마 플러그인으로 zip을 다시 받거나, 카드에서 글자만 숨겨 images/{n:02d}.jpg로")
             if not fn and raws(d, f"card{n:02d}"):
                 fn = to_web(pick_photo(raws(d, f"card{n:02d}")), d / "images" / f"{n:02d}.jpg")
+            if not fn:
+                fn = card_visual(d, fr, title_top, d / "images" / f"{n:02d}.jpg")
+                if fn:
+                    warn.append(f"{n}번은 사진 레이어가 없어서(숫자·목록을 글자와 도형으로 그린 카드 등) 카드 그림에서 제목 위를 잘라 썼어요 — shot으로 확인")
             if fn:
                 card["image"] = fn
             else:
-                warn.append(f"{n}번 사진이 없어요 — 피그마 '{layer}' 레이어를 images/에 내보내 주세요")
+                warn.append(f"{n}번 사진이 없어요 — 카드 미리보기(figma/cards/)를 보고 판단해 주세요")
         cards.append(card)
 
     # 표지: 표지에 쓰인 사진 중 진짜 사진 = 글자 없는 커버, export = 글자 있는 표지(대표 이미지)
@@ -1479,6 +1543,8 @@ def main(argv):
         return ref(int(argv[1]))
     if argv[:1] == ["shot"] and len(argv) == 2:
         return shot(order_dir(argv[1]))
+    if argv[:1] == ["visual"] and len(argv) == 5:
+        return visual(order_dir(argv[1]), int(argv[2]), float(argv[3]), float(argv[4]))
     if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css", "still", "profile"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
