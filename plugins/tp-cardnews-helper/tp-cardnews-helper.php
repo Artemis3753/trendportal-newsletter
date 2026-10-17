@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.6.0
+ * Version: 1.7.0
  * Author: Trendportal
  */
 
@@ -1004,7 +1004,19 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-memo">메모 <em>선택</em></label>
-			<textarea id="tpcn-memo" name="memo" rows="2" placeholder="예: 제목에 '팝업' 넣어 주세요"></textarea>
+			<textarea id="tpcn-memo" name="memo" rows="2" placeholder="예: 인터뷰 패널형으로, 카테고리는 인터뷰 / 제목에 '팝업' 넣어 주세요"></textarea>
+			<?php // 10/17 사용자: 메모로 무엇까지 시킬 수 있는지 화면에서 알 수 있게. 형식 이름은 docs/post-formats.md와 같게 ?>
+			<details class="tpcn-how">
+				<summary>메모로 할 수 있는 것</summary>
+				<ul>
+					<li><b>형식</b>: <code>인터뷰 패널형으로</code> (질문 하나에 여러 명이 답한 카드, 734 글처럼) · 아무 말 없으면 셰프가 카드를 보고 골라요</li>
+					<li><b>디자인</b>: <code>카드 배경처럼 어둡게 물들여서</code>처럼 적으면 이 글에만 CSS를 입혀요. 셰프는 화면을 못 보니 미리보기로 확인해 주세요</li>
+					<li><b>제목·카테고리</b>: <code>제목에 '팝업' 넣어 주세요</code>, <code>카테고리는 브랜드</code></li>
+					<li><b>카드에 없는 사실</b>: 인스타 계정, 바른 이름처럼 셰프가 알 수 없는 것</li>
+					<li>아직 못 하는 것: 질문 여러 개짜리 인터뷰(498 글처럼) 형식, 카피 모음형(729 글 전용)</li>
+					<li>완성 뒤 고칠 것은 "고쳐 주세요"에 같은 식으로 적으면 돼요</li>
+				</ul>
+			</details>
 		</div>
 		<button type="submit" class="tpcn-go" id="tpcn-go">주문 넣기</button>
 	</form>
