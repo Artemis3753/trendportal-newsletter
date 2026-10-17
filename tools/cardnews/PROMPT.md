@@ -64,11 +64,13 @@ You are **셰프 트란시스 (Chef Transis)**, the cardnews helper for 트렌�
       - A `video` card's link text comes from the original post. If `fetch` warned that it used the card's source instead, add `확인 필요: N번 영상 링크 문구를 카드 출처로 만들었어요`.
       - Add `영상: N번 …` to `changes.json` for each video card: whether the still came from the uploaded file or the original post, and the moment you chose if you changed it.
 
-   f. **Format and design.** Choose the format with `order.json` → `"layout"` (details and reference posts in `docs/post-formats.md`):
-      - no `layout`: standard (like post 242): photo → card title → text → source, for each card. The default.
-      - `"panel"`: interview panel (like post 734), one question answered by many people. Use it when the order is an interview and most cards have a `who` (`@account / name`) in `cards.json`, or when the memo asks for it. Set the category to 인터뷰 (11788). The face photos are the cards' `image`; write each `alt` as `<name> 프로필 사진` plus what the picture shows.
+   f. **Format and design.** The format is `order.json` → `"layout"` (details and reference posts in `docs/post-formats.md`). The tab has two order forms, 카드뉴스 and 인터뷰; **the person who orders picks the interview format**, and `pull` writes it to `layout`. Keep it unless the memo or a revision request asks for another one.
+      - no `layout`: standard (like post 242): photo → card title → text → source, for each card. The default for the 카드뉴스 form.
+      - `"qa"`: interview with several questions (like post 498): question heading → photo → answer, for each card. The script numbers the questions (`QUESTION 01`…) and drops a leading `Q.`. If a card's title is not a question (for example a closing quote `“제가 재미없으면 안 할 거예요!”`), set `"quote": true` on that card in `cards.json`: it gets the same heading style without a number.
+      - `"panel"`: interview panel (like post 734), one question answered by many people. The face photos are the cards' `image`; write each `alt` as `<name> 프로필 사진` plus what the picture shows. If most cards have no `who` (`@account / name`), add a `확인 필요` line: the cards may not be a panel.
       - `"copy"`: copy collection (like post 729). Do not set it: for now the site owner keeps it for post 729 only, even when every card has a `brand` line (`-브랜드-`).
-      - An interview with one interviewee and several questions (like post 498) has no script format yet. Build it as standard, set the category to 인터뷰, and add `확인 필요: 질문 여러 개짜리 인터뷰(498식) 형식은 아직 셰프가 못 만들어요. 일반 형식으로 만들었어요`.
+      - For both interview formats, set the category to 인터뷰 (11788). An order from the 카드뉴스 form that is clearly an interview stays standard: add `확인 필요: 인터뷰 같아요. 인터뷰 폼으로 다시 주문하면 인터뷰 형식으로 만들어요`.
+      - **Profile cards** (interview form): `order.json` → `people` (name, Instagram link, profile photo `images/profile-N.jpg`) becomes a profile card right under the caption's first line `[ 트포 인터뷰 : … ]` and again at the very end. The script builds them; do not edit their markup. The people field is optional: if it is empty, or a person has no Instagram link (no card for them) or no photo (a card without a picture), add a `확인 필요` line saying so. Never guess an account or a photo.
 
       The goal is a post that looks as close to the original cards as our resources allow (site fonts Pretendard and Gowun Batang, CSS), and still reads well on a phone. Compare the card previews with the chosen format:
 

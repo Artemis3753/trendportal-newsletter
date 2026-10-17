@@ -270,6 +270,49 @@ def panel_cards(media, cards, notes):
     return out
 
 
+def qa_cards(media, cards, notes):
+    """인터뷰 질문 여러 개(498식, 탭 1.8.0 인터뷰 폼). 카드 하나 = 질문 소제목 → 사진 → 답.
+    카드뉴스 순서(사진 → 소제목)와 반대다: 소제목 위 검정 선이 사진을 앞 문답에서 끊어 주려고(10/13 사용자).
+    셰프가 cards.json에 "quote": true를 단 카드는 질문이 아닌 인용 소제목이라 QUESTION 번호 없이 쓴다"""
+    out, n = "", 0
+    for card, note in zip(cards, notes):
+        text = card["title"].replace("\n", " ")
+        if card.get("quote"):
+            out += ('<!-- wp:heading {"className":"tp-iv-q"} -->'
+                    f'<h2 class="wp-block-heading tp-iv-q">{esc(text)}</h2><!-- /wp:heading -->')
+        else:
+            n += 1
+            out += iv_heading(f"QUESTION {n:02d}", re.sub(r"^Q\s*\d*\s*[.:]\s*", "", text))
+        if card.get("image"):
+            out += image_block(media, card["image"], note.get("alt", ""), size="large", link_none=True)
+        out += "".join(para(esc(p)) for p in card["what"])
+        if card.get("src"):
+            out += ('<!-- wp:paragraph {"className":"tp-source","fontSize":"small"} -->'
+                    f'<p class="tp-source has-small-font-size">© {esc(card["src"])}</p><!-- /wp:paragraph -->')
+    return out
+
+
+def profile_cards(media, people):
+    """인터뷰 대상 프로필 카드(498·광고 글 439와 같은 마크업). 인스타 주소가 있는 사람만 — 카드 전체가 그 링크라서.
+    사진은 이름 옆 꾸밈이라 alt를 비운다(이름이 바로 옆에 글자로 있다)"""
+    out = ""
+    for p in people:
+        if not p.get("insta"):
+            continue
+        handle = re.sub(r"^https?://(www\.)?instagram\.com/", "", p["insta"]).split("/")[0].split("?")[0]
+        url = f"https://www.instagram.com/{handle}/"
+        avatar = ""
+        if p.get("photo"):
+            _, src = media.get(p["photo"])
+            avatar = f'<span class="tp-ad-avatar"><img src="{src}" alt=""></span>'
+        name = p.get("name") or handle
+        out += ('<!-- wp:html -->'
+                f'<a class="tp-ad-profile" href="{attr(url)}" target="_blank" rel="noreferrer noopener">{avatar}'
+                f'<span class="tp-ad-name"><b>{esc(name)}</b><small>@{esc(handle)}</small></span>'
+                '<span class="tp-ad-btn">프로필 보기</span></a><!-- /wp:html -->')
+    return out
+
+
 def build_archive(order, cards, notes, media):
     if len(notes["cards"]) != len(cards["cards"]):
         sys.exit(f"카드 {len(cards['cards'])}장인데 notes는 {len(notes['cards'])}장이에요")
@@ -278,19 +321,26 @@ def build_archive(order, cards, notes, media):
         # TP Cover Photo가 이 이름표(tp-cover-photo) 사진을 글 머리 커버로 옮긴다
         out += image_block(media, order["cover_photo"], notes.get("cover_alt", ""),
                            size="large", cls="tp-cover-photo", link_none=True)
-    out += "".join(para(esc(p)) for p in cards["intro"])
+    intro = [para(esc(p)) for p in cards["intro"]]
+    # 인터뷰 프로필 카드: 시작 카드는 첫 줄 "[ 트포 인터뷰 : … ]" 바로 아래(광고 글 439의 [광고] 줄 자리와 같다), 끝 카드는 맨 끝
+    profiles = profile_cards(media, order.get("people") or [])
+    if profiles:
+        at = 1 if cards["intro"] and cards["intro"][0].lstrip().startswith("[") else 0
+        intro.insert(at, profiles)
+    out += "".join(intro)
     # 카피 모음형(764식)은 원본처럼 어두운 전시장 띠 하나에 카드를 이어 붙인다
     # (사용자 결정 C, 10/17 — 시안 docs/트렌드포털-시안비교/1017-1-*). 모양은 additional.css의 .tp-copy-stage
     # 처음엔 카드마다 "-브랜드-" 줄이 있으면 자동으로 골랐지만, 카드 모양만 보고 틀을 붙이면 엉뚱한 글에도 띠가 생길 수 있어
     # order.json에 "layout": "copy"라고 적은 주문만 쓴다(10/17 사용자: 일단 764 글에만)
     copy = order.get("layout") == "copy"
-    panel = order.get("layout") == "panel"
-    if panel:
-        out += panel_cards(media, cards["cards"], notes["cards"])
+    # 인터뷰 형식(패널·질문 여러 개)은 카드 줄을 따로 만든다 → 아래 일반 카드 줄은 건너뛴다
+    interview = {"panel": panel_cards, "qa": qa_cards}.get(order.get("layout"))
+    if interview:
+        out += interview(media, cards["cards"], notes["cards"])
     if copy:
         out += ('<!-- wp:group {"align":"full","className":"tp-copy-stage","layout":{"type":"default"}} -->'
                 '<div class="wp-block-group alignfull tp-copy-stage">')
-    for card, note in ([] if panel else zip(cards["cards"], notes["cards"])):
+    for card, note in ([] if interview else zip(cards["cards"], notes["cards"])):
         if copy:
             out += '<!-- wp:group {"className":"tp-copy","layout":{"type":"default"}} --><div class="wp-block-group tp-copy">'
         if card.get("clip"):
@@ -312,6 +362,7 @@ def build_archive(order, cards, notes, media):
     if copy:
         out += "</div><!-- /wp:group -->"
     out += "".join(para(esc(p)) for p in cards.get("outro", []))
+    out += profiles
     if order.get("design"):
         # 셰프가 새 디자인을 만든 글: 커버 뒤 본문 전체를 이름표 하나로 감싼다.
         # `css` 명령은 이 이름표로 시작하는 규칙만 받아서, 새 CSS가 다른 글에 닿지 않는다(10/17 사용자: 새 규칙은 새 class 안에만)
@@ -930,6 +981,10 @@ def alts(d):
             out[c["image"]] = n.get("alt", "")
         if c.get("poster"):
             out[c["poster"]] = n.get("poster_alt", "")
+    # 인터뷰 대상 프로필 사진: 본문에선 alt를 비우지만 미디어 보관함에선 누구 사진인지 알 수 있게
+    for p in order.get("people") or []:
+        if p.get("photo"):
+            out[p["photo"]] = f"{p.get('name') or '인터뷰 대상'} 인스타그램 프로필 사진"
     return out
 
 
@@ -1183,6 +1238,19 @@ def pull():
             order = load(d, "order.json", {})
             order.update(kind="archive", order_id=o["id"], group=o["group"], videos=o["videos"], files=files,
                          memo=o["memo"])
+            # 인터뷰 폼(탭 1.8.0): 형식은 주문한 사람이 고른 것 그대로, 대상 사진은 images/profile-N.jpg로
+            if o.get("kind") == "interview":
+                order["layout"] = o.get("layout") or None
+                order["people"] = []
+                for i, p in enumerate(o.get("people") or [], start=1):
+                    person = {"name": p["name"], "insta": p["insta"]}
+                    if p.get("photo"):
+                        (d / "uploads").mkdir(exist_ok=True)
+                        src = d / "uploads" / f"profile-{i}"
+                        src.write_bytes(wp(p["photo"], raw=True))
+                        (d / "images").mkdir(exist_ok=True)
+                        person["photo"] = to_web(src, d / "images" / f"profile-{i}.jpg")
+                    order["people"].append(person)
             save(d, "order.json", order)
             if o.get("post_id") and not (d / "result.json").exists():
                 # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야

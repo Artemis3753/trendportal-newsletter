@@ -64,13 +64,12 @@ For each card: photo → card title (H2, boxed like the card title) → text →
 ### Copy collection (post 729) — `"layout": "copy"`
 All cards on one dark band across the screen, copy in Gowun Batang, `— brand —` under it. **Only post 729 uses it for now**; do not choose it for other posts even if their cards have `-brand-` lines.
 
-### Interview Q&A (post 498)
+### Interview Q&A (post 498) — `"layout": "qa"`
 One interviewee, several questions.
-- A profile card right under the first line (`[ 트포 인터뷰 : … ]`) and again after the last paragraph: `<a class="tp-ad-profile">` with the avatar (`tp-ad-avatar`), name (`<b>`), `@account` (`<small>`) and "프로필 보기". The Instagram account and profile photo come from a person, never guessed.
-- Each question: `<h2 class="wp-block-heading tp-iv-q"><span class="tp-q">QUESTION 01</span> question</h2>`. Keep the space after the label.
+- A profile card right under the first line (`[ 트포 인터뷰 : … ]`) and again after the last paragraph: `<a class="tp-ad-profile">` with the avatar (`tp-ad-avatar`, empty alt: the name is right next to it), name (`<b>`), `@account` (`<small>`) and "프로필 보기". The Instagram account and profile photo come from a person (the interview form), never guessed.
+- Each question: `<h2 class="wp-block-heading tp-iv-q"><span class="tp-q">QUESTION 01</span> question</h2>`. Keep the space after the label. A heading that is not a question (a closing quote) has the same class and no label.
 - Order inside a question: heading → photo → answer (the opposite of standard cards).
 - The cover photo has no text on it. If only a cover with text is available, ask for one without.
-- Not in the script yet: the helper cannot build it on its own.
 
 ### Interview panel (post 734) — `"layout": "panel"`
 One question answered by many people.
@@ -82,10 +81,16 @@ One question answered by many people.
 ### Weekly roundup
 Built by hand, not by the helper: newsletter layout (`tp-wk`), subscriber lock from card 02, the "매주 금요일…" paragraph at the very end.
 
+## Order forms
+
+The helper tab (트란시스 카드뉴스 도우미) takes two kinds of orders. Weekly roundups are not ordered there.
+- **카드뉴스**: Figma zip, Instagram caption, video cards, memo. Built as standard.
+- **인터뷰**: the same, plus the interview format (질문 여러 개 = `qa` / 패널 = `panel`, chosen by the person who orders) and the interviewees (name, Instagram link, profile photo, all optional) for the profile cards.
+
 ## Order memo and revision requests
 
 The memo in the order tab and "고쳐 주세요" come from the site team. Through them a person can ask for:
-- a format: `인터뷰 패널형으로`, `카드 그림처럼 어두운 판으로`
+- a format: `카드 그림처럼 어두운 판으로` (interviews are ordered with the interview form)
 - a category or title
 - design changes for this post (new CSS stays under its own `tp-fmt-…` class)
 - facts the cards do not have: an Instagram account, a corrected name
