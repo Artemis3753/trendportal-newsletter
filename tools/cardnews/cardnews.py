@@ -11,6 +11,7 @@
     python3 tools/cardnews/cardnews.py report  <주문> [--fail "이유"]   (결과를 관리자 탭에 적는다)
     python3 tools/cardnews/cardnews.py css     <주문> <파일.css> | --remove  (새 디자인 CSS를 사이트에 붙이기·빼기)
     python3 tools/cardnews/cardnews.py still   <주문> <카드 번호> <초>        (영상 카드 정지 화면·포스터를 그 초 장면으로)
+    python3 tools/cardnews/cardnews.py profile <주문> <대상 번호> [x y 한 변]  (인터뷰 대상 프로필 사진을 캡처에서 정사각형으로)
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
@@ -721,6 +722,37 @@ def still(d, n, at):
     print(f"{n}번 → {card.get('poster') if card.get('clip') else card['image']}")
 
 
+def profile(d, n, box=None):
+    """인터뷰 대상 n번(1부터) 프로필 사진을 받은 캡처에서 정사각형으로 잘라낸다(10/17 사용자: 캡처만 주면 셰프가 알아서 예쁘게).
+    어디를 자를지는 셰프가 사진을 보고 정하고(판단), 자르기는 여기서 한다(손일) — 영상 정지 화면 고르기와 같은 나눔.
+    box 없이 부르면 캡처 크기만 알려 준다. 늘 받은 원본(uploads/profile-n)에서 자르니 여러 번 다시 잘라도 화질이 안 깎인다.
+    파일 이름에 자른 자리를 붙여 새 이름으로 — media.json에 옛 이름이 올라가 있으면 draft가 다시 안 올려서(still과 같은 이유)"""
+    order = load(d, "order.json")
+    people = order.get("people") or []
+    if not 1 <= n <= len(people):
+        sys.exit(f"인터뷰 대상은 {len(people)}명이에요 (1부터)")
+    src = d / "uploads" / f"profile-{n}"
+    if not src.exists():
+        sys.exit(f"{n}번 대상은 받은 프로필 사진이 없어요")
+    need_ffmpeg()
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                            "-of", "csv=p=0", str(src)], capture_output=True, text=True, check=True)
+    w, h = (int(v) for v in probe.stdout.strip().split(",")[:2])
+    if box is None:
+        print(f"{n}번 캡처 {w}×{h}px — 자르려면: profile <주문> {n} <왼쪽 x> <위 y> <한 변>")
+        return
+    x, y, size = box
+    if x < 0 or y < 0 or size < 40 or x + size > w or y + size > h:
+        sys.exit(f"자를 칸이 캡처({w}×{h}) 밖으로 나가요: x {x}, y {y}, 한 변 {size}")
+    dst = d / "images" / f"profile-{n}-{x}-{y}-{size}.jpg"
+    # 프로필 카드 동그라미는 44px라 400px이면 레티나 화면에서도 넉넉하다
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vf", f"crop={size}:{size}:{x}:{y},scale=400:400",
+                    "-q:v", "2", str(dst)], check=True, capture_output=True)
+    people[n - 1]["photo"] = dst.name
+    save(d, "order.json", order)
+    print(f"{n}번 → {dst.name}")
+
+
 def jpeg_size(path):
     # 가로/세로만 알면 돼서 JPEG 머리만 읽는다 (사진 라이브러리 설치 없이)
     data = path.read_bytes()
@@ -1286,11 +1318,15 @@ def report(d, fail=None):
 def main(argv):
     if argv[:1] == ["pull"]:
         return pull()
-    if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css", "still"):
+    if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css", "still", "profile"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
     if not d.is_dir():
         sys.exit(f"주문 폴더가 없어요: {d}")
+    if argv[0] == "profile":
+        if len(argv) not in (3, 6):
+            sys.exit("profile <주문> <대상 번호> [<왼쪽 x> <위 y> <한 변>]")
+        return profile(d, int(argv[2]), tuple(int(v) for v in argv[3:6]) if len(argv) == 6 else None)
     if argv[0] == "still":
         if len(argv) < 4:
             sys.exit("still <주문> <카드 번호> <초>")

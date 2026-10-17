@@ -66,7 +66,7 @@ All cards on one dark band across the screen, copy in Gowun Batang, `— brand �
 
 ### Interview Q&A (post 498) — `"layout": "qa"`
 One interviewee, several questions.
-- A profile card right under the first line (`[ 트포 인터뷰 : … ]`) and again after the last paragraph: `<a class="tp-ad-profile">` with the avatar (`tp-ad-avatar`, empty alt: the name is right next to it), name (`<b>`), `@account` (`<small>`) and "프로필 보기". The Instagram account and profile photo come from a person (the interview form), never guessed.
+- A profile card right under the first line (`[ 트포 인터뷰 : … ]`) and again after the last paragraph: `<a class="tp-ad-profile">` with the avatar (`tp-ad-avatar`, empty alt: the name is right next to it), name (`<b>`), `@account` (`<small>`) and "프로필 보기". The Instagram account and profile photo come from a person (the interview form), never guessed. The photo may be a raw screenshot: crop a square just inside the profile picture's circle, without Instagram's story ring or white edge (`cardnews.py profile`), because the site draws its own ring.
 - Each question: `<h2 class="wp-block-heading tp-iv-q"><span class="tp-q">QUESTION 01</span> question</h2>`. Keep the space after the label. A heading that is not a question (a closing quote) has the same class and no label.
 - Order inside a question: heading → photo → answer (the opposite of standard cards).
 - The cover photo has no text on it. If only a cover with text is available, ask for one without.
