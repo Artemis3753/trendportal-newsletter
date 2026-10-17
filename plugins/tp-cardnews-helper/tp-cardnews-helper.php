@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.7.0
+ * Version: 1.8.0
  * Author: Trendportal
  */
 
@@ -60,11 +60,20 @@ function tp_cn_dir() {
 	return $dir;
 }
 
-// 주문에 딸린 파일(zip + 영상 카드 파일)을 지운다. 주문을 지울 때, 그리고 글이 발행·휴지통으로 갈 때
+// 주문에 딸린 파일(zip + 영상 카드 파일 + 인터뷰 대상 사진)을 지운다. 주문을 지울 때, 그리고 글이 발행·휴지통으로 갈 때
 function tp_cn_unlink_files( $order_id ) {
 	$names = array( get_post_meta( $order_id, '_tp_cn_zip', true ) );
 	foreach ( (array) get_post_meta( $order_id, '_tp_cn_files', true ) as $f ) {
 		$names[] = is_array( $f ) ? $f['file'] : '';
+	}
+	// 인터뷰 대상은 이름·주소는 남기고(목록·수정 때 필요) 사진 파일만 지운다
+	$people = get_post_meta( $order_id, '_tp_cn_people', true );
+	if ( is_array( $people ) ) {
+		foreach ( $people as $i => $p ) {
+			$names[]              = $p['file'] ?? '';
+			$people[ $i ]['file'] = '';
+		}
+		update_post_meta( $order_id, '_tp_cn_people', $people );
 	}
 	foreach ( array_filter( $names ) as $name ) {
 		if ( is_file( tp_cn_dir() . '/' . $name ) ) {
@@ -165,6 +174,59 @@ function tp_cn_parse_video_rows( $cards, $urls, $files ) {
 				'kind' => $kind,
 			);
 		}
+	}
+	return $out;
+}
+
+/*
+ * 인터뷰 폼(1.8.0, 10/17 사용자: 도우미 = 카드뉴스 폼 + 인터뷰 폼). 형식은 주문하는 사람이 고른다 —
+ * 카피 모음형 때처럼 카드 모양으로 자동으로 고르다 엉뚱한 틀이 붙는 일을 막으려고. 값은 cardnews.py의 order.json "layout"과 같다
+ */
+const TP_CN_LAYOUTS = array(
+	'qa'    => '질문 여러 개 (498식)',
+	'panel' => '패널 (734식)',
+);
+
+/**
+ * 인터뷰 대상 줄들(이름 · 인스타 주소 · 프로필 사진, 모두 선택) → 목록 또는 WP_Error.
+ * 글 시작·끝 프로필 카드 재료다. 비워도 주문은 된다(사용자 결정: 항상 선택) — 셰프가 프로필 카드를 빼고 알린다.
+ * 파일은 아직 옮기지 않는다(다른 칸 검사가 다 끝난 뒤에 옮긴다).
+ */
+function tp_cn_parse_people( $names, $instas, $files ) {
+	$out = array();
+	foreach ( (array) $names as $i => $name ) {
+		$name  = trim( sanitize_text_field( (string) $name ) );
+		$raw   = trim( (string) ( $instas[ $i ] ?? '' ) );
+		$insta = esc_url_raw( $raw, array( 'https', 'http' ) );
+		$has   = isset( $files['error'][ $i ] ) && UPLOAD_ERR_NO_FILE !== $files['error'][ $i ];
+		if ( '' === $name && '' === $raw && ! $has ) {
+			continue;
+		}
+		$who = '' !== $name ? $name : ( '' !== $raw ? $raw : '사진만 넣은 줄' );
+		if ( '' !== $raw && ! preg_match( '#^https?://(www\.)?instagram\.com/[A-Za-z0-9._]+/?#', $insta ) ) {
+			return new WP_Error( 'tp_cn_people', "인터뷰 대상 '{$who}'의 인스타 주소를 못 읽었어요 — https://www.instagram.com/계정/ 모양으로 붙여 넣어 주세요" );
+		}
+		if ( '' === $name && '' === $raw ) {
+			return new WP_Error( 'tp_cn_people', '인터뷰 대상 사진만 있고 이름·인스타 주소가 없는 줄이 있어요' );
+		}
+		$p = array(
+			'name'  => $name,
+			'insta' => $insta,
+			'tmp'   => '',
+			'ext'   => '',
+		);
+		if ( $has ) {
+			if ( UPLOAD_ERR_OK !== $files['error'][ $i ] ) {
+				return new WP_Error( 'tp_cn_people', "인터뷰 대상 '{$who}' 사진을 올리다 멈췄어요 (오류 {$files['error'][ $i ]})" );
+			}
+			$ext = strtolower( pathinfo( $files['name'][ $i ], PATHINFO_EXTENSION ) );
+			if ( 'image' !== ( TP_CN_FILE_TYPES[ $ext ] ?? '' ) || 'image' !== tp_cn_sniff( $files['tmp_name'][ $i ] ) ) {
+				return new WP_Error( 'tp_cn_people', "인터뷰 대상 '{$who}' 사진은 jpg·png·webp만 받아요" );
+			}
+			$p['tmp'] = $files['tmp_name'][ $i ];
+			$p['ext'] = $ext;
+		}
+		$out[] = $p;
 	}
 	return $out;
 }
@@ -434,6 +496,16 @@ add_action(
 		if ( is_wp_error( $rows ) ) {
 			$fail( $rows->get_error_message() );
 		}
+		// 인터뷰 폼: 형식은 꼭 고르고, 대상 칸은 비워도 된다. 카드뉴스 폼이면 인터뷰 칸에 뭐가 남아 있어도 안 본다
+		$interview = 'interview' === ( $_POST['kind'] ?? '' );
+		$layout    = $interview ? sanitize_key( wp_unslash( $_POST['layout'] ?? '' ) ) : '';
+		if ( $interview && ! isset( TP_CN_LAYOUTS[ $layout ] ) ) {
+			$fail( '인터뷰 형식을 골라 주세요 (질문 여러 개 / 패널)' );
+		}
+		$people = $interview ? tp_cn_parse_people( wp_unslash( $_POST['pname'] ?? array() ), wp_unslash( $_POST['pinsta'] ?? array() ), $_FILES['pfile'] ?? array() ) : array();
+		if ( is_wp_error( $people ) ) {
+			$fail( $people->get_error_message() );
+		}
 		$group = tp_cn_check_zip( $file['tmp_name'], $file['name'] );
 		if ( is_wp_error( $group ) ) {
 			$fail( $group->get_error_message() );
@@ -461,6 +533,20 @@ add_action(
 				'kind' => $f['kind'],
 			);
 		}
+		foreach ( $people as $i => $p ) {
+			$people[ $i ]['file'] = '';
+			if ( $p['tmp'] ) {
+				$pname = bin2hex( random_bytes( 16 ) ) . '.' . $p['ext'];
+				if ( ! move_uploaded_file( $p['tmp'], tp_cn_dir() . '/' . $pname ) ) {
+					foreach ( array_merge( array( $name ), array_column( $stored, 'file' ), array_filter( array_column( $people, 'file' ) ) ) as $gone ) {
+						unlink( tp_cn_dir() . '/' . $gone );
+					}
+					$fail( "인터뷰 대상 '{$p['name']}' 사진을 저장하지 못했어요. 잠시 뒤 다시 해 주세요" );
+				}
+				$people[ $i ]['file'] = $pname;
+			}
+			unset( $people[ $i ]['tmp'], $people[ $i ]['ext'] );
+		}
 
 		$id = wp_insert_post(
 			array(
@@ -475,6 +561,9 @@ add_action(
 		update_post_meta( $id, '_tp_cn_videos', $rows['videos'] );
 		update_post_meta( $id, '_tp_cn_files', $stored );
 		update_post_meta( $id, '_tp_cn_memo', trim( sanitize_textarea_field( wp_unslash( $_POST['memo'] ?? '' ) ) ) );
+		update_post_meta( $id, '_tp_cn_kind', $interview ? 'interview' : 'cardnews' );
+		update_post_meta( $id, '_tp_cn_layout', $layout );
+		update_post_meta( $id, '_tp_cn_people', array_values( $people ) );
 
 		if ( ! tp_cn_ring( $id ) ) {
 			// 주문은 저장됐으니 다시 쓸 필요는 없다. 목록의 "셰프 다시 부르기"로 이어서 할 수 있게 알려 준다
@@ -499,6 +588,20 @@ function tp_cn_file_list( $id ) {
 	return $out;
 }
 
+// 인터뷰 대상: 이름·인스타 주소·사진 받는 주소(관리자 인증 필요, 발행 뒤엔 사진이 지워져 null)
+function tp_cn_people_list( $id ) {
+	$people = get_post_meta( $id, '_tp_cn_people', true );
+	$out    = array();
+	foreach ( is_array( $people ) ? $people : array() as $i => $p ) {
+		$out[] = array(
+			'name'  => $p['name'],
+			'insta' => $p['insta'],
+			'photo' => ! empty( $p['file'] ) ? rest_url( "tp-cardnews/v1/orders/{$id}/people/{$i}" ) : null,
+		);
+	}
+	return $out;
+}
+
 /**
  * 주문 하나를 화면·REST에서 같이 쓰는 모양으로.
  */
@@ -516,6 +619,10 @@ function tp_cn_order( $post, $with_state = false ) {
 		// 영상 카드 파일: 카드 번호 → 원래 파일 이름·종류(video|image)·받는 주소(관리자 인증 필요)
 		'files'   => (object) tp_cn_file_list( $id ),
 		'memo'    => get_post_meta( $id, '_tp_cn_memo', true ),
+		// 인터뷰 폼(1.8.0): 1.8.0 전 주문은 값이 없어서 카드뉴스로 본다
+		'kind'    => get_post_meta( $id, '_tp_cn_kind', true ) ?: 'cardnews',
+		'layout'  => get_post_meta( $id, '_tp_cn_layout', true ),
+		'people'  => tp_cn_people_list( $id ),
 		'zip'     => rest_url( "tp-cardnews/v1/orders/{$id}/zip" ),
 		'post_id' => $draft ?: null,
 		'title'   => get_post_meta( $id, '_tp_cn_title', true ),
@@ -676,6 +783,29 @@ add_action(
 					$path  = $f ? tp_cn_dir() . '/' . $f['file'] : '';
 					if ( ! $f || ! is_file( $path ) ) {
 						return new WP_Error( 'tp_cn_none', '파일이 없어요', array( 'status' => 404 ) );
+					}
+					header( 'Content-Type: application/octet-stream' );
+					header( 'Content-Length: ' . filesize( $path ) );
+					readfile( $path );
+					exit;
+				},
+			)
+		);
+
+		// 인터뷰 대상 사진도 같은 방식으로 (번호 = 대상 줄 순서, 0부터)
+		register_rest_route(
+			'tp-cardnews/v1',
+			'/orders/(?P<id>\d+)/people/(?P<no>\d+)',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => $admin,
+				'callback'            => function ( $req ) use ( $find ) {
+					$post   = $find( $req['id'] );
+					$people = $post ? get_post_meta( $post->ID, '_tp_cn_people', true ) : '';
+					$p      = is_array( $people ) ? ( $people[ (int) $req['no'] ] ?? null ) : null;
+					$path   = ! empty( $p['file'] ) ? tp_cn_dir() . '/' . $p['file'] : '';
+					if ( ! $path || ! is_file( $path ) ) {
+						return new WP_Error( 'tp_cn_none', '사진이 없어요', array( 'status' => 404 ) );
 					}
 					header( 'Content-Type: application/octet-stream' );
 					header( 'Content-Length: ' . filesize( $path ) );
@@ -868,6 +998,25 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-vdel { width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }
 .tpcn-vdel:hover { background: var(--failed-soft); color: var(--failed); }
 .tpcn-vadd { margin-top: 8px; padding: 4px 12px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+/* 주문 종류 전환: 알약 두 개 중 하나가 토마토색으로 */
+.tpcn-kind { display: inline-flex; justify-self: start; gap: 4px; padding: 4px; border-radius: 999px; background: var(--bg); border: 1.5px solid var(--line); }
+.tpcn-kind input, .tpcn-layouts input { position: absolute; opacity: 0; pointer-events: none; }
+.tpcn-kind span { display: block; padding: 7px 18px; border-radius: 999px; font-weight: 700; cursor: pointer; }
+.tpcn-kind input:checked + span { background: var(--tomato); color: #fff; }
+.tpcn-kind input:focus-visible + span, .tpcn-layouts input:focus-visible + span { box-shadow: 0 0 0 3px var(--new-soft); }
+/* 인터뷰 칸: 형식 카드 두 장 + 대상 줄 */
+.tpcn-iv { display: grid; gap: 16px; padding: 14px; border-radius: 16px; border: 1.5px dashed var(--line-strong); }
+.tpcn-iv[hidden] { display: none; }
+.tpcn-layouts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tpcn-layouts label { position: relative; margin: 0; font-weight: 500; }
+.tpcn-layouts span { display: block; height: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.tpcn-layouts span b { display: block; margin-bottom: 2px; font-size: 14px; color: var(--ink); }
+.tpcn-layouts input:checked + span { border-color: var(--tomato); background: var(--card); box-shadow: 0 0 0 3px rgba(226, 88, 50, .15); }
+.tpcn-prows { display: grid; gap: 8px; }
+.tpcn-prow { display: grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr) minmax(0, 160px) 32px; gap: 8px; align-items: center; }
+.tpcn-prow input[type=text], .tpcn-prow input[type=url] { width: 100%; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; color: var(--ink); }
+.tpcn-prow input:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
+.tpcn-tag { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 11px; font-weight: 700; vertical-align: 2px; }
 .tpcn-go { justify-self: start; padding: 11px 22px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font-family: var(--font-display); font-size: 17px; cursor: pointer; box-shadow: 0 4px 0 #b8401d; }
 .tpcn-go:hover { background: #ec6a43; }
 .tpcn-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #b8401d; }
@@ -928,6 +1077,10 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
   /* 폰: 번호·파일·지우기 한 줄, 주소는 아래 줄 전체 */
   .tpcn-vrow { grid-template-columns: 64px minmax(0, 1fr) 32px; }
   .tpcn-vrow input[type=url] { grid-column: 1 / -1; grid-row: 2; }
+  /* 폰: 이름·사진·지우기 한 줄, 인스타 주소는 아래 줄 전체. 형식 카드는 세로로 */
+  .tpcn-prow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; }
+  .tpcn-prow input[type=url] { grid-column: 1 / -1; grid-row: 2; }
+  .tpcn-layouts { grid-template-columns: 1fr; }
 }
 </style>
 
@@ -958,10 +1111,15 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 <p class="tpcn-msg ok" id="tpcn-live" role="status" hidden></p>
 
 <section class="tpcn-panel">
-	<h2>새 주문서 <small>카드뉴스 하나 = 주문 하나</small></h2>
+	<h2>새 주문서 <small>카드뉴스·인터뷰 하나 = 주문 하나</small></h2>
 	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data" data-max="<?php echo (int) $u['max']; ?>">
 		<input type="hidden" name="action" value="tp_cn_order">
 		<?php echo $u['nonce']; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_nonce_field 결과 ?>
+		<?php // 주문 종류(1.8.0, 사용자 A): 맨 위에서 고르면 인터뷰일 때만 인터뷰 칸이 나타난다 ?>
+		<div class="tpcn-kind" role="radiogroup" aria-label="주문 종류">
+			<label><input type="radio" name="kind" value="cardnews" checked><span>📰 카드뉴스</span></label>
+			<label><input type="radio" name="kind" value="interview"><span>🎤 인터뷰</span></label>
+		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-zip">피그마 zip <em>필수</em></label>
 			<div class="tpcn-drop" id="tpcn-drop">
@@ -973,6 +1131,28 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		<div class="tpcn-field">
 			<label for="tpcn-caption">인스타 캡션 <em>필수</em></label>
 			<textarea id="tpcn-caption" name="caption" rows="7" required placeholder="인스타 게시물 본문을 그대로 붙여 넣어 주세요 (해시태그 줄은 알아서 빼요)"></textarea>
+		</div>
+		<div class="tpcn-iv" id="tpcn-iv" hidden>
+			<div class="tpcn-field">
+				<label>인터뷰 형식 <em>필수</em></label>
+				<div class="tpcn-layouts">
+					<label><input type="radio" name="layout" value="qa"><span><b>질문 여러 개</b>한 브랜드·사람에게 여러 질문 (498 글처럼)</span></label>
+					<label><input type="radio" name="layout" value="panel"><span><b>패널</b>질문 하나에 여러 명이 답함 (734 글처럼)</span></label>
+				</div>
+			</div>
+			<div class="tpcn-field">
+				<label>인터뷰 대상 <em>선택</em></label>
+				<div class="tpcn-prows" id="tpcn-prows">
+					<div class="tpcn-prow">
+						<input type="text" name="pname[0]" placeholder="이름 (예: 짐빔)" aria-label="이름">
+						<input type="url" name="pinsta[0]" placeholder="인스타 주소 (https://www.instagram.com/계정/)" aria-label="인스타 주소">
+						<label class="tpcn-vfile"><input type="file" name="pfile[0]" accept="image/jpeg,image/png,image/webp" title=""><span>🖼 프로필 사진</span></label>
+						<button type="button" class="tpcn-vdel" aria-label="이 줄 지우기">×</button>
+					</div>
+				</div>
+				<button type="button" class="tpcn-vadd" id="tpcn-padd">+ 한 명 더</button>
+				<p class="tpcn-hint">글 <b>시작과 끝의 프로필 카드</b>에 들어가요. 프로필 사진은 인스타 프로필을 캡처해 동그라미 부분만 잘라 주세요(네모여도 동그랗게 보여요). 비우면 프로필 카드 없이 만들고 알려 드려요. 패널형은 카드에 계정·얼굴이 있어서 보통 비워도 돼요</p>
+			</div>
 		</div>
 		<div class="tpcn-field">
 			<label>영상 카드 <em>있을 때만</em></label>
@@ -1004,16 +1184,16 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-memo">메모 <em>선택</em></label>
-			<textarea id="tpcn-memo" name="memo" rows="2" placeholder="예: 인터뷰 패널형으로, 카테고리는 인터뷰 / 제목에 '팝업' 넣어 주세요"></textarea>
+			<textarea id="tpcn-memo" name="memo" rows="2" placeholder="예: 카드 배경처럼 어둡게 물들여서 / 제목에 '팝업' 넣어 주세요"></textarea>
 			<?php // 10/17 사용자: 메모로 무엇까지 시킬 수 있는지 화면에서 알 수 있게. 형식 이름은 docs/post-formats.md와 같게 ?>
 			<details class="tpcn-how">
 				<summary>메모로 할 수 있는 것</summary>
 				<ul>
-					<li><b>형식</b>: <code>인터뷰 패널형으로</code> (질문 하나에 여러 명이 답한 카드, 734 글처럼) · 아무 말 없으면 셰프가 카드를 보고 골라요</li>
+					<li><b>인터뷰</b>는 메모 대신 맨 위 <b>🎤 인터뷰</b>를 눌러 형식·대상을 골라 주세요</li>
 					<li><b>디자인</b>: <code>카드 배경처럼 어둡게 물들여서</code>처럼 적으면 이 글에만 CSS를 입혀요. 셰프는 화면을 못 보니 미리보기로 확인해 주세요</li>
 					<li><b>제목·카테고리</b>: <code>제목에 '팝업' 넣어 주세요</code>, <code>카테고리는 브랜드</code></li>
 					<li><b>카드에 없는 사실</b>: 인스타 계정, 바른 이름처럼 셰프가 알 수 없는 것</li>
-					<li>아직 못 하는 것: 질문 여러 개짜리 인터뷰(498 글처럼) 형식, 카피 모음형(729 글 전용)</li>
+					<li>아직 못 하는 것: 카피 모음형(729 글 전용)</li>
 					<li>완성 뒤 고칠 것은 "고쳐 주세요"에 같은 식으로 적으면 돼요</li>
 				</ul>
 			</details>
@@ -1038,7 +1218,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
 			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
 			<div>
-				<h3><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
+				<h3><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag">🎤 <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '인터뷰' ); ?></span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
 				<p class="tpcn-when"><?php echo esc_html( $fmt( $o['created'] ) ); ?> 주문</p>
 			</div>
 			<span class="tpcn-chip"><?php echo esc_html( TP_CN_STATUS[ $s ] ); ?></span>
@@ -1179,35 +1359,48 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	});
 	['dragenter', 'dragover'].forEach(e => zip.addEventListener(e, () => drop.classList.add('is-over')));
 	['dragleave', 'drop'].forEach(e => zip.addEventListener(e, () => drop.classList.remove('is-over')));
-	// 영상 카드 줄: 파일 이름 보여 주기, 줄 더하기·지우기. 새 줄은 첫 줄을 복사해 이름의 [번호]만 바꾼다
-	const rows = $('tpcn-vrows');
-	let next = 1;
-	const fresh = row => {
-		row.querySelectorAll('input').forEach(i => { i.value = ''; });
-		const box = row.querySelector('.tpcn-vfile');
-		box.classList.remove('has-file');
-		box.querySelector('span').textContent = '🎬 파일 고르기';
+	// 줄 칸(영상 카드 줄, 인터뷰 대상 줄): 파일 이름 보여 주기, 줄 더하기·지우기. 새 줄은 첫 줄을 복사해 이름의 [번호]만 바꾼다
+	const lines = (list, add, label) => {
+		let next = 1;
+		const fresh = row => {
+			row.querySelectorAll('input').forEach(i => { i.value = ''; });
+			const box = row.querySelector('.tpcn-vfile');
+			box.classList.remove('has-file');
+			box.querySelector('span').textContent = label;
+		};
+		list.addEventListener('change', e => {
+			if (e.target.type !== 'file') return;
+			const f = e.target.files[0], box = e.target.closest('.tpcn-vfile');
+			box.classList.toggle('has-file', !!f);
+			box.querySelector('span').textContent = f ? `${f.name} · ${(f.size / 1048576).toFixed(1)}MB` : label;
+		});
+		list.addEventListener('click', e => {
+			if (!e.target.classList.contains('tpcn-vdel')) return;
+			const row = e.target.parentElement;
+			// 마지막 한 줄은 지우지 않고 비우기만 한다(칸이 사라지면 다시 넣을 곳이 없어서)
+			if (list.children.length > 1) row.remove(); else fresh(row);
+		});
+		add.addEventListener('click', () => {
+			const row = list.firstElementChild.cloneNode(true);
+			row.querySelectorAll('input').forEach(i => { i.name = i.name.replace(/\[\d+\]/, `[${next}]`); });
+			next++;
+			fresh(row);
+			list.append(row);
+			row.querySelector('input').focus();
+		});
 	};
-	rows.addEventListener('change', e => {
-		if (e.target.type !== 'file') return;
-		const f = e.target.files[0], box = e.target.closest('.tpcn-vfile');
-		box.classList.toggle('has-file', !!f);
-		box.querySelector('span').textContent = f ? `${f.name} · ${(f.size / 1048576).toFixed(1)}MB` : '🎬 파일 고르기';
-	});
-	rows.addEventListener('click', e => {
-		if (!e.target.classList.contains('tpcn-vdel')) return;
-		const row = e.target.closest('.tpcn-vrow');
-		// 마지막 한 줄은 지우지 않고 비우기만 한다(칸이 사라지면 다시 넣을 곳이 없어서)
-		if (rows.children.length > 1) row.remove(); else fresh(row);
-	});
-	$('tpcn-vadd').addEventListener('click', () => {
-		const row = rows.firstElementChild.cloneNode(true);
-		row.querySelectorAll('input').forEach(i => { i.name = i.name.replace(/\[\d+\]/, `[${next}]`); });
-		next++;
-		fresh(row);
-		rows.append(row);
-		row.querySelector('input').focus();
-	});
+	const rows = $('tpcn-vrows'), people = $('tpcn-prows');
+	lines(rows, $('tpcn-vadd'), '🎬 파일 고르기');
+	lines(people, $('tpcn-padd'), '🖼 프로필 사진');
+	// 주문 종류: 인터뷰일 때만 인터뷰 칸을 보여 주고 형식을 꼭 고르게 한다
+	const kind = () => $('tpcn-form').querySelector('input[name=kind]:checked').value;
+	const showKind = () => {
+		const iv = kind() === 'interview';
+		$('tpcn-iv').hidden = !iv;
+		$('tpcn-form').querySelector('input[name=layout]').required = iv;
+	};
+	$('tpcn-form').querySelectorAll('input[name=kind]').forEach(r => r.addEventListener('change', showKind));
+	showKind();
 	// 큰 zip은 올리는 데 시간이 걸려서, 두 번 누르지 않게 버튼을 잠근다.
 	// 서버 한도를 넘으면 다 올린 뒤에야 실패해서, 보내기 전에 합계를 재서 막는다
 	$('tpcn-form').addEventListener('submit', e => {
@@ -1229,7 +1422,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	const known = Object.fromEntries(items.map(li => [li.dataset.id, li.dataset.status]));
 	const waiting = () => Object.values(known).some(s => s === 'new' || s === 'revise' || s === 'working');
 	const typing = () => zip.files.length || ['tpcn-caption', 'tpcn-memo'].some(id => $(id).value.trim())
-		|| [...rows.querySelectorAll('input')].some(i => (i.files ? i.files.length : i.value.trim()));
+		|| [...rows.querySelectorAll('input'), ...people.querySelectorAll('input')].some(i => (i.files ? i.files.length : i.value.trim()));
 	const FLASH = 'tpcn-flash', LAST = 'tpcn-reloaded';
 	const done = { done: '✅ 완성', failed: '⚠️ 주방 멈춤' };
 	const clean = location.pathname + '?page=<?php echo esc_js( TP_CN_SLUG ); ?>';
