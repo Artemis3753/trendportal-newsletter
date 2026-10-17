@@ -350,7 +350,10 @@ def scan_group(d):
     s = load(d / "figma", "scan.json")
     g = ET.Element("frame", id=s["group"]["id"], name=s["group"]["name"])
     for f in s["frames"]:
-        fr = ET.SubElement(g, "frame", id=f["id"], name=f["name"], x=str(f["x"]), y=str(f["y"]), height=str(f["height"]))
+        fr = ET.SubElement(g, "frame", id=f["id"], name=f["name"], x=str(f["x"]), y=str(f["y"]),
+                           width=str(f["width"]), height=str(f["height"]))
+        if f.get("composite"):
+            fr.set("composite", f["composite"])  # 글자 뺀 카드 그림(플러그인 3판, 사진이 여러 장인 카드만)
         for t in f["texts"]:
             text = re.sub(r"\s*[\n]\s*", " ", t["characters"]).strip()
             # lines = 줄바꿈을 살린 글자 (카피 제목은 끊어 읽는 자리가 리듬이라 그대로 쓴다, 764 사용자 결정 10/17)
@@ -523,6 +526,40 @@ def to_web(src, dst):
     return dst.name
 
 
+def composite_photo(d, fr, layers, dst):
+    """사진이 여러 장 겹친 카드: 플러그인이 글자만 숨겨 내보낸 카드 그림에서 사진들이 차지한 칸만 잘라 쓴다.
+    10/16 주간 총정리 때 손으로 만든 "사진 칸 합성본"과 같은 결과(말풍선·작은 사진·좌우 두 장이 카드 모습 그대로).
+    자르는 칸 = 사진 레이어들을 모두 덮는 사각형(카드 밖으로 삐져나간 부분은 뺀다). 못 쓰면 None."""
+    rel = fr.get("composite")
+    src = d / rel if rel else None
+    if not src or not src.exists() or not layers:
+        return None
+    fx, fy, fw, fh = (float(fr.get(k)) for k in ("x", "y", "width", "height"))
+    size = jpeg_size(src)
+    # 그림 크기가 카드 모양과 다르면(그룹 밖으로 삐져나간 레이어 등) 좌표를 못 믿으니 쓰지 않는다
+    if not size or abs(size[0] / size[1] - fw / fh) > 0.01:
+        return None
+    s = size[0] / fw
+    left = max(0, min(float(e.get("x")) - fx for e in layers))
+    top = max(0, min(float(e.get("y")) - fy for e in layers))
+    right = min(fw, max(float(e.get("x")) + float(e.get("width")) - fx for e in layers))
+    bottom = min(fh, max(float(e.get("y")) + float(e.get("height")) - fy for e in layers))
+    # ffmpeg는 짝수 크기를 좋아해서 2의 배수로 맞춘다
+    even = lambda v: int(v * s) // 2 * 2
+    x, y, w, h = even(left), even(top), even(right - left), even(bottom - top)
+    if w < 100 or h < 100:
+        return None
+    if shutil.which("ffmpeg"):
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vf", f"crop={w}:{h}:{x}:{y}",
+                        "-q:v", "3", str(dst)], check=True, capture_output=True)
+    elif shutil.which("sips"):
+        subprocess.run(["sips", "-c", str(h), str(w), "--cropOffset", str(y), str(x), str(src), "--out", str(dst)],
+                       check=True, capture_output=True)
+    else:
+        return None
+    return dst.name
+
+
 def raws(d, prefix):
     return sorted((d / "figma").glob(f"{prefix}-raw-*"))
 
@@ -619,11 +656,15 @@ def fetch(d):
             layer = el.get("name") if el is not None else None
             fn = find_image(d, n, layer)
             if not fn and scan_image(d, el):
-                fn = to_web(scan_image(d, el), d / "images" / f"{n:02d}.jpg")
-                # 사진 위에 다른 사진(트윗 캡처·브랜드 로고 등)이 겹친 카드는 원본만 들어간다 — 242의 3·6번(10/17)
-                deco = [e.get("name") for e in fr if e.get("hash") and e.get("hash") not in bg | {el.get("hash")}]
-                if deco:
-                    warn.append(f"{n}번 사진 위에 겹친 그림 {deco}은 빠져요 — 필요하면 카드에서 글자만 숨겨 images/{n:02d}.jpg로")
+                # 사진 위에 다른 사진(말풍선·트윗 캡처·로고·좌우 두 장)이 겹친 카드는 원본 한 장으론 카드 모습이 안 나온다
+                # → 글자 뺀 카드 그림에서 사진 칸을 잘라 쓴다(10/17 744). 사진 한 장짜리는 원본이 더 선명해서 원본
+                layers = [e for e in fr if e.get("hash") and e.get("hash") not in bg]
+                deco = [e.get("name") for e in layers if e.get("hash") != el.get("hash")]
+                fn = composite_photo(d, fr, layers, d / "images" / f"{n:02d}.jpg") if deco else None
+                if not fn:
+                    fn = to_web(scan_image(d, el), d / "images" / f"{n:02d}.jpg")
+                    if deco:
+                        warn.append(f"{n}번 사진 위에 겹친 그림 {deco}은 빠져요 — 피그마 플러그인으로 zip을 다시 받거나, 카드에서 글자만 숨겨 images/{n:02d}.jpg로")
             if not fn and raws(d, f"card{n:02d}"):
                 fn = to_web(pick_photo(raws(d, f"card{n:02d}")), d / "images" / f"{n:02d}.jpg")
             if fn:

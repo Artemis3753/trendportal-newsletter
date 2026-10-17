@@ -110,7 +110,8 @@ figma.ui.onmessage = async msg => {
   const frames = got.frames.map(readFrame);
   const scan = {
     tool: 'transis-cardnews-reader',
-    version: 2,
+    version: 3, // 3 = 사진이 여러 장인 카드에 composite(글자 뺀 카드 그림)
+
     scannedAt: new Date().toISOString(),
     file: figma.fileKey || null,  // 개발용 플러그인에서만 채워진다 (manifest의 enablePrivatePluginApi)
     page: figma.currentPage.name,
@@ -143,6 +144,26 @@ figma.ui.onmessage = async msg => {
       say(`카드 미리보기 ${i + 1}/${got.frames.length}…`);
       const jpg = await fr.exportAsync({ format: 'JPG', constraint: { type: 'WIDTH', value: 500 } });
       files.push({ name: `figma/cards/${fr.name}.jpg`, bytes: jpg });
+    }
+    // 글자 뺀 카드: 사진이 여러 장 겹친 카드(말풍선·작은 사진·좌우 두 장)는 원본 한 장으론 카드 모습이 안 나온다.
+    // 10/16 주간 총정리 때 손으로 만든 "사진 칸 합성본"과 같은 것을 여기서 만든다(10/17 744: 2~6번이 다 콜라주였다).
+    // 원본 카드는 건드리지 않게 복사본에서 글자만 숨겨 내보내고 복사본은 바로 지운다. 사진 칸 자르기는 fetch가 한다
+    for (let i = 0; i < got.frames.length; i++) {
+      const fr = got.frames[i];
+      if (frames[i].images.length < 2) continue; // 사진 한 장짜리 카드는 원본이 더 선명해서 필요 없다
+      say(`글자 뺀 카드 ${i + 1}/${got.frames.length}…`);
+      const copy = fr.clone();
+      try {
+        copy.findAll(n => n.type === 'TEXT').forEach(t => { t.visible = false; });
+        // 1080px짜리 옛 카드도 사이트 사진이 흐리지 않게 가로 2000px 이상으로
+        const constraint = fr.width < 2000 ? { type: 'WIDTH', value: 2000 } : { type: 'SCALE', value: 1 };
+        const bytes = await copy.exportAsync({ format: 'JPG', constraint: constraint });
+        const name = `figma/composites/${fr.name}.jpg`;
+        files.push({ name: name, bytes: bytes });
+        frames[i].composite = name;
+      } finally {
+        copy.remove();
+      }
     }
   } catch (e) {
     figma.ui.postMessage({ type: 'error', error: `사진을 꺼내다 멈췄어요: ${e.message || e}` });
