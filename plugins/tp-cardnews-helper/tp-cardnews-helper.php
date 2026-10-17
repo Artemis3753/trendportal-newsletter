@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.11.0
+ * Version: 1.12.0
  * Author: Trendportal
  */
 
@@ -233,6 +233,30 @@ function tp_cn_parse_people( $names, $instas, $files, $label = '인터뷰 대상
 		$out[] = $p;
 	}
 	return $out;
+}
+
+/**
+ * 셰프가 손본 것 한 줄 → [단계, 글자]. 단계는 셰프가 붙인 이름표로 정한다(10/18 사용자: 중요도에 따라 강조, 시안 1018-1 C).
+ * 3 = '꼭 확인:'(발행하면 곤란할 수 있음) · 2 = '확인 필요:'(한 번 봐야 함) · 1 = 셰프가 한 일 기록.
+ * '꼭 확인'은 1.12.0부터 생긴 이름표라 그 전 주문은 '확인 필요'까지만 나온다
+ */
+function tp_cn_level( $line ) {
+	if ( preg_match( '/^\s*꼭\s*확인\s*:\s*(.*)$/su', $line, $m ) ) {
+		return array( 3, $m[1] );
+	}
+	if ( preg_match( '/^\s*확인\s*필요\s*:\s*(.*)$/su', $line, $m ) ) {
+		return array( 2, $m[1] );
+	}
+	return array( 1, $line );
+}
+
+/**
+ * 손본 것 한 줄을 <li>로. 확인 항목은 이모지를 앞에 달고 이름표는 뗀다(이모지가 그 뜻을 대신한다)
+ */
+function tp_cn_change_li( $line ) {
+	list( $lv, $text ) = tp_cn_level( $line );
+	$mark = array( 3 => '❗ ', 2 => '🟡 ', 1 => '' )[ $lv ];
+	return '<li class="lv' . $lv . '">' . esc_html( $mark . $text ) . '</li>';
 }
 
 /**
@@ -1144,7 +1168,17 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-links a { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; }
 .tpcn-links a.main { background: var(--ink); border-color: var(--ink); color: #fff; }
 .tpcn-links a:hover { border-color: var(--muted); }
-.tpcn-chip.is-pub { background: #23242b; color: #fff; }
+/* 발행된 주문: 버터색 카드(10/18 사용자, 시안 1018-1 P3). 번호 상자·딱지도 같은 색, 글 보기 버튼은 흰 바탕 */
+.tpcn-item.is-pub { --s: #d08c12; --s-soft: #fbedc9; background: linear-gradient(135deg, #fff1d6, #fff8ea); border-color: #f2d394; }
+.tpcn-chip.is-pub { background: #c27c0e; color: #fff; }
+.tpcn-item.is-pub .tpcn-links a.main { background: #fff; color: var(--ink); border-color: var(--ink); }
+/* 셰프가 손본 것의 중요도(시안 1018-1 C): 확인 항목은 늘 펼친 상자로, ❗는 분홍 띠 */
+.tpcn-check { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: #fff3d6; border: 1.5px solid #f2cf7c; }
+.tpcn-check > b { display: block; margin-bottom: 4px; }
+.tpcn-check ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.tpcn-check li { padding: 0 8px; }
+.tpcn-check li.lv3 { padding: 4px 8px; border-radius: 8px; background: #ffdbe4; color: #9b1c3d; font-weight: 700; }
+.tpcn-changes li.lv2, .tpcn-changes li.lv3 { color: var(--ink); font-weight: 700; }
 .tpcn-publish { margin: 0; }
 .tpcn-publish button { padding: 5px 14px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 #b8401d; }
 .tpcn-publish button:hover { background: #ec6a43; }
@@ -1314,7 +1348,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 			// 발행된 주문은 '완성' 대신 '발행됨' 딱지(10/18 사용자). 화면 표시만 바꾸고 저장된 상태는 그대로 done
 			$pub = 'done' === $s && 'publish' === $o['post_status'];
 			?>
-		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
+		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $pub ? ' is-pub' : ''; ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
 			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
 			<div>
 				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php elseif ( 'ad' === $o['kind'] ) : ?><span class="tpcn-tag is-ad">📢 광고</span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
@@ -1376,26 +1410,35 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 					<?php endif; ?>
 				</div>
 				<?php endif; ?>
-				<?php if ( $o['changes'] ) : ?>
+				<?php
+				if ( $o['changes'] ) :
+					// 확인 항목(❗·🟡)은 위로 모은다. 발행 전엔 "발행 전에 봐 주세요" 상자로 늘 펼쳐 두고(시안 1018-1 C),
+					// 발행 뒤엔 다 본 것이니 상자 없이 접힌 목록 맨 위에 둔다
+					$checks = array_values( array_filter( $o['changes'], fn( $c ) => tp_cn_level( $c )[0] > 1 ) );
+					usort( $checks, fn( $a, $b ) => tp_cn_level( $b )[0] <=> tp_cn_level( $a )[0] );
+					$rest = array_values( array_filter( $o['changes'], fn( $c ) => 1 === tp_cn_level( $c )[0] ) );
+					$box  = $checks && ! $pub;
+					$fold = $box ? $rest : array_merge( $checks, $rest );
+					?>
+				<?php if ( $box ) : ?>
+				<div class="tpcn-check">
+					<b>👀 발행 전에 봐 주세요 (<?php echo count( $checks ); ?>)</b>
+					<ul><?php foreach ( $checks as $c ) { echo tp_cn_change_li( $c ); } // phpcs:ignore WordPress.Security.EscapeOutput -- 안에서 esc_html ?></ul>
+				</div>
+				<?php endif; ?>
+				<?php if ( $fold ) : ?>
 				<details>
-					<summary>셰프가 손본 것 <?php echo count( $o['changes'] ); ?>건</summary>
-					<ul>
-						<?php foreach ( $o['changes'] as $c ) : ?>
-						<li><?php echo esc_html( $c ); ?></li>
-						<?php endforeach; ?>
-					</ul>
+					<summary><?php echo $box ? '셰프가 알아서 고친 것' : '셰프가 손본 것'; ?> <?php echo count( $fold ); ?>건</summary>
+					<ul class="tpcn-changes"><?php foreach ( $fold as $c ) { echo tp_cn_change_li( $c ); } // phpcs:ignore WordPress.Security.EscapeOutput -- 안에서 esc_html ?></ul>
 				</details>
+				<?php endif; ?>
 				<?php endif; ?>
 				<?php if ( $o['rounds'] ) : ?>
 				<ol class="tpcn-rounds">
 					<?php foreach ( $o['rounds'] as $i => $r ) : ?>
 					<li><b><?php echo (int) $i + 1; ?>차 수정</b> · <?php echo esc_html( $r['feedback'] ); ?>
 						<?php if ( ! empty( $r['changes'] ) ) : ?>
-						<ul>
-							<?php foreach ( $r['changes'] as $c ) : ?>
-							<li><?php echo esc_html( $c ); ?></li>
-							<?php endforeach; ?>
-						</ul>
+						<ul class="tpcn-changes"><?php foreach ( $r['changes'] as $c ) { echo tp_cn_change_li( $c ); } // phpcs:ignore WordPress.Security.EscapeOutput -- 안에서 esc_html ?></ul>
 						<?php endif; ?>
 					</li>
 					<?php endforeach; ?>
