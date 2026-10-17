@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: Trendportal
  */
 
@@ -27,6 +27,7 @@ const TP_CN_MAX  = 200 * 1024 * 1024; // zip 상한. 764(카드 17장)가 16MB�
 // 상태 이름은 영어로 저장하고, 화면에는 한국어로 (REST로 오가는 값이 글자 깨짐 걱정 없게)
 const TP_CN_STATUS = array(
 	'new'     => '주문 접수',
+	'revise'  => '수정 접수', // 완성된 초안에 "고쳐 주세요"가 들어온 주문 (10/17 사용자: 관리자 창에서 메모로 고치기)
 	'working' => '요리 중',
 	'done'    => '완성',
 	'failed'  => '주방 멈춤',
@@ -193,18 +194,88 @@ add_action(
 		$id = (int) ( $_POST['order'] ?? 0 );
 		check_admin_referer( 'tp_cn_recall_' . $id );
 		$back = admin_url( 'admin.php?page=' . TP_CN_SLUG );
-		if ( TP_CN_TYPE !== get_post_type( $id ) || ! get_post_meta( $id, '_tp_cn_zip', true ) ) {
+		// 처음 요리는 zip이 있어야 하고, 수정은 지난번 작업 기록(state)만 있어도 된다
+		$can = get_post_meta( $id, '_tp_cn_zip', true ) || ( get_post_meta( $id, '_tp_cn_feedback', true ) && get_post_meta( $id, '_tp_cn_state', true ) );
+		if ( TP_CN_TYPE !== get_post_type( $id ) || ! $can ) {
 			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( '이 주문은 zip이 없어서 다시 요리할 수 없어요. 새로 주문해 주세요' ), $back ) );
 			exit;
 		}
-		// 셰프는 '접수' 주문만 가져가니 상태를 되돌린 뒤 깨운다
-		update_post_meta( $id, '_tp_cn_status', 'new' );
+		// 셰프는 '접수' 주문만 가져가니 상태를 되돌린 뒤 깨운다. 수정 요청이 남아 있으면 '수정 접수'로
+		update_post_meta( $id, '_tp_cn_status', get_post_meta( $id, '_tp_cn_feedback', true ) ? 'revise' : 'new' );
 		delete_post_meta( $id, '_tp_cn_error' );
 		$ok = tp_cn_ring( $id );
 		wp_safe_redirect( $ok ? add_query_arg( 'tp_cn_ok', $id, $back ) : add_query_arg( 'tp_cn_err', rawurlencode( get_post_meta( $id, '_tp_cn_bell_err', true ) ), $back ) );
 		exit;
 	}
 );
+
+// "고쳐 주세요": 완성된 초안에 메모로 수정을 요청한다. 셰프가 지난번 작업 기록을 이어받아 같은 초안을 고친다
+add_action(
+	'admin_post_tp_cn_revise',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 요청할 수 있어요' );
+		}
+		$id = (int) ( $_POST['order'] ?? 0 );
+		check_admin_referer( 'tp_cn_revise_' . $id );
+		$back = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		$fail = function ( $msg ) use ( $back ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( $msg ), $back ) );
+			exit;
+		};
+		$text = trim( sanitize_textarea_field( wp_unslash( $_POST['feedback'] ?? '' ) ) );
+		if ( TP_CN_TYPE !== get_post_type( $id ) || 'done' !== get_post_meta( $id, '_tp_cn_status', true ) ) {
+			$fail( '완성된 주문만 고칠 수 있어요' );
+		}
+		if ( '' === $text ) {
+			$fail( '무엇을 고칠지 적어 주세요' );
+		}
+		if ( ! get_post_meta( $id, '_tp_cn_state', true ) ) {
+			// 1.4.0 전에 완성된 주문은 작업 기록이 없어서 이어서 고칠 수 없다
+			$fail( '이 주문은 작업 기록이 없어서 고칠 수 없어요. 편집기에서 직접 고치거나 새로 주문해 주세요' );
+		}
+		update_post_meta( $id, '_tp_cn_feedback', $text );
+		update_post_meta( $id, '_tp_cn_status', 'revise' );
+		delete_post_meta( $id, '_tp_cn_error' );
+		if ( ! tp_cn_ring( $id ) ) {
+			$fail( '수정 요청은 받았는데 셰프를 깨우지 못했어요. ' . get_post_meta( $id, '_tp_cn_bell_err', true ) );
+		}
+		wp_safe_redirect( add_query_arg( 'tp_cn_rev', $id, $back ) );
+		exit;
+	}
+);
+
+// zip은 글이 발행되거나 휴지통에 갈 때 지운다(10/17 사용자: 수정 요청 때 "사진 바꿔"에 원본이 필요해서 완성 때 지우던 것을 바꿈).
+// 발행 전까지는 주문당 수 MB가 남는다
+function tp_cn_drop_zip_for_post( $post_id ) {
+	$orders = get_posts(
+		array(
+			'post_type'   => TP_CN_TYPE,
+			'post_status' => 'private',
+			'numberposts' => 5,
+			'meta_key'    => '_tp_cn_post',
+			'meta_value'  => (int) $post_id,
+		)
+	);
+	foreach ( $orders as $order ) {
+		$zip = get_post_meta( $order->ID, '_tp_cn_zip', true );
+		if ( $zip && is_file( tp_cn_dir() . '/' . $zip ) ) {
+			unlink( tp_cn_dir() . '/' . $zip );
+		}
+		update_post_meta( $order->ID, '_tp_cn_zip', '' );
+	}
+}
+add_action(
+	'transition_post_status',
+	function ( $new, $old, $post ) {
+		if ( 'post' === $post->post_type && 'publish' === $new && 'publish' !== $old ) {
+			tp_cn_drop_zip_for_post( $post->ID );
+		}
+	},
+	10,
+	3
+);
+add_action( 'wp_trash_post', 'tp_cn_drop_zip_for_post' );
 
 // ── 주문 받기 (탭의 폼) ──────────────────────────────────
 
@@ -275,11 +346,11 @@ add_action(
 /**
  * 주문 하나를 화면·REST에서 같이 쓰는 모양으로.
  */
-function tp_cn_order( $post ) {
+function tp_cn_order( $post, $with_state = false ) {
 	$id      = $post->ID;
 	$draft   = (int) get_post_meta( $id, '_tp_cn_post', true );
 	$changes = get_post_meta( $id, '_tp_cn_changes', true );
-	return array(
+	$out     = array(
 		'id'      => $id,
 		'group'   => $post->post_title,
 		'created' => get_post_time( 'c', true, $post ),
@@ -299,7 +370,15 @@ function tp_cn_order( $post ) {
 		'bell_err' => get_post_meta( $id, '_tp_cn_bell_err', true ),
 		'started'  => (int) get_post_meta( $id, '_tp_cn_working_at', true ),
 		'has_zip'  => (bool) get_post_meta( $id, '_tp_cn_zip', true ),
+		// 수정 요청: 지금 들어온 요청, 지난 수정들(요청 + 셰프가 손본 것), 셰프가 이어받을 작업 기록(파일 이름 → 내용)
+		'feedback' => get_post_meta( $id, '_tp_cn_feedback', true ),
+		'rounds'   => get_post_meta( $id, '_tp_cn_rounds', true ) ?: array(),
 	);
+	// 작업 기록은 수십 KB라 셰프가 주문을 가져갈 때(상태를 골라 물을 때)만 싣는다 — 탭이 20초마다 묻는 목록엔 빼서 가볍게
+	if ( $with_state ) {
+		$out['state'] = (object) ( json_decode( (string) get_post_meta( $id, '_tp_cn_state', true ), true ) ?: array() );
+	}
+	return $out;
 }
 
 function tp_cn_orders( $status = null, $limit = 30 ) {
@@ -315,7 +394,13 @@ function tp_cn_orders( $status = null, $limit = 30 ) {
 		$args['meta_value'] = $status;
 		$args['order']      = 'ASC'; // 가져가는 쪽은 먼저 들어온 주문부터
 	}
-	return array_map( 'tp_cn_order', get_posts( $args ) );
+	$with_state = (bool) $status;
+	return array_map(
+		function ( $p ) use ( $with_state ) {
+			return tp_cn_order( $p, $with_state );
+		},
+		get_posts( $args )
+	);
 }
 
 // ── REST: 사이트 밖 주방이 주문을 가져가고 결과를 적는 곳 ───────────
@@ -358,19 +443,27 @@ add_action(
 					$id = $post->ID;
 					if ( null !== $req->get_param( 'status' ) ) {
 						if ( ! isset( TP_CN_STATUS[ $req['status'] ] ) ) {
-							return new WP_Error( 'tp_cn_status', '상태는 new·working·done·failed 중 하나예요', array( 'status' => 400 ) );
+							return new WP_Error( 'tp_cn_status', '상태는 new·revise·working·done·failed 중 하나예요', array( 'status' => 400 ) );
 						}
 						update_post_meta( $id, '_tp_cn_status', $req['status'] );
 						update_post_meta( $id, '_tp_cn_' . $req['status'] . '_at', time() );
-						// 완성되면 zip은 지운다(10/17 사용자): 주문당 16MB쯤이라 쌓이면 사이트 저장 공간을 먹고,
-						// 원본은 피그마와 받은 사람 컴퓨터에 남아 있다. 멈춤일 땐 다시 시도할 수 있게 남겨 둔다
-						$zip = get_post_meta( $id, '_tp_cn_zip', true );
-						if ( 'done' === $req['status'] && $zip ) {
-							if ( is_file( tp_cn_dir() . '/' . $zip ) ) {
-								unlink( tp_cn_dir() . '/' . $zip );
-							}
-							update_post_meta( $id, '_tp_cn_zip', '' );
+						// 수정 요청을 끝냈으면 그 요청과 손본 것을 지난 수정 목록에 쌓고 요청 칸을 비운다
+						$feedback = get_post_meta( $id, '_tp_cn_feedback', true );
+						if ( 'done' === $req['status'] && $feedback ) {
+							$rounds   = get_post_meta( $id, '_tp_cn_rounds', true ) ?: array();
+							$rounds[] = array(
+								'feedback' => $feedback,
+								'changes'  => is_array( $req->get_param( 'changes' ) ) ? array_values( array_map( 'sanitize_text_field', $req['changes'] ) ) : array(),
+								'at'       => time(),
+							);
+							update_post_meta( $id, '_tp_cn_rounds', $rounds );
+							delete_post_meta( $id, '_tp_cn_feedback' );
+							$revised = true;
 						}
+					}
+					// 셰프의 작업 기록: 다음 수정 때 빈 컴퓨터에서 이어받는다. 글 HTML까지 수십 KB라 메타 하나에 JSON으로
+					if ( is_array( $req->get_param( 'state' ) ) ) {
+						update_post_meta( $id, '_tp_cn_state', wp_slash( wp_json_encode( $req['state'], JSON_UNESCAPED_UNICODE ) ) );
 					}
 					if ( null !== $req->get_param( 'post_id' ) ) {
 						update_post_meta( $id, '_tp_cn_post', (int) $req['post_id'] );
@@ -378,7 +471,8 @@ add_action(
 					if ( null !== $req->get_param( 'title' ) ) {
 						update_post_meta( $id, '_tp_cn_title', sanitize_text_field( $req['title'] ) );
 					}
-					if ( is_array( $req->get_param( 'changes' ) ) ) {
+					// 처음 요리 때 손본 것만 여기에. 수정 때 손본 것은 위에서 그 회차 기록에 들어갔다
+					if ( is_array( $req->get_param( 'changes' ) ) && empty( $revised ) ) {
 						update_post_meta( $id, '_tp_cn_changes', array_values( array_map( 'sanitize_text_field', $req['changes'] ) ) );
 					}
 					if ( null !== $req->get_param( 'error' ) ) {
@@ -465,6 +559,8 @@ function tp_cn_page() {
 	} elseif ( isset( $_GET['tp_cn_ok'] ) && 'new' === get_post_meta( (int) $_GET['tp_cn_ok'], '_tp_cn_status', true ) ) {
 		// 아직 접수 상태일 때만. 요리가 시작·끝난 뒤엔 목록이 상태를 말해 주니 "곧 시작해요"가 남아 있으면 헷갈린다
 		$msg = array( 'ok', '주문 받았어요! 셰프 트란시스가 곧 요리를 시작해요.' );
+	} elseif ( isset( $_GET['tp_cn_rev'] ) && 'revise' === get_post_meta( (int) $_GET['tp_cn_rev'], '_tp_cn_status', true ) ) {
+		$msg = array( 'ok', '수정 요청 받았어요! 셰프 트란시스가 같은 초안을 고쳐 둘게요.' );
 	}
 	tp_cn_render(
 		tp_cn_orders(),
@@ -489,16 +585,17 @@ function tp_cn_page() {
  * 기다리는 시간: 초인종 뒤 셰프가 주문을 가져가기까지 보통 1~2분, 요리는 10분 안팎(711 실측 전 추정)이라 넉넉히.
  */
 function tp_cn_recall_reason( $o, $now ) {
-	if ( 'new' === $o['status'] && $o['bell_err'] ) {
+	$waiting = in_array( $o['status'], array( 'new', 'revise' ), true );
+	if ( $waiting && $o['bell_err'] ) {
 		return $o['bell_err'];
 	}
-	if ( 'new' === $o['status'] && $o['rang_at'] && $now - $o['rang_at'] > 15 * MINUTE_IN_SECONDS ) {
+	if ( $waiting && $o['rang_at'] && $now - $o['rang_at'] > 15 * MINUTE_IN_SECONDS ) {
 		return '초인종을 눌렀는데 15분이 지나도 셰프가 주문을 가져가지 않았어요.';
 	}
 	if ( 'working' === $o['status'] && $o['started'] && $now - $o['started'] > 45 * MINUTE_IN_SECONDS ) {
 		return '요리가 45분 넘게 끝나지 않아요. 셰프가 중간에 멈췄을 수 있어요.';
 	}
-	if ( 'failed' === $o['status'] && $o['has_zip'] ) {
+	if ( 'failed' === $o['status'] && ( $o['has_zip'] || $o['feedback'] ) ) {
 		return ''; // 멈춘 이유는 이미 위에 나온다 — 버튼만
 	}
 	return null;
@@ -518,7 +615,7 @@ function tp_cn_render( $orders, $msg, $u ) {
    색은 주방 쪽으로: 크림 바탕, 갈색 글자, 상태 = 주문서 파랑 · 버터(요리 중) · 바질(완성) · 토마토(멈춤) */
 body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfooter { background: #fbf4e6; }
 .tpcn { --bg: #fdf8ee; --card: #fffdf8; --ink: #3b2f2a; --muted: #8c7f73; --line: #efe3cf; --line-strong: #dcc9ab;
-  --new: #3a86ff; --new-soft: #dde9ff; --working: #d08c12; --working-soft: #fbedc9;
+  --new: #3a86ff; --new-soft: #dde9ff; --revise: #7a5af8; --revise-soft: #ebe5ff; --working: #d08c12; --working-soft: #fbedc9;
   --done: #2f9e6b; --done-soft: #d9f1e3; --failed: #e4572e; --failed-soft: #fde3da; --fresh: #b8572e; --fresh-soft: #fbe6da;
   --tomato: #e4572e;
   --font-display: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
@@ -594,7 +691,16 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-live-btn { margin-left: 8px; padding: 3px 12px; border: 0; border-radius: 999px; background: var(--done); color: #fff; font: inherit; font-size: 12.5px; cursor: pointer; }
 @keyframes tpcn-blink { 50% { opacity: .2; } }
 .s-new { --s: var(--new); --s-soft: var(--new-soft); }
+.s-revise { --s: var(--revise); --s-soft: var(--revise-soft); }
 .s-working { --s: var(--working); --s-soft: var(--working-soft); }
+/* 고쳐 주세요: 완성된 주문 아래 메모 칸 + 지난 수정 기록 */
+.tpcn-revise { margin-top: 10px; display: grid; gap: 6px; }
+.tpcn-revise textarea { font-size: 13px; }
+.tpcn-revise button { justify-self: start; padding: 6px 16px; border: 0; border-radius: 999px; background: var(--revise); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.tpcn-rounds { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.tpcn-rounds > li { padding: 8px 10px; border-radius: 10px; background: var(--bg); border: 1px dashed var(--line-strong); }
+.tpcn-rounds b { color: var(--revise); }
+.tpcn-rounds ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); }
 .s-done { --s: var(--done); --s-soft: var(--done-soft); }
 .s-failed { --s: var(--failed); --s-soft: var(--failed-soft); }
 .tpcn-body { grid-column: 2 / -1; font-size: 13px; }
@@ -715,10 +821,21 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				<?php if ( null === tp_cn_recall_reason( $o, $u['now'] ) ) : // 초인종이 실패했으면 "곧 가져가요"는 틀린 말이라 아래 이유만 ?>
 				<p>셰프 트란시스가 곧 주문서를 가져가요.</p>
 				<?php endif; ?>
+			<?php elseif ( 'revise' === $s ) : ?>
+				<p>✏️ <?php echo esc_html( $o['feedback'] ); ?></p>
+				<?php if ( null === tp_cn_recall_reason( $o, $u['now'] ) ) : ?>
+				<p>셰프 트란시스가 곧 와서 같은 초안을 고쳐요.</p>
+				<?php endif; ?>
 			<?php elseif ( 'working' === $s ) : ?>
-				<p>사진을 고르고 글을 굽는 중이에요.</p>
+				<p><?php echo $o['feedback'] ? '✏️ ' . esc_html( $o['feedback'] ) . ' — 고치는 중이에요.' : '사진을 고르고 글을 굽는 중이에요.'; ?></p>
 			<?php elseif ( 'failed' === $s ) : ?>
 				<p><?php echo esc_html( $o['error'] ?: '이유를 남기지 못하고 주방이 멈췄어요.' ); ?></p>
+				<?php if ( $o['post_id'] ) : // 수정 중에 멈춰도 지난 초안은 그대로 있다 ?>
+				<div class="tpcn-links">
+					<a href="<?php echo esc_url( home_url( '/?p=' . (int) $o['post_id'] . '&preview=true' ) ); ?>" target="_blank" rel="noopener">지난 초안 미리보기</a>
+					<a href="<?php echo esc_url( admin_url( 'post.php?post=' . (int) $o['post_id'] . '&action=edit' ) ); ?>">편집기에서 열기</a>
+				</div>
+				<?php endif; ?>
 			<?php else : ?>
 				<?php if ( $o['title'] ) : ?>
 				<p class="tpcn-title"><?php echo esc_html( $o['title'] ); ?></p>
@@ -738,6 +855,31 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 						<?php endforeach; ?>
 					</ul>
 				</details>
+				<?php endif; ?>
+				<?php if ( $o['rounds'] ) : ?>
+				<ol class="tpcn-rounds">
+					<?php foreach ( $o['rounds'] as $i => $r ) : ?>
+					<li><b><?php echo (int) $i + 1; ?>차 수정</b> · <?php echo esc_html( $r['feedback'] ); ?>
+						<?php if ( ! empty( $r['changes'] ) ) : ?>
+						<ul>
+							<?php foreach ( $r['changes'] as $c ) : ?>
+							<li><?php echo esc_html( $c ); ?></li>
+							<?php endforeach; ?>
+						</ul>
+						<?php endif; ?>
+					</li>
+					<?php endforeach; ?>
+				</ol>
+				<?php endif; ?>
+				<?php if ( $o['post_id'] ) : ?>
+				<?php // 10/17 사용자: Claude Code 없이 관리자 창에서 메모로 고치기. 셰프가 같은 초안을 고치고 위 기록에 쌓인다 ?>
+				<form class="tpcn-revise" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
+					<input type="hidden" name="action" value="tp_cn_revise">
+					<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+					<?php wp_nonce_field( 'tp_cn_revise_' . (int) $o['id'] ); ?>
+					<textarea name="feedback" rows="2" required placeholder="고쳐 주세요 — 예: 제목을 더 짧게 / 3번 설명 두 문단으로 / 카테고리는 브랜드로"></textarea>
+					<button type="submit">✏️ 다시 요리</button>
+				</form>
 				<?php endif; ?>
 			<?php endif; ?>
 			<?php
@@ -811,7 +953,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	const base = document.title;
 	const items = [...document.querySelectorAll('.tpcn-item')];
 	const known = Object.fromEntries(items.map(li => [li.dataset.id, li.dataset.status]));
-	const waiting = () => Object.values(known).some(s => s === 'new' || s === 'working');
+	const waiting = () => Object.values(known).some(s => s === 'new' || s === 'revise' || s === 'working');
 	const typing = () => zip.files.length || ['tpcn-caption', 'tpcn-videos', 'tpcn-memo'].some(id => $(id).value.trim());
 	const FLASH = 'tpcn-flash', LAST = 'tpcn-reloaded';
 	const done = { done: '✅ 완성', failed: '⚠️ 주방 멈춤' };

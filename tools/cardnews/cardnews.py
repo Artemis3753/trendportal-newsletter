@@ -739,7 +739,22 @@ def alts(d):
     return out
 
 
+def guard(d):
+    """수정 때 덮어쓰기 전에: 사람이 편집기에서 초안을 직접 고쳤거나 이미 발행했으면 멈춘다(10/17 사용자 A — 사람 손은 절대 안 지운다).
+    지난번 셰프가 올린 그대로인지는 published.json(올린 직후 라이브에서 다시 읽은 제목·본문)과 비교한다."""
+    post_id = load(d, "result.json", {}).get("post_id")
+    sent = load(d, "published.json", {})
+    if not post_id or not sent:
+        return  # 처음 만드는 초안, 또는 이 기능 전에 만든 초안
+    live = wp(f"posts/{post_id}?context=edit")
+    if live["status"] == "publish":
+        sys.exit("이미 발행된 글이라 셰프는 고치지 않아요 — 편집기에서 직접 고쳐 주세요")
+    if live["content"]["raw"] != sent.get("content") or live["title"]["raw"] != sent.get("title"):
+        sys.exit("편집기에서 직접 고친 내용이 있어서 덮어쓰지 않았어요 — 남은 수정도 편집기에서 해 주세요")
+
+
 def publish(d):
+    guard(d)
     order = load(d, "order.json")
     table = load(d, "media.json", {})
     _, missing = build(d, quiet=True)
@@ -779,6 +794,9 @@ def publish(d):
                   preview=f"https://trendportal.kr/?p={p['id']}&preview=true",
                   edit=f"https://trendportal.kr/wp-admin/post.php?post={p['id']}&action=edit")
     save(d, "result.json", result)
+    # 올린 그대로를 라이브에서 다시 읽어 남긴다 — 다음 수정 때 guard가 "그 사이 사람이 고쳤나"를 이걸로 본다
+    live = wp(f"posts/{p['id']}?context=edit")
+    save(d, "published.json", {"title": live["title"]["raw"], "content": live["content"]["raw"]})
     print(f"초안 {p['id']} ({p['status']}) · 미리보기 {result['preview']}")
 
 
@@ -926,34 +944,50 @@ def css(d, src=None, remove=False):
 # ── pull·report: 관리자 탭(TP Cardnews Helper)과 주고받기 ────────
 # 탭은 주문을 받아 두기만 하고, 요리는 여기서 한다. 클라우드 routine도 같은 명령을 쓴다(10/17 사용자 결정 A)
 
+# 셰프가 다음 수정 때 이어받을 작업 기록. 클라우드는 매번 빈 컴퓨터라 탭(주문 메타)에 맡겨 둔다(10/17 수정 요청 기능)
+STATE_FILES = ("order.json", "cards.json", "notes.json", "media.json", "result.json", "published.json", "design.css")
+
+
 def pull():
-    """접수된 주문 → local/cardnews/order-<번호>/ (zip 풀기 + caption.txt + order.json), 탭 상태는 '만드는 중'으로."""
-    orders = wp("orders?status=new", base=ORDER_API)
+    """접수된 주문 → local/cardnews/order-<번호>/, 탭 상태는 '요리 중'으로.
+    새 주문: zip 풀기 + caption.txt + order.json. 수정 요청: 지난 작업 기록(state) + feedback.txt (+ 남아 있으면 zip)."""
+    orders = wp("orders?status=new", base=ORDER_API) + wp("orders?status=revise", base=ORDER_API)
     if not orders:
         print("새 주문 없음")
         return
     for o in orders:
         d = ORDERS / f"order-{o['id']}"
         d.mkdir(parents=True, exist_ok=True)
-        z = d / "order.zip"
-        z.write_bytes(wp(o["zip"], raw=True))
-        with zipfile.ZipFile(z) as zf:
-            # 플러그인이 만든 zip이지만 내려받은 파일이라 폴더 밖으로 나가는 이름은 막는다
-            bad = [n for n in zf.namelist() if n.startswith("/") or ".." in Path(n).parts]
-            if bad:
-                wp(f"orders/{o['id']}", {"status": "failed", "error": f"zip 안 파일 이름이 이상해요: {bad[0]}"}, base=ORDER_API)
-                continue
-            zf.extractall(d)
-        (d / "caption.txt").write_text(o["caption"] + "\n", encoding="utf-8")
-        order = load(d, "order.json", {})
-        order.update(kind="archive", order_id=o["id"], group=o["group"], videos=o["videos"], memo=o["memo"])
-        save(d, "order.json", order)
-        if o.get("post_id") and not (d / "result.json").exists():
-            # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야
-            # draft가 새 초안을 또 만들지 않고 그 초안을 고친다
-            save(d, "result.json", {"post_id": o["post_id"]})
+        revise = o["status"] == "revise"
+        if o.get("has_zip", True):
+            z = d / "order.zip"
+            z.write_bytes(wp(o["zip"], raw=True))
+            with zipfile.ZipFile(z) as zf:
+                # 플러그인이 만든 zip이지만 내려받은 파일이라 폴더 밖으로 나가는 이름은 막는다
+                bad = [n for n in zf.namelist() if n.startswith("/") or ".." in Path(n).parts]
+                if bad:
+                    wp(f"orders/{o['id']}", {"status": "failed", "error": f"zip 안 파일 이름이 이상해요: {bad[0]}"}, base=ORDER_API)
+                    continue
+                zf.extractall(d)
+        if revise:
+            # 지난번 끝난 상태 그대로 되살린다 — fetch를 다시 돌리지 않아도 되고, 사진도 다시 올리지 않는다(media.json)
+            for fn, text in (o.get("state") or {}).items():
+                if fn in STATE_FILES:
+                    (d / fn).write_text(text, encoding="utf-8")
+            (d / "feedback.txt").write_text(o["feedback"] + "\n", encoding="utf-8")
+            (d / "changes.json").unlink(missing_ok=True)  # 이번 수정에서 손본 것만 새로 적는다
+        else:
+            (d / "caption.txt").write_text(o["caption"] + "\n", encoding="utf-8")
+            order = load(d, "order.json", {})
+            order.update(kind="archive", order_id=o["id"], group=o["group"], videos=o["videos"], memo=o["memo"])
+            save(d, "order.json", order)
+            if o.get("post_id") and not (d / "result.json").exists():
+                # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야
+                # draft가 새 초안을 또 만들지 않고 그 초안을 고친다
+                save(d, "result.json", {"post_id": o["post_id"]})
         wp(f"orders/{o['id']}", {"status": "working"}, base=ORDER_API)
-        print(f"주문 {o['id']} {o['group']} → {d.relative_to(ROOT)}" + (f"  · 메모: {o['memo']}" if o["memo"] else ""))
+        what = f"수정 요청: {o['feedback']}" if revise else (f"메모: {o['memo']}" if o["memo"] else "")
+        print(f"주문 {o['id']} {o['group']} → {d.relative_to(ROOT)}" + (f"  · {what}" if what else ""))
 
 
 def report(d, fail=None):
@@ -971,6 +1005,9 @@ def report(d, fail=None):
         result = load(d, "result.json")
         body = {"status": "done", "post_id": result["post_id"], "title": title_of(order),
                 "changes": load(d, "changes.json", [])}
+        # 작업 기록도 같이 맡긴다 — 다음 "고쳐 주세요" 때 셰프가 이어받는다(pull 참고).
+        # 끝까지 된 때만: 멈춘 수정의 반쯤 고친 기록을 맡기면 다시 부를 때 그 위에 또 고치게 된다
+        body["state"] = {fn: (d / fn).read_text(encoding="utf-8") for fn in STATE_FILES if (d / fn).exists()}
     o = wp(f"orders/{order['order_id']}", body, base=ORDER_API)
     print(f"탭에 적었어요: 주문 {o['id']} → {o['status']}" + (f" · 초안 {o['post_id']}" if o.get("post_id") else ""))
 
