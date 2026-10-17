@@ -71,16 +71,30 @@ One interviewee, several questions.
 - Order inside a question: heading → photo → answer (the opposite of standard cards).
 - The cover photo has no text on it. If only a cover with text is available, ask for one without.
 
-### Interview panel (post 734) — `"layout": "panel"`
-One question answered by many people.
-- The question once as the interview heading (`tp-iv-q`, label `QUESTION`; `QUESTION 01`, `02`… when there are several questions).
-- Each answer is a panel shaped like its card (`.tp-pn-card`): the card's question line → face (cut from the card) → white `@account / name` pill linking to Instagram → answer paragraphs, left aligned.
-- A card without an `@account` line (an intro card) goes as plain text before the heading.
+### Interview panel (post 843) — `"layout": "panel"`
+One question answered by many people. **Reference: post 843** (approved, made in Claude Code). It follows the Q&A post 498, not the card look.
+- The intro card's text (a card without an `@account` line), then the question once as the interview heading (`tp-iv-q`, label `QUESTION`; `QUESTION 01`, `02`… when there are several questions).
+- For each person: a white profile card (`tp-ad-profile`, as in 498) → their answer paragraphs. A 40px spacer block goes between people, so no extra CSS is needed.
+- Profile photo and link: from the interviewee given in the interview form with the same Instagram account; otherwise the face cut from the card and the card's `@account`.
 - The script reads `@account / name` from the card (`cards.json` → `who`).
-- Interviewees given in the interview form replace the face and link of the panel with the same Instagram account. No profile cards at the top or end: the panels already show everyone.
+- Not the dark card-shaped panels (`.tp-pn-card`) tried first: the site owner chose the 843 look instead.
 
 ### Weekly roundup
 Built by hand, not by the helper: newsletter layout (`tp-wk`), subscriber lock from card 02, the "매주 금요일…" paragraph at the very end.
+
+## Reference posts
+
+Posts the site owner approved as the model for their format. When writing a post of that kind, look at the reference's actual markup (`python3 tools/cardnews/cardnews.py ref <id>`) and copy its structure, not only the rules above.
+
+| format | post |
+| :- | :- |
+| standard cardnews | 242 |
+| video card | 351 (someone else's video), 636 (our own clip) |
+| copy collection | 729 |
+| interview Q&A | 498 |
+| interview panel | 843 |
+
+When a format decision changes in a conversation, update this file in the same session, and add the approved post here. A decision that lives only in someone's notes or a chat does not reach the helper.
 
 ## Order forms
 

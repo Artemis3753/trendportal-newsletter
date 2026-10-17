@@ -12,6 +12,7 @@
     python3 tools/cardnews/cardnews.py css     <주문> <파일.css> | --remove  (새 디자인 CSS를 사이트에 붙이기·빼기)
     python3 tools/cardnews/cardnews.py still   <주문> <카드 번호> <초>        (영상 카드 정지 화면·포스터를 그 초 장면으로)
     python3 tools/cardnews/cardnews.py profile <주문> <대상 번호> [x y 한 변]  (인터뷰 대상 프로필 사진을 캡처에서 정사각형으로)
+    python3 tools/cardnews/cardnews.py ref     <글 번호>                     (정답 예시 글의 블록 원문 보기, 읽기만)
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
@@ -264,12 +265,16 @@ def insta_handle(url):
     return re.sub(r"^https?://(www\.)?instagram\.com/", "", url or "").split("/")[0].split("?")[0]
 
 
+SPACER = ('<!-- wp:spacer {"height":"40px"} -->'
+          '<div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->')
+
+
 def panel_cards(media, cards, notes, people=()):
-    """인터뷰 패널형(734 — 질문 하나에 여러 명이 답한 카드, 사용자 결정 D 10/17, 시안 docs/트렌드포털-시안비교/1017-4-*).
-    같은 질문 카드끼리 묶어 QUESTION 소제목 한 번 → 답한 사람(cards[].who)마다 카드 한 장 모양의 판(.tp-pn-card).
-    답한 사람이 없는 카드(734의 2번 안내 카드)는 글만 그 질문 소제목 앞에 둔다. 모양은 additional.css의 Interview panel.
-    인터뷰 폼에 대상을 넣었으면 계정이 같은 사람의 프로필 사진·인스타 주소로 판의 얼굴·알약 링크를 바꾼다
-    (사용자 결정 A 10/17 — 맨 위·맨 끝 프로필 카드를 열 명분 넣으면 판과 겹쳐서)"""
+    """인터뷰 패널형(734 — 질문 하나에 여러 명이 답한 카드). 정답 예시 = 글 843(사용자 승인 10/17, Claude Code에서 498 방식으로 만든 것).
+    같은 질문 카드끼리 묶어 QUESTION 소제목 한 번 → 답한 사람(cards[].who)마다 흰 프로필 카드(498의 tp-ad-profile) → 답.
+    사람 사이엔 40px 여백(spacer 블록, CSS 없이). 답한 사람이 없는 카드(734의 2번 안내 카드)는 글만 그 질문 소제목 앞에 둔다.
+    프로필 사진·인스타 주소 = 인터뷰 폼에 넣은 대상 중 계정이 같은 사람 것, 없으면 카드에서 잘라 낸 얼굴과 카드의 계정.
+    (처음 만든 '카드 모양 어두운 판(.tp-pn-card)'은 웹폼 실전 뒤 사용자가 843 모양을 골라서 쓰지 않는다)"""
     by_handle = {insta_handle(p.get("insta")).lower(): p for p in people if p.get("insta")}
     groups = []
     for card, note in zip(cards, notes):
@@ -281,21 +286,18 @@ def panel_cards(media, cards, notes, people=()):
     for i, (title, items) in enumerate(groups, start=1):
         out += "".join(para(esc(p)) for c, _ in items if not c.get("who") for p in c["what"])
         out += iv_heading("QUESTION" if len(groups) == 1 else f"QUESTION {i:02d}", re.sub(r"^Q\.\s*", "", title).replace("\n", " "))
+        first = True
         for c, note in items:
             if not c.get("who"):
                 continue
-            # 판 안은 카드 순서 그대로: 질문 머리(짧은 선은 CSS) → 얼굴 → "@계정 / 이름" 알약 → 답
-            inner = para(esc(title), "tp-pn-q")
             w = c["who"]
             p = by_handle.get(w["handle"].lower(), {})
-            face = p.get("photo") or c.get("image")
-            if face:
-                inner += image_block(media, face, note.get("alt", ""), size="large", cls="tp-pn-face", link_none=True)
-            label = f"@{w['handle']}" + (f" / {w['name']}" if w.get("name") else "")
-            href = f"https://www.instagram.com/{insta_handle(p['insta'])}/" if p.get("insta") else f"https://www.instagram.com/{w['handle']}/"
-            inner += para(f'<a href="{attr(href)}" target="_blank" rel="noreferrer noopener">{esc(label)}</a>', "tp-pn-pill")
-            inner += "".join(para(esc(p)) for p in c["what"])
-            out += group("tp-pn-card", inner)
+            person = {"name": w.get("name") or p.get("name") or w["handle"],
+                      "insta": p.get("insta") or f"https://www.instagram.com/{w['handle']}/",
+                      "photo": p.get("photo") or c.get("image")}
+            out += ("" if first else SPACER) + profile_cards(media, [person])
+            out += "".join(para(esc(x)) for x in c["what"])
+            first = False
     return out
 
 
@@ -428,7 +430,16 @@ def build(d, quiet=False):
     media = Media(load(d, "media.json", {}))
     if order["kind"] not in BUILDERS:
         sys.exit(f"모르는 종류예요: {order['kind']} (weekly / archive)")
-    out = BUILDERS[order["kind"]](order, cards, notes, media)
+    hand = d / "body.html"
+    if hand.exists():
+        # 셰프가 직접 짠 본문: 맞는 틀이 없을 때 셰프도 여기(Claude Code)처럼 직접 짠다(10/17 사용자 — 웹폼 결과가 대화 결과만 못해서).
+        # 사진 자리는 {{url:파일}}·{{id:파일}}로 적으면 올린 뒤 실제 주소·번호로 바뀐다. 틀 대신 이걸 쓰니 draft가 덮어쓰지 않는다
+        def fill(m):
+            mid, url = media.get(m.group(2))
+            return str(mid) if m.group(1) == "id" else url
+        out = re.sub(r"\{\{(url|id):([^}]+)\}\}", fill, hand.read_text(encoding="utf-8"))
+    else:
+        out = BUILDERS[order["kind"]](order, cards, notes, media)
     (d / "post.html").write_text(out, encoding="utf-8")
     if not quiet:
         print(f"post.html {len(out):,}자 · 카드 {len(cards['cards'])}장 · 아직 안 올린 파일 {len(media.missing)}개")
@@ -784,6 +795,14 @@ def profile(d, n, box=None):
     print(f"{n}번 → {dst.name}")
 
 
+def ref(post_id):
+    """정답 예시 글(docs/post-formats.md의 Reference posts)의 블록 원문을 보여 준다. 읽기만 한다.
+    셰프가 틀에 없는 모양을 직접 짤 때 말 규칙보다 실제 마크업을 보고 따라 하라고(10/17 사용자: 대화 결과와 웹폼 결과를 같게)"""
+    p = wp(f"posts/{post_id}?context=edit&_fields=id,status,title,categories,content")
+    print(f"# 글 {p['id']} ({p['status']}) · {p['title']['raw']} · 카테고리 {p['categories']}")
+    print(p["content"]["raw"])
+
+
 def jpeg_size(path):
     # 가로/세로만 알면 돼서 JPEG 머리만 읽는다 (사진 라이브러리 설치 없이)
     data = path.read_bytes()
@@ -1044,6 +1063,8 @@ def alts(d):
             out[c["image"]] = n.get("alt", "")
         if c.get("poster"):
             out[c["poster"]] = n.get("poster_alt", "")
+    # 셰프가 직접 짠 본문(body.html)에만 쓰인 사진의 alt
+    out.update(notes.get("files") or {})
     # 인터뷰 대상 프로필 사진: 본문에선 alt를 비우지만 미디어 보관함에선 누구 사진인지 알 수 있게
     for p in order.get("people") or []:
         if p.get("photo"):
@@ -1257,7 +1278,7 @@ def css(d, src=None, remove=False):
 # 탭은 주문을 받아 두기만 하고, 요리는 여기서 한다. 클라우드 routine도 같은 명령을 쓴다(10/17 사용자 결정 A)
 
 # 셰프가 다음 수정 때 이어받을 작업 기록. 클라우드는 매번 빈 컴퓨터라 탭(주문 메타)에 맡겨 둔다(10/17 수정 요청 기능)
-STATE_FILES = ("order.json", "cards.json", "notes.json", "media.json", "result.json", "published.json", "design.css")
+STATE_FILES = ("order.json", "cards.json", "notes.json", "media.json", "result.json", "published.json", "design.css", "body.html")
 
 
 def pull():
@@ -1349,6 +1370,8 @@ def report(d, fail=None):
 def main(argv):
     if argv[:1] == ["pull"]:
         return pull()
+    if argv[:1] == ["ref"] and len(argv) == 2:
+        return ref(int(argv[1]))
     if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css", "still", "profile"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
