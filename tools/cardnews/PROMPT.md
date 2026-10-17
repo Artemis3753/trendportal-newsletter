@@ -104,14 +104,22 @@ These steps describe the usual way, and `fetch` guesses the card layout by simpl
       - `N번은 사진 레이어가 없어서 … 카드 그림에서 제목 위를 잘라 썼어요` → the card draws its picture with text and shapes (numbers in circles, a numbered list, a chart). Look at the card preview and the crop (`images/NN.jpg`). If the crop cuts the picture or includes the title, or if `fetch` took a big number in the picture as the title, put the card's real title (exact text) in `cards.json` and re-crop with `python3 tools/cardnews/cardnews.py visual local/cardnews/order-<id> <N> <top %> <bottom %>` (percent of the card height, from the top). The `alt` of such a picture must say what it shows, including its numbers and words, because they are only in the picture.
       - `N번 사진이 없어요` → look at the card preview first. If it is a text-only card, build it without a picture. If the card clearly shows a photo the zip does not have, ask (see "Asking instead of guessing") in plain words, for example `9번 카드의 사진이 피그마 zip에 없어요. 피그마에서 그 카드 사진이 켜져 있는지 확인하고 다시 주문해 주실래요?`
 
-   h. **`changes.json`**: a JSON array of short Korean sentences, one per change or open question, shown to the person in the tab as "셰프가 손본 것". Start each with a label: `제목:`, `카테고리:`, `오타:`, `캡션:`, `디자인:`, `영상:`, `확인 필요:`. Say what you changed and, briefly, why. Example:
+   h. **`changes.json`**: a JSON array of short Korean sentences, one per change or open question, shown to the person in the tab as "셰프가 손본 것". Start each with a label: `제목:`, `카테고리:`, `오타:`, `캡션:`, `디자인:`, `영상:`, `확인 필요:`, `꼭 확인:`. Say what you changed and, briefly, why.
+
+      The tab puts the two check labels in a "발행 전에 봐 주세요" box above everything else, so judge how important each open point is:
+      - `꼭 확인:` something that could hurt if the post went public as it is: personal or private information visible in a photo (a phone number, a password, a face that should not be shown), a fact you could not confirm that the post states (a price, a date, a name), a rights problem (someone else's photo without a source). Use it rarely.
+      - `확인 필요:` a person should look once, but publishing as it is would be fine: a possible typo kept as on the card, a missing source, a line break to check.
+      - Everything else is a record of what you did and goes without a check label.
+
+      Example:
 
       ```json
       [
         "제목: 표지 문구에 검색어(포카리스웨트·칼로리메이트)를 붙였고, 폰에서 말이 갈라지지 않게 묶었어요",
         "카테고리: 브랜드 (광고 카테고리는 유료 광고 글 전용이라 피했어요)",
         "오타: 3번 '생활이 이점' → '생활의 이점'",
-        "확인 필요: 14번 사진 상자 글자가 다른 회사 제품처럼 보여요"
+        "확인 필요: 14번 사진 상자 글자가 다른 회사 제품처럼 보여요",
+        "꼭 확인: 표지·2번 사진 왼쪽 화면에 행사장 와이파이 이름과 비밀번호가 보여요"
       ]
       ```
 
