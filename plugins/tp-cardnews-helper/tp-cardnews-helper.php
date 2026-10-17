@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.2.1
+ * Version: 1.3.0
  * Author: Trendportal
  */
 
@@ -114,6 +114,98 @@ function tp_cn_check_zip( $path, $filename ) {
 	return ! empty( $data['group']['name'] ) ? $data['group']['name'] : $fallback;
 }
 
+// ── 초인종: 주문이 들어오면 클라우드의 셰프(Claude Code routine)를 바로 깨운다 ──────────
+/*
+ * 10/17 사용자 결정 A(즉시 신호). 매시간 알람으로 깨우면 최대 1시간을 기다리고 주문 없는 날에도 빈손으로 깨어나서다.
+ * routine의 API 트리거 주소로 POST 한 번 = 셰프 한 번 출근. 열쇠(토큰)는 이 사이트 설정에만 두고 화면에 다시 보여 주지 않는다.
+ * 열쇠가 새도 할 수 있는 건 "셰프 깨우기"뿐이다: 셰프는 신호에 딸린 글을 무시하고 탭의 '접수' 주문만 처리한다(tools/cardnews/PROMPT.md).
+ */
+const TP_CN_BELL = 'tp_cn_bell'; // 옵션 이름: array( 'url' => …, 'token' => … )
+
+function tp_cn_ring( $id ) {
+	$bell = get_option( TP_CN_BELL, array() );
+	if ( empty( $bell['url'] ) || empty( $bell['token'] ) ) {
+		$err = '초인종이 아직 설정되지 않았어요 (아래 "셰프 초인종 설정")';
+	} else {
+		$res = wp_remote_post(
+			$bell['url'],
+			array(
+				'timeout' => 20,
+				'headers' => array(
+					'Authorization'     => 'Bearer ' . $bell['token'],
+					// routine 문서(10/17 확인)가 요구하는 머리글. 실험 기능이라 바뀌면 이 날짜만 고친다
+					'anthropic-beta'    => 'experimental-cc-routine-2026-04-01',
+					'anthropic-version' => '2023-06-01',
+					'Content-Type'      => 'application/json',
+				),
+				// 셰프는 이 글을 따르지 않는다. 실행 기록에서 어느 주문 때 깨웠는지 알아보는 표시일 뿐
+				'body'    => wp_json_encode( array( 'text' => "order {$id}" ) ),
+			)
+		);
+		$code = is_wp_error( $res ) ? 0 : wp_remote_retrieve_response_code( $res );
+		if ( $code >= 200 && $code < 300 ) {
+			update_post_meta( $id, '_tp_cn_rang_at', time() );
+			delete_post_meta( $id, '_tp_cn_bell_err' );
+			return true;
+		}
+		$err = is_wp_error( $res )
+			? '셰프에게 연결하지 못했어요: ' . $res->get_error_message()
+			: "셰프가 응답하지 않았어요 (오류 {$code}" . ( 401 === $code ? ', 열쇠가 틀렸거나 바뀌었어요' : '' ) . ')';
+	}
+	update_post_meta( $id, '_tp_cn_bell_err', $err );
+	return false;
+}
+
+// 초인종 설정 저장 (관리자만). 열쇠 칸을 비워 두면 기존 열쇠를 그대로 둔다 — 화면에 열쇠를 다시 채워 보여 주지 않아서
+add_action(
+	'admin_post_tp_cn_bell',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 바꿀 수 있어요' );
+		}
+		check_admin_referer( 'tp_cn_bell' );
+		$bell  = get_option( TP_CN_BELL, array() );
+		$url   = esc_url_raw( trim( wp_unslash( $_POST['bell_url'] ?? '' ) ) );
+		$token = trim( sanitize_text_field( wp_unslash( $_POST['bell_token'] ?? '' ) ) );
+		$back  = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		// 엉뚱한 곳으로 열쇠를 보내지 않게, routine 주소 모양만 받는다
+		if ( ! preg_match( '#^https://api\.anthropic\.com/v1/claude_code/routines/trig_\w+/fire$#', $url ) ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( '초인종 주소는 https://api.anthropic.com/v1/claude_code/routines/trig_…/fire 모양이에요' ), $back ) );
+			exit;
+		}
+		$bell['url'] = $url;
+		if ( '' !== $token ) {
+			$bell['token'] = $token;
+		}
+		update_option( TP_CN_BELL, $bell, false ); // autoload 끔: 탭에서만 쓰는 값이라 모든 페이지에서 불러올 필요 없다
+		wp_safe_redirect( add_query_arg( 'tp_cn_info', 'bell', $back ) );
+		exit;
+	}
+);
+
+// "셰프 다시 부르기": 초인종이 실패했거나, 주방이 멈췄거나, 너무 오래 요리 중일 때
+add_action(
+	'admin_post_tp_cn_recall',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 부를 수 있어요' );
+		}
+		$id = (int) ( $_POST['order'] ?? 0 );
+		check_admin_referer( 'tp_cn_recall_' . $id );
+		$back = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		if ( TP_CN_TYPE !== get_post_type( $id ) || ! get_post_meta( $id, '_tp_cn_zip', true ) ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( '이 주문은 zip이 없어서 다시 요리할 수 없어요. 새로 주문해 주세요' ), $back ) );
+			exit;
+		}
+		// 셰프는 '접수' 주문만 가져가니 상태를 되돌린 뒤 깨운다
+		update_post_meta( $id, '_tp_cn_status', 'new' );
+		delete_post_meta( $id, '_tp_cn_error' );
+		$ok = tp_cn_ring( $id );
+		wp_safe_redirect( $ok ? add_query_arg( 'tp_cn_ok', $id, $back ) : add_query_arg( 'tp_cn_err', rawurlencode( get_post_meta( $id, '_tp_cn_bell_err', true ) ), $back ) );
+		exit;
+	}
+);
+
 // ── 주문 받기 (탭의 폼) ──────────────────────────────────
 
 add_action(
@@ -171,6 +263,10 @@ add_action(
 		update_post_meta( $id, '_tp_cn_videos', $videos );
 		update_post_meta( $id, '_tp_cn_memo', trim( sanitize_textarea_field( wp_unslash( $_POST['memo'] ?? '' ) ) ) );
 
+		if ( ! tp_cn_ring( $id ) ) {
+			// 주문은 저장됐으니 다시 쓸 필요는 없다. 목록의 "셰프 다시 부르기"로 이어서 할 수 있게 알려 준다
+			$fail( '주문은 받았는데 셰프를 깨우지 못했어요. ' . get_post_meta( $id, '_tp_cn_bell_err', true ) . ' — 주문 현황에서 "셰프 다시 부르기"를 눌러 주세요' );
+		}
 		wp_safe_redirect( add_query_arg( 'tp_cn_ok', $id, $back ) );
 		exit;
 	}
@@ -198,6 +294,11 @@ function tp_cn_order( $post ) {
 		'error'   => get_post_meta( $id, '_tp_cn_error', true ),
 		// 요리가 끝난(완성·멈춤) 시각. 메뉴 배지와 "방금 완성" 표시가 이걸로 "아직 안 본 결과"를 센다
 		'finished' => (int) max( (int) get_post_meta( $id, '_tp_cn_done_at', true ), (int) get_post_meta( $id, '_tp_cn_failed_at', true ) ),
+		// 초인종 기록: "셰프 다시 부르기" 버튼을 언제 보여 줄지 정하는 데 쓴다
+		'rang_at'  => (int) get_post_meta( $id, '_tp_cn_rang_at', true ),
+		'bell_err' => get_post_meta( $id, '_tp_cn_bell_err', true ),
+		'started'  => (int) get_post_meta( $id, '_tp_cn_working_at', true ),
+		'has_zip'  => (bool) get_post_meta( $id, '_tp_cn_zip', true ),
 	);
 }
 
@@ -359,6 +460,8 @@ function tp_cn_page() {
 	$msg = array();
 	if ( isset( $_GET['tp_cn_err'] ) ) {
 		$msg = array( 'bad', sanitize_text_field( wp_unslash( $_GET['tp_cn_err'] ) ) );
+	} elseif ( isset( $_GET['tp_cn_info'] ) ) {
+		$msg = array( 'ok', '초인종 설정을 저장했어요. 다음 주문부터 셰프가 바로 와요.' );
 	} elseif ( isset( $_GET['tp_cn_ok'] ) && 'new' === get_post_meta( (int) $_GET['tp_cn_ok'], '_tp_cn_status', true ) ) {
 		// 아직 접수 상태일 때만. 요리가 시작·끝난 뒤엔 목록이 상태를 말해 주니 "곧 시작해요"가 남아 있으면 헷갈린다
 		$msg = array( 'ok', '주문 받았어요! 셰프 트란시스가 곧 요리를 시작해요.' );
@@ -375,8 +478,30 @@ function tp_cn_page() {
 			'poll'   => rest_url( 'tp-cardnews/v1/orders' ),
 			'rnonce' => wp_create_nonce( 'wp_rest' ),
 			'seen'   => isset( $GLOBALS['tp_cn_prev_seen'] ) ? (int) $GLOBALS['tp_cn_prev_seen'] : time(),
+			'bell'   => get_option( TP_CN_BELL, array() ),
+			'now'    => time(),
 		)
 	);
+}
+
+/**
+ * 이 주문에 "셰프 다시 부르기"가 필요한지와 그 이유. 필요 없으면 null.
+ * 기다리는 시간: 초인종 뒤 셰프가 주문을 가져가기까지 보통 1~2분, 요리는 10분 안팎(711 실측 전 추정)이라 넉넉히.
+ */
+function tp_cn_recall_reason( $o, $now ) {
+	if ( 'new' === $o['status'] && $o['bell_err'] ) {
+		return $o['bell_err'];
+	}
+	if ( 'new' === $o['status'] && $o['rang_at'] && $now - $o['rang_at'] > 15 * MINUTE_IN_SECONDS ) {
+		return '초인종을 눌렀는데 15분이 지나도 셰프가 주문을 가져가지 않았어요.';
+	}
+	if ( 'working' === $o['status'] && $o['started'] && $now - $o['started'] > 45 * MINUTE_IN_SECONDS ) {
+		return '요리가 45분 넘게 끝나지 않아요. 셰프가 중간에 멈췄을 수 있어요.';
+	}
+	if ( 'failed' === $o['status'] && $o['has_zip'] ) {
+		return ''; // 멈춘 이유는 이미 위에 나온다 — 버튼만
+	}
+	return null;
 }
 
 /**
@@ -482,6 +607,13 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-body details { margin-top: 8px; }
 .tpcn-body summary { cursor: pointer; color: var(--fresh); font-weight: 700; }
 .tpcn-body details ul { margin: 6px 0 0; padding-left: 18px; }
+.tpcn-recall { margin-top: 8px; }
+.tpcn-recall p { margin: 0 0 6px; color: var(--muted); }
+.tpcn-recall button { padding: 5px 14px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.tpcn-bell summary { cursor: pointer; font-family: var(--font-display); font-size: 18px; }
+.tpcn-bell summary small { margin-left: 6px; font-family: var(--font-body); font-size: 12px; color: var(--muted); }
+.tpcn-bell form { display: grid; gap: 12px; margin-top: 12px; }
+.tpcn-bell input[type=url], .tpcn-bell input[type=password] { width: 100%; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; }
 .tpcn-empty { display: grid; justify-items: center; gap: 6px; padding: 18px 0 8px; color: var(--muted); text-align: center; }
 .tpcn-empty img { width: 180px; height: auto; }
 @media (max-width: 782px) {
@@ -580,7 +712,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 			<span class="tpcn-chip"><?php echo esc_html( TP_CN_STATUS[ $s ] ); ?></span>
 			<div class="tpcn-body">
 			<?php if ( 'new' === $s ) : ?>
+				<?php if ( null === tp_cn_recall_reason( $o, $u['now'] ) ) : // 초인종이 실패했으면 "곧 가져가요"는 틀린 말이라 아래 이유만 ?>
 				<p>셰프 트란시스가 곧 주문서를 가져가요.</p>
+				<?php endif; ?>
 			<?php elseif ( 'working' === $s ) : ?>
 				<p>사진을 고르고 글을 굽는 중이에요.</p>
 			<?php elseif ( 'failed' === $s ) : ?>
@@ -606,12 +740,45 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				</details>
 				<?php endif; ?>
 			<?php endif; ?>
+			<?php
+			$why = tp_cn_recall_reason( $o, $u['now'] );
+			if ( null !== $why ) :
+				?>
+				<form class="tpcn-recall" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
+					<?php if ( '' !== $why ) : ?>
+					<p><?php echo esc_html( $why ); ?></p>
+					<?php endif; ?>
+					<input type="hidden" name="action" value="tp_cn_recall">
+					<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+					<?php wp_nonce_field( 'tp_cn_recall_' . (int) $o['id'] ); ?>
+					<button type="submit">🔔 셰프 다시 부르기</button>
+				</form>
+			<?php endif; ?>
 			</div>
 		</li>
 		<?php endforeach; ?>
 	</ol>
 	<?php endif; ?>
 </section>
+
+<?php // 초인종 설정: 처음 한 번과 열쇠를 바꿀 때만 쓰니 접어 둔다. 열쇠는 저장 뒤 다시 보여 주지 않는다 ?>
+<details class="tpcn-panel tpcn-bell"<?php echo empty( $u['bell']['token'] ) ? ' open' : ''; ?>>
+	<summary>🔔 셰프 초인종 설정 <small><?php echo empty( $u['bell']['token'] ) ? '아직 설정 안 됨 — 주문해도 셰프가 오지 않아요' : '연결됨'; ?></small></summary>
+	<form method="post" action="<?php echo esc_url( $u['action'] ); ?>">
+		<input type="hidden" name="action" value="tp_cn_bell">
+		<?php wp_nonce_field( 'tp_cn_bell' ); ?>
+		<p class="tpcn-hint">claude.ai/code/routines → 셰프 routine → Edit → API 트리거에서 받은 주소와 열쇠를 넣어 주세요.</p>
+		<div class="tpcn-field">
+			<label for="tpcn-bell-url">주소</label>
+			<input type="url" id="tpcn-bell-url" name="bell_url" required value="<?php echo esc_attr( $u['bell']['url'] ?? '' ); ?>" placeholder="https://api.anthropic.com/v1/claude_code/routines/trig_…/fire">
+		</div>
+		<div class="tpcn-field">
+			<label for="tpcn-bell-token">열쇠 <em><?php echo empty( $u['bell']['token'] ) ? '필수' : '바꿀 때만 — 비워 두면 그대로'; ?></em></label>
+			<input type="password" id="tpcn-bell-token" name="bell_token" autocomplete="off" <?php echo empty( $u['bell']['token'] ) ? 'required' : ''; ?> placeholder="sk-ant-…">
+		</div>
+		<button type="submit" class="tpcn-go">저장</button>
+	</form>
+</details>
 
 <script>
 (() => {
