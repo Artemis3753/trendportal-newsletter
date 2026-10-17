@@ -117,9 +117,12 @@ figma.ui.onmessage = async msg => {
       const bytes = await img.getBytesAsync();
       files.push({ name: `figma/images/${hashes[i]}.${ext(bytes)}`, bytes: bytes });
     }
-    // 대표 이미지 = 글자까지 다 있는 표지. 표지는 맨 왼쪽 카드다 (fetch가 x 순서로 세는 것과 같은 기준)
+    // 대표 이미지 = 글자까지 다 있는 표지. 표지는 책 읽는 순서의 첫 장 = 윗줄 맨 왼쪽 카드
+    // (764처럼 두 줄로 놓인 묶음은 맨 왼쪽만 보면 아랫줄 첫 장과 겹친다. fetch의 reading_order와 같은 기준)
     say('표지 내보내는 중…');
-    const cover = got.frames.reduce((a, b) => (box(b).x < box(a).x ? b : a));
+    const top = Math.min(...got.frames.map(f => box(f).y));
+    const cover = got.frames.filter(f => box(f).y - top < f.height / 2)
+      .reduce((a, b) => (box(b).x < box(a).x ? b : a));
     const png = await cover.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 1 } });
     files.push({ name: 'figma/cover-export.png', bytes: png });
   } catch (e) {

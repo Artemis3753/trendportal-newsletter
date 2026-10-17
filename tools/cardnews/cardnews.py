@@ -33,6 +33,7 @@ import xml.etree.ElementTree as ET
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -228,6 +229,10 @@ def build_archive(order, cards, notes, media):
         if card.get("video"):
             out += video_link(card["video"])
         out += h2(card["title"])
+        if card.get("brand"):
+            # 카피 모음형: 카드처럼 카피(제목) 바로 아래 브랜드를 작게 (사용자 결정 B, 10/17)
+            out += ('<!-- wp:paragraph {"className":"tp-brand","fontSize":"small"} -->'
+                    f'<p class="tp-brand has-small-font-size">{esc(card["brand"])}</p><!-- /wp:paragraph -->')
         out += "".join(para(esc(p)) for p in card["what"])
         if card.get("src"):
             out += ('<!-- wp:paragraph {"className":"tp-source","fontSize":"small"} -->'
@@ -299,11 +304,14 @@ def scan_group(d):
     s = load(d / "figma", "scan.json")
     g = ET.Element("frame", id=s["group"]["id"], name=s["group"]["name"])
     for f in s["frames"]:
-        fr = ET.SubElement(g, "frame", id=f["id"], name=f["name"], x=str(f["x"]), y=str(f["y"]))
+        fr = ET.SubElement(g, "frame", id=f["id"], name=f["name"], x=str(f["x"]), y=str(f["y"]), height=str(f["height"]))
         for t in f["texts"]:
             text = re.sub(r"\s*[\n]\s*", " ", t["characters"]).strip()
-            ET.SubElement(fr, "text", name=text, x=str(t["x"]), y=str(t["y"]),
-                          width=str(t["width"]), height=str(t["height"]))
+            # lines = 줄바꿈을 살린 글자 (카피 제목은 끊어 읽는 자리가 리듬이라 그대로 쓴다, 764 사용자 결정 10/17)
+            el = ET.SubElement(fr, "text", name=text, lines=t["characters"].strip(), x=str(t["x"]), y=str(t["y"]),
+                               width=str(t["width"]), height=str(t["height"]))
+            if t.get("fontSize"):
+                el.set("font", str(t["fontSize"]))
         for im in f["images"]:
             ET.SubElement(fr, "rounded-rectangle", name=im["name"], hash=im["hash"], x=str(im["x"]), y=str(im["y"]),
                           width=str(im["width"]), height=str(im["height"]))
@@ -316,6 +324,20 @@ def scan_image(d, el):
     return next(iter(sorted((d / "figma" / "images").glob(f"{h}.*"))), None) if h else None
 
 
+def reading_order(frames):
+    """카드를 책 읽듯이: 윗줄부터, 줄 안에서는 왼쪽부터.
+    242는 한 줄이었지만 764는 두 줄(1~10 / 11~17)이라 x만으로 세면 1, 11, 2, 12…로 섞였다(10/17).
+    y가 카드 높이 절반 안쪽으로 비슷하면 같은 줄로 본다."""
+    rows = []
+    for fr in sorted(frames, key=lambda e: float(e.get("y", 0))):
+        y = float(fr.get("y", 0))
+        if rows and y - float(rows[-1][0].get("y", 0)) < float(fr.get("height") or 0) / 2:
+            rows[-1].append(fr)
+        else:
+            rows.append([fr])
+    return [fr for row in rows for fr in sorted(row, key=lambda e: float(e.get("x")))]
+
+
 def frame_no(fr, i):
     # 프레임 이름 끝 번호("트렌드포털 802-3" → 3)가 카드 번호. 없으면 왼쪽부터 센 순서
     m = re.search(r"-(\d+)\s*$", fr.get("name", ""))
@@ -324,6 +346,7 @@ def frame_no(fr, i):
 
 # 출처 표기는 시기마다 다르다: 2026년 가을 카드는 "© 한국경제", 그 전 카드는 "출처ㅣVogue"
 SRC_MARK = re.compile(r"^\s*(?:©|ⓒ|출처\s*[ㅣ|:])\s*")
+BRAND_LINE = re.compile(r"^\s*-\s*(.+?)\s*-\s*$")
 
 
 def read_card(fr):
@@ -337,10 +360,25 @@ def read_card(fr):
     if not rest:
         return None
     body = max(rest, key=lambda t: len(t.get("name")))
-    # 제목 = 큰 글씨 한 줄(높이 60~120). 두 줄 제목은 레이어가 둘로 나뉘어 있어 위에서부터 잇는다
-    lines = sorted((t for t in rest if t is not body and 60 <= float(t.get("height")) <= 120), key=lambda t: float(t.get("y")))
-    extra = [t.get("name") for t in rest if t is not body and t not in lines]
-    card = {"title": " ".join(t.get("name").strip() for t in lines), "what": [body.get("name").strip()]}
+    others = [t for t in rest if t is not body]
+    font = lambda t: float(t.get("font") or 0)
+    top = max(map(font, others), default=0)
+    if top > font(body):
+        # 플러그인 결과엔 글자 크기가 있다: 제목 = 가장 큰 글씨. 242(한 줄짜리 레이어 여럿)와
+        # 764(두 줄 레이어 하나, 높이 210)가 둘 다 100이라 높이보다 이게 맞다(10/17)
+        lines = [t for t in others if font(t) == top]
+    else:
+        # MCP 메타데이터엔 글자 크기가 없어서: 큰 글씨 한 줄(높이 60~120)
+        lines = [t for t in others if 60 <= float(t.get("height")) <= 120]
+    # 두 줄 제목이 레이어 둘로 나뉘어 있으면 위에서부터 띄어쓰기로 잇고, 레이어 하나 안의 줄바꿈은 살린다
+    lines.sort(key=lambda t: float(t.get("y")))
+    extra = [t.get("name") for t in others if t not in lines]
+    card = {"title": " ".join((t.get("lines") or t.get("name")).strip() for t in lines), "what": [body.get("name").strip()]}
+    # 카피 모음형(764)의 "-가텐 (구인 정보지)-" 줄 = 그 카피를 쓴 브랜드
+    brand = next((m.group(1) for m in (BRAND_LINE.match(x) for x in extra) if m), None)
+    if brand:
+        card["brand"] = brand
+        extra = [x for x in extra if not BRAND_LINE.match(x)]
     if src:
         card["src"] = SRC_MARK.sub("", src[0].get("name")).strip()
     return card, len(lines), extra
@@ -452,10 +490,16 @@ def read_caption(d):
     return paras[:-1], paras[-1:], []
 
 
-def photo_layer(fr):
+def background_hashes(frames):
+    # 내용 카드 절반 넘게 똑같이 깔린 사진 = 종이 질감 같은 배경 (764는 15장 모두 같은 배경, 10/17)
+    seen = Counter(h for fr in frames for h in {e.get("hash") for e in fr if e.get("hash")})
+    return {h for h, k in seen.items() if k >= 3 and k > len(frames) / 2}
+
+
+def photo_layer(fr, skip=()):
     # 카드에 깔린 사진 = 카드 안에서 가장 넓은 사진 레이어 (그라데이션 판·국기·로고보다 크다)
     # MCP 메타데이터는 사진인지 표시가 없어 이름("image …")으로, 플러그인 결과는 hash가 있으면 사진
-    imgs = [e for e in fr if e.get("hash") or e.get("name", "").startswith("image")]
+    imgs = [e for e in fr if (e.get("hash") or e.get("name", "").startswith("image")) and e.get("hash") not in skip]
     return max(imgs, key=lambda e: float(e.get("width")) * float(e.get("height"))) if imgs else None
 
 
@@ -484,8 +528,9 @@ def fetch(d):
         group = scan_group(d)
     else:
         group = figma_group(d, order["figma"]["group"])
-    frames = sorted((c for c in group if c.tag == "frame"), key=lambda e: float(e.get("x")))
+    frames = reading_order([c for c in group if c.tag == "frame"])
     videos = {int(k): v for k, v in order.get("videos", {}).items()}
+    bg = background_hashes(frames[1:-1])
     cards, warn = [], []
     # 첫 장 = 표지, 마지막 장 = 끝 카드(계정 이름 + 제목 한 줄)라서 빼고, 그 사이가 내용 카드
     for i, fr in enumerate(frames[1:-1], start=1):
@@ -498,7 +543,7 @@ def fetch(d):
         card["no"] = n
         if not card.get("title"):
             warn.append(f"{n}번 제목을 못 찾았어요 (큰 글씨 한 줄이 없음)")
-        if not card.get("src"):
+        if not card.get("src") and not card.get("brand"):
             warn.append(f"{n}번 출처가 없어요")
         if nlines > 1:
             warn.append(f"{n}번 제목이 {nlines}줄이라 띄어쓰기로 이었어요 — 줄바꿈이 맞으면 cards.json에서 \\n으로")
@@ -517,13 +562,13 @@ def fetch(d):
         else:
             # 사람이 내보낸 사진(images/NN.*)이 먼저 — 여러 장을 합친 카드(트윗 캡처 겹침 등)는 원본 한 장으론 안 돼서
             # 없으면 플러그인 사진 원본, 그것도 없으면 MCP rawImages(figma/cardNN-raw-*)에서 고른다
-            el = photo_layer(fr)
+            el = photo_layer(fr, bg)
             layer = el.get("name") if el is not None else None
             fn = find_image(d, n, layer)
             if not fn and scan_image(d, el):
                 fn = to_web(scan_image(d, el), d / "images" / f"{n:02d}.jpg")
                 # 사진 위에 다른 사진(트윗 캡처·브랜드 로고 등)이 겹친 카드는 원본만 들어간다 — 242의 3·6번(10/17)
-                deco = [e.get("name") for e in fr if e.get("hash") and e.get("hash") != el.get("hash")]
+                deco = [e.get("name") for e in fr if e.get("hash") and e.get("hash") not in bg | {el.get("hash")}]
                 if deco:
                     warn.append(f"{n}번 사진 위에 겹친 그림 {deco}은 빠져요 — 필요하면 카드에서 글자만 숨겨 images/{n:02d}.jpg로")
             if not fn and raws(d, f"card{n:02d}"):
