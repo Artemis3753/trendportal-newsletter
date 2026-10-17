@@ -814,6 +814,52 @@ body:has(.tp-copy-stage) { overflow-x: clip; }
 .tp-copy .tp-brand::after { content: "  \2014"; }
 .wp-block-post-content .tp-copy p:not(.tp-brand) { margin-top: 18px !important; color: rgba(255,255,255,.86); font-size: .9375rem; line-height: 1.75; }
 
+/* Interview panel posts (e.g. 734, one question answered by many editors): the question once as the
+   usual .tp-iv-q heading, then each answer as a panel shaped like its original card (4:5, grows with long answers).
+   Markup from tools/cardnews: .tp-pn-card (group) > p.tp-pn-q, figure.tp-pn-face, p.tp-pn-pill > a, p (answer).
+   Layout follows the 2000px card: question 6% from the top, rule 25% wide, face 19% wide, text 5.75% from the sides.
+   Background colours were measured on the card (navy edges, a diagonal haze in the middle). Text is a little larger
+   than the card ratio so it reads on a phone. No overflow: hidden, or aspect-ratio would clip long answers */
+.wp-block-post-content .tp-pn-card {
+  position: relative;
+  isolation: isolate;
+  aspect-ratio: 4 / 5;
+  box-sizing: border-box;
+  margin-top: 28px !important;
+  padding: 6% 5.75% 8%;
+  border-radius: 14px;
+  text-align: center;
+  background:
+    radial-gradient(55% 35% at 25% 72%, rgba(52,66,78,.75), transparent 70%),
+    radial-gradient(60% 40% at 88% 22%, rgba(48,62,74,.6), transparent 70%),
+    linear-gradient(160deg, #0a141e 0%, #1b2834 48%, #04090e 100%);
+}
+.tp-pn-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='tpn'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23tpn)'/%3E%3C/svg%3E");
+  opacity: .28;
+  mix-blend-mode: overlay;
+}
+.wp-block-post-content .tp-pn-card > * { max-width: 100% !important; }
+.wp-block-post-content .tp-pn-card p.tp-pn-q { margin: 0 !important; color: #fff; text-align: center; font-size: 15px; font-weight: 700; line-height: 1.45; letter-spacing: -0.02em; }
+.tp-pn-card p.tp-pn-q::after { content: ""; display: block; width: 25%; margin: 14px auto 0; border-top: 1px solid rgba(255,255,255,.55); }
+.wp-block-post-content .tp-pn-card figure.tp-pn-face { width: 19% !important; max-width: none !important; margin: 22px auto 12px !important; border-radius: 50%; overflow: hidden; }
+.tp-pn-card figure.tp-pn-face img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; border-radius: 50%; }
+.wp-block-post-content .tp-pn-card p.tp-pn-pill { margin: 0 0 20px !important; text-align: center; }
+.tp-pn-card p.tp-pn-pill a { display: inline-block; padding: 4px 10px; background: #fff; border-radius: 3px; color: #000 !important; font-size: 12.5px; font-weight: 500; line-height: 1.5; text-decoration: none !important; }
+.wp-block-post-content .tp-pn-card p:not(.tp-pn-q):not(.tp-pn-pill) { margin-top: 14px !important; color: #fff; text-align: left; font-size: 13.5px; font-weight: 500; line-height: 1.75; letter-spacing: -0.01em; }
+/* PC: as wide as post photos (480px), so the 4:5 panel is not a tall empty box in the 650px column */
+@media (min-width: 782px) {
+  .wp-block-post-content .tp-pn-card { max-width: 480px !important; margin-left: auto !important; margin-right: auto !important; }
+  .wp-block-post-content .tp-pn-card p.tp-pn-q { font-size: 16px; }
+  .wp-block-post-content .tp-pn-card p:not(.tp-pn-q):not(.tp-pn-pill) { font-size: 14.5px; }
+  .tp-pn-card p.tp-pn-pill a { font-size: 13px; }
+}
+
 /* TP Kakao Share button */
 .tp-kakao-share:not([hidden]) {
   display: flex;

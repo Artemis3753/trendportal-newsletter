@@ -235,6 +235,41 @@ def build_weekly(order, cards, notes, media):
 # ── build: 아카이빙 틀 (기준 글 242) ─────────────────────
 # 글자 없는 커버 사진 → 인스타 캡션 앞부분 → 카드마다 사진 → (영상 링크) → H2 → 설명 → 출처 → 캡션 끝맺음
 
+def iv_heading(label, text):
+    # 인터뷰 질문 소제목: 498과 같은 마크업. 라벨 뒤 공백은 검색·글자 추출에서 "QUESTION 01대체…"로 붙지 않게(10/15)
+    return ('<!-- wp:heading {"className":"tp-iv-q"} -->'
+            f'<h2 class="wp-block-heading tp-iv-q"><span class="tp-q">{label}</span> {esc(text)}</h2><!-- /wp:heading -->')
+
+
+def panel_cards(media, cards, notes):
+    """인터뷰 패널형(734 — 질문 하나에 여러 명이 답한 카드, 사용자 결정 D 10/17, 시안 docs/트렌드포털-시안비교/1017-4-*).
+    같은 질문 카드끼리 묶어 QUESTION 소제목 한 번 → 답한 사람(cards[].who)마다 카드 한 장 모양의 판(.tp-pn-card).
+    답한 사람이 없는 카드(734의 2번 안내 카드)는 글만 그 질문 소제목 앞에 둔다. 모양은 additional.css의 Interview panel"""
+    groups = []
+    for card, note in zip(cards, notes):
+        if groups and groups[-1][0] == card["title"]:
+            groups[-1][1].append((card, note))
+        else:
+            groups.append((card["title"], [(card, note)]))
+    out = ""
+    for i, (title, items) in enumerate(groups, start=1):
+        out += "".join(para(esc(p)) for c, _ in items if not c.get("who") for p in c["what"])
+        out += iv_heading("QUESTION" if len(groups) == 1 else f"QUESTION {i:02d}", re.sub(r"^Q\.\s*", "", title).replace("\n", " "))
+        for c, note in items:
+            if not c.get("who"):
+                continue
+            # 판 안은 카드 순서 그대로: 질문 머리(짧은 선은 CSS) → 얼굴 → "@계정 / 이름" 알약 → 답
+            inner = para(esc(title), "tp-pn-q")
+            if c.get("image"):
+                inner += image_block(media, c["image"], note.get("alt", ""), size="large", cls="tp-pn-face", link_none=True)
+            w = c["who"]
+            label = f"@{w['handle']}" + (f" / {w['name']}" if w.get("name") else "")
+            inner += para(f'<a href="https://www.instagram.com/{attr(w["handle"])}/" target="_blank" rel="noreferrer noopener">{esc(label)}</a>', "tp-pn-pill")
+            inner += "".join(para(esc(p)) for p in c["what"])
+            out += group("tp-pn-card", inner)
+    return out
+
+
 def build_archive(order, cards, notes, media):
     if len(notes["cards"]) != len(cards["cards"]):
         sys.exit(f"카드 {len(cards['cards'])}장인데 notes는 {len(notes['cards'])}장이에요")
@@ -249,10 +284,13 @@ def build_archive(order, cards, notes, media):
     # 처음엔 카드마다 "-브랜드-" 줄이 있으면 자동으로 골랐지만, 카드 모양만 보고 틀을 붙이면 엉뚱한 글에도 띠가 생길 수 있어
     # order.json에 "layout": "copy"라고 적은 주문만 쓴다(10/17 사용자: 일단 764 글에만)
     copy = order.get("layout") == "copy"
+    panel = order.get("layout") == "panel"
+    if panel:
+        out += panel_cards(media, cards["cards"], notes["cards"])
     if copy:
         out += ('<!-- wp:group {"align":"full","className":"tp-copy-stage","layout":{"type":"default"}} -->'
                 '<div class="wp-block-group alignfull tp-copy-stage">')
-    for card, note in zip(cards["cards"], notes["cards"]):
+    for card, note in ([] if panel else zip(cards["cards"], notes["cards"])):
         if copy:
             out += '<!-- wp:group {"className":"tp-copy","layout":{"type":"default"}} --><div class="wp-block-group tp-copy">'
         if card.get("clip"):
@@ -404,6 +442,15 @@ def frame_no(fr, i):
 # 출처 표기는 시기마다 다르다: 2026년 가을 카드는 "© 한국경제", 그 전 카드는 "출처ㅣVogue"
 SRC_MARK = re.compile(r"^\s*(?:©|ⓒ|출처\s*[ㅣ|:])\s*")
 BRAND_LINE = re.compile(r"^\s*-\s*(.+?)\s*-\s*$")
+WHO_LINE = re.compile(r"^\s*@([A-Za-z0-9._]+)\s*(?:/\s*(.+))?$")
+
+
+def paragraphs(body):
+    """본문 글자 → 문단 목록. 카드의 빈 줄이 문단 나눔이다(post-style 규칙, 10/10 사용자).
+    플러그인 결과엔 줄바꿈을 살린 글자(lines)가 있어서 빈 줄로 나누고, 문단 안 줄바꿈은 띄어쓰기로 잇는다.
+    MCP 메타데이터엔 줄바꿈이 없어서 예전처럼 한 문단"""
+    raw = (body.get("lines") or body.get("name")).strip()
+    return [re.sub(r"\s*\n\s*", " ", p).strip() for p in re.split(r"\n\s*\n", raw) if p.strip()]
 
 
 def read_card(fr):
@@ -430,7 +477,12 @@ def read_card(fr):
     # 두 줄 제목이 레이어 둘로 나뉘어 있으면 위에서부터 띄어쓰기로 잇고, 레이어 하나 안의 줄바꿈은 살린다
     lines.sort(key=lambda t: float(t.get("y")))
     extra = [t.get("name") for t in others if t not in lines]
-    card = {"title": " ".join((t.get("lines") or t.get("name")).strip() for t in lines), "what": [body.get("name").strip()]}
+    card = {"title": " ".join((t.get("lines") or t.get("name")).strip() for t in lines), "what": paragraphs(body)}
+    # 인터뷰 패널형(734)의 "@luxmag.kr / 룩스매거진" 줄 = 답한 사람. 예전엔 꾸밈 글자로 버렸다(10/17)
+    who = next((m for m in (WHO_LINE.match(x) for x in extra) if m), None)
+    if who:
+        card["who"] = {"handle": who.group(1), "name": (who.group(2) or "").strip()}
+        extra = [x for x in extra if not WHO_LINE.match(x)]
     # 카피 모음형(764)의 "-가텐 (구인 정보지)-" 줄 = 그 카피를 쓴 브랜드
     brand = next((m.group(1) for m in (BRAND_LINE.match(x) for x in extra) if m), None)
     if brand:
@@ -780,7 +832,8 @@ def fetch(d):
         card["no"] = n
         if not card.get("title"):
             warn.append(f"{n}번 제목을 못 찾았어요 (큰 글씨 한 줄이 없음)")
-        if not card.get("src") and not card.get("brand"):
+        if not card.get("src") and not card.get("brand") and not card.get("who"):
+            # 인터뷰 답 카드는 답한 사람이 곧 출처라 출처 줄이 없다
             warn.append(f"{n}번 출처가 없어요")
         if nlines > 1:
             warn.append(f"{n}번 제목이 {nlines}줄이라 띄어쓰기로 이었어요 — 줄바꿈이 맞으면 cards.json에서 \\n으로")
