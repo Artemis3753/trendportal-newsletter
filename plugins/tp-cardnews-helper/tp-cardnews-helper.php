@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.10.0
+ * Version: 1.11.0
  * Author: Trendportal
  */
 
@@ -194,8 +194,9 @@ const TP_CN_LAYOUTS = array(
  * 인터뷰 대상 줄들(이름 · 인스타 주소 · 프로필 사진, 모두 선택) → 목록 또는 WP_Error.
  * 글 시작·끝 프로필 카드 재료다. 비워도 주문은 된다(사용자 결정: 항상 선택) — 셰프가 프로필 카드를 빼고 알린다.
  * 파일은 아직 옮기지 않는다(다른 칸 검사가 다 끝난 뒤에 옮긴다).
+ * 광고 폼(1.11.0)도 같은 칸을 광고 브랜드 칸으로 쓴다 — $label은 오류 문구에 들어갈 이름.
  */
-function tp_cn_parse_people( $names, $instas, $files ) {
+function tp_cn_parse_people( $names, $instas, $files, $label = '인터뷰 대상' ) {
 	$out = array();
 	foreach ( (array) $names as $i => $name ) {
 		$name  = trim( sanitize_text_field( (string) $name ) );
@@ -207,10 +208,10 @@ function tp_cn_parse_people( $names, $instas, $files ) {
 		}
 		$who = '' !== $name ? $name : ( '' !== $raw ? $raw : '사진만 넣은 줄' );
 		if ( '' !== $raw && ! preg_match( '#^https?://(www\.)?instagram\.com/[A-Za-z0-9._]+/?#', $insta ) ) {
-			return new WP_Error( 'tp_cn_people', "인터뷰 대상 '{$who}'의 인스타 주소를 못 읽었어요 — https://www.instagram.com/계정/ 모양으로 붙여 넣어 주세요" );
+			return new WP_Error( 'tp_cn_people', "{$label} '{$who}'의 인스타 주소를 못 읽었어요 — https://www.instagram.com/계정/ 모양으로 붙여 넣어 주세요" );
 		}
 		if ( '' === $name && '' === $raw ) {
-			return new WP_Error( 'tp_cn_people', '인터뷰 대상 사진만 있고 이름·인스타 주소가 없는 줄이 있어요' );
+			return new WP_Error( 'tp_cn_people', "{$label} 사진만 있고 이름·인스타 주소가 없는 줄이 있어요" );
 		}
 		$p = array(
 			'name'  => $name,
@@ -220,11 +221,11 @@ function tp_cn_parse_people( $names, $instas, $files ) {
 		);
 		if ( $has ) {
 			if ( UPLOAD_ERR_OK !== $files['error'][ $i ] ) {
-				return new WP_Error( 'tp_cn_people', "인터뷰 대상 '{$who}' 사진을 올리다 멈췄어요 (오류 {$files['error'][ $i ]})" );
+				return new WP_Error( 'tp_cn_people', "{$label} '{$who}' 사진을 올리다 멈췄어요 (오류 {$files['error'][ $i ]})" );
 			}
 			$ext = strtolower( pathinfo( $files['name'][ $i ], PATHINFO_EXTENSION ) );
 			if ( 'image' !== ( TP_CN_FILE_TYPES[ $ext ] ?? '' ) || 'image' !== tp_cn_sniff( $files['tmp_name'][ $i ] ) ) {
-				return new WP_Error( 'tp_cn_people', "인터뷰 대상 '{$who}' 사진은 jpg·png·webp만 받아요" );
+				return new WP_Error( 'tp_cn_people', "{$label} '{$who}' 사진은 jpg·png·webp만 받아요" );
 			}
 			$p['tmp'] = $files['tmp_name'][ $i ];
 			$p['ext'] = $ext;
@@ -564,9 +565,16 @@ add_action(
 		if ( $interview && ! isset( TP_CN_LAYOUTS[ $layout ] ) ) {
 			$fail( '인터뷰 형식을 골라 주세요 (질문 여러 개 / 패널)' );
 		}
-		$people = $interview ? tp_cn_parse_people( wp_unslash( $_POST['pname'] ?? array() ), wp_unslash( $_POST['pinsta'] ?? array() ), $_FILES['pfile'] ?? array() ) : array();
+		// 광고 폼(1.11.0, 10/18 사용자): 인터뷰처럼 글 시작·끝에 광고 브랜드 프로필 카드를 단다. 같은 칸(pname·pinsta·pfile)을 쓴다
+		$ad     = 'ad' === ( $_POST['kind'] ?? '' );
+		$label  = $ad ? '광고 브랜드' : '인터뷰 대상';
+		$people = ( $interview || $ad ) ? tp_cn_parse_people( wp_unslash( $_POST['pname'] ?? array() ), wp_unslash( $_POST['pinsta'] ?? array() ), $_FILES['pfile'] ?? array(), $label ) : array();
 		if ( is_wp_error( $people ) ) {
 			$fail( $people->get_error_message() );
+		}
+		// 광고 글은 브랜드 계정 링크가 핵심이라 인스타 주소는 꼭 받는다(사진은 없어도 카드는 만들어진다)
+		if ( $ad && ! array_filter( array_column( $people, 'insta' ) ) ) {
+			$fail( '광고 브랜드의 인스타 주소를 넣어 주세요' );
 		}
 		$group = tp_cn_check_zip( $file['tmp_name'], $file['name'] );
 		if ( is_wp_error( $group ) ) {
@@ -603,7 +611,7 @@ add_action(
 					foreach ( array_merge( array( $name ), array_column( $stored, 'file' ), array_filter( array_column( $people, 'file' ) ) ) as $gone ) {
 						unlink( tp_cn_dir() . '/' . $gone );
 					}
-					$fail( "인터뷰 대상 '{$p['name']}' 사진을 저장하지 못했어요. 잠시 뒤 다시 해 주세요" );
+					$fail( "{$label} '{$p['name']}' 사진을 저장하지 못했어요. 잠시 뒤 다시 해 주세요" );
 				}
 				$people[ $i ]['file'] = $pname;
 			}
@@ -623,7 +631,7 @@ add_action(
 		update_post_meta( $id, '_tp_cn_videos', $rows['videos'] );
 		update_post_meta( $id, '_tp_cn_files', $stored );
 		update_post_meta( $id, '_tp_cn_memo', trim( sanitize_textarea_field( wp_unslash( $_POST['memo'] ?? '' ) ) ) );
-		update_post_meta( $id, '_tp_cn_kind', $interview ? 'interview' : 'cardnews' );
+		update_post_meta( $id, '_tp_cn_kind', $interview ? 'interview' : ( $ad ? 'ad' : 'cardnews' ) );
 		update_post_meta( $id, '_tp_cn_layout', $layout );
 		update_post_meta( $id, '_tp_cn_people', array_values( $people ) );
 
@@ -1095,6 +1103,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-prow input:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
 .tpcn-tag { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 11px; font-weight: 700; vertical-align: 2px; }
 .tpcn-tag.is-iv { background: #fde9e2; border-color: #f4b8a5; color: #a8401f; }
+.tpcn-tag.is-ad { background: #e6effd; border-color: #a9c4f2; color: #1f4fa8; }
 .tpcn-go { justify-self: start; padding: 11px 22px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font-family: var(--font-display); font-size: 17px; cursor: pointer; box-shadow: 0 4px 0 #b8401d; }
 .tpcn-go:hover { background: #ec6a43; }
 .tpcn-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #b8401d; }
@@ -1196,14 +1205,15 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 <p class="tpcn-msg ok" id="tpcn-live" role="status" hidden></p>
 
 <section class="tpcn-panel">
-	<h2>새 주문서 <small>카드뉴스·인터뷰 하나 = 주문 하나</small></h2>
+	<h2>새 주문서 <small>카드뉴스·인터뷰·광고 하나 = 주문 하나</small></h2>
 	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data" data-max="<?php echo (int) $u['max']; ?>">
 		<input type="hidden" name="action" value="tp_cn_order">
 		<?php echo $u['nonce']; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_nonce_field 결과 ?>
-		<?php // 주문 종류(1.8.0, 사용자 A): 맨 위에서 고르면 인터뷰일 때만 인터뷰 칸이 나타난다 ?>
+		<?php // 주문 종류(1.8.0, 사용자 A): 맨 위에서 고르면 인터뷰·광고일 때만 대상(브랜드) 칸이 나타난다 ?>
 		<div class="tpcn-kind" role="radiogroup" aria-label="주문 종류">
 			<label><input type="radio" name="kind" value="cardnews" checked><span>📰 카드뉴스</span></label>
 			<label><input type="radio" name="kind" value="interview"><span>🎤 인터뷰</span></label>
+			<label><input type="radio" name="kind" value="ad"><span>📢 광고</span></label>
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-zip">피그마 zip <em class="tpcn-must">필수</em></label>
@@ -1217,8 +1227,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 			<label for="tpcn-caption">인스타 캡션 <em class="tpcn-must">필수</em></label>
 			<textarea id="tpcn-caption" name="caption" rows="7" required placeholder="인스타 게시물 본문을 그대로 붙여 넣어 주세요 (해시태그 줄은 알아서 빼요)"></textarea>
 		</div>
+		<?php // 인터뷰·광고가 같이 쓰는 칸. 광고면 형식 칸을 숨기고 글자만 바꾼다(아래 showKind) ?>
 		<div class="tpcn-iv" id="tpcn-iv" hidden>
-			<div class="tpcn-field">
+			<div class="tpcn-field" id="tpcn-layout-field">
 				<label>인터뷰 형식 <em class="tpcn-must">필수</em></label>
 				<div class="tpcn-layouts">
 					<label><input type="radio" name="layout" value="qa"><span><b>질문 여러 개</b>한 브랜드·사람에게 여러 질문</span></label>
@@ -1226,7 +1237,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				</div>
 			</div>
 			<div class="tpcn-field">
-				<label>인터뷰 대상 <em>선택</em></label>
+				<label><span id="tpcn-plabel">인터뷰 대상</span> <em id="tpcn-pmust">선택</em></label>
 				<div class="tpcn-prows" id="tpcn-prows">
 					<div class="tpcn-prow">
 						<input type="text" name="pname[0]" placeholder="이름 (예: 짐빔)" aria-label="이름">
@@ -1236,7 +1247,8 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 					</div>
 				</div>
 				<button type="button" class="tpcn-vadd" id="tpcn-padd">+ 한 명 더</button>
-				<p class="tpcn-hint">글 <b>시작과 끝의 프로필 카드</b>에 들어가요. 프로필 사진은 인스타 프로필 화면을 캡처해 그대로 올려 주세요. 셰프가 동그란 프로필 사진만 잘라서 써요. 비우면 프로필 카드 없이 만들고 알려 드려요. 패널형은 카드에 계정·얼굴이 있어서 보통 비워도 돼요</p>
+				<p class="tpcn-hint" id="tpcn-adhint" hidden>글 맨 위 <b>[광고] 표시 바로 아래와 글 끝</b>에 브랜드 프로필 카드가 들어가요. <b>인스타 주소는 꼭</b> 넣어 주세요. 프로필 사진은 브랜드 인스타 프로필 화면을 캡처해 그대로 올리면 셰프가 동그란 사진만 잘라서 써요</p>
+				<p class="tpcn-hint" id="tpcn-ivhint">글 <b>시작과 끝의 프로필 카드</b>에 들어가요. 프로필 사진은 인스타 프로필 화면을 캡처해 그대로 올려 주세요. 셰프가 동그란 프로필 사진만 잘라서 써요. 비우면 프로필 카드 없이 만들고 알려 드려요. 패널형은 카드에 계정·얼굴이 있어서 보통 비워도 돼요</p>
 			</div>
 		</div>
 		<div class="tpcn-field">
@@ -1305,7 +1317,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
 			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
 			<div>
-				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
+				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php elseif ( 'ad' === $o['kind'] ) : ?><span class="tpcn-tag is-ad">📢 광고</span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
 				<p class="tpcn-when"><?php echo esc_html( $fmt( $o['created'] ) ); ?> 주문</p>
 			</div>
 			<span class="tpcn-chip<?php echo $pub ? ' is-pub' : ''; ?>"><?php echo esc_html( $pub ? '발행됨' : TP_CN_STATUS[ $s ] ); ?></span>
@@ -1504,12 +1516,21 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	const rows = $('tpcn-vrows'), people = $('tpcn-prows');
 	lines(rows, $('tpcn-vadd'), '🎬 파일 고르기');
 	lines(people, $('tpcn-padd'), '🖼 프로필 사진');
-	// 주문 종류: 인터뷰일 때만 인터뷰 칸을 보여 주고 형식을 꼭 고르게 한다
+	// 주문 종류: 인터뷰면 형식(꼭 고름) + 대상 칸, 광고면 같은 칸을 광고 브랜드 칸으로(인스타 주소 필수) 보여 준다
 	const kind = () => $('tpcn-form').querySelector('input[name=kind]:checked').value;
 	const showKind = () => {
-		const iv = kind() === 'interview';
-		$('tpcn-iv').hidden = !iv;
+		const iv = kind() === 'interview', ad = kind() === 'ad';
+		$('tpcn-iv').hidden = !(iv || ad);
+		$('tpcn-layout-field').hidden = !iv;
 		$('tpcn-form').querySelector('input[name=layout]').required = iv;
+		$('tpcn-plabel').textContent = ad ? '광고 브랜드' : '인터뷰 대상';
+		$('tpcn-pmust').textContent = ad ? '필수' : '선택';
+		$('tpcn-pmust').className = ad ? 'tpcn-must' : '';
+		$('tpcn-padd').textContent = ad ? '+ 브랜드 하나 더' : '+ 한 명 더';
+		$('tpcn-adhint').hidden = !ad;
+		$('tpcn-ivhint').hidden = ad;
+		// 첫 줄 인스타 주소만 브라우저에서 바로 막는다(서버도 같은 검사를 한다)
+		$('tpcn-prows').querySelector('input[type=url]').required = ad;
 	};
 	$('tpcn-form').querySelectorAll('input[name=kind]').forEach(r => r.addEventListener('change', showKind));
 	showKind();
