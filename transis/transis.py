@@ -43,6 +43,8 @@ HUSKY_URL = 'https://trendportal.kr/wp-content/uploads/2026/10/mascot-mail.png'
 # 체크할 일이 없는 아침에만 나오는, 이불 덮고 쉬는 프란시스(같은 사진 + 이불·달·Zzz를 한 장으로 구움, 시안 1016-1 B1).
 # 400×300을 200×150으로 보여서 폰 화면에서도 선명하게
 REST_URL = 'https://trendportal.kr/wp-content/uploads/2026/10/mascot-rest.png'
+# 밤 메일에서 오늘 일이 다 끝났을 때 나오는 따봉 프란시스(같은 사진 + 👍·🎉·✨·💜를 한 장으로 구움, 10/17 사용자). 400×300을 200×150으로
+THUMBS_URL = 'https://trendportal.kr/wp-content/uploads/2026/10/mascot-thumbs.png'
 COLOR = {  # 일정표와 같은 색 (진한색, 옅은 바탕)
     'upload': ('#1fa971', '#d9f3e7'),
     'draft': ('#ec4a5a', '#ffe2e5'),
@@ -378,9 +380,11 @@ def shell(kicker, heading, url, rows, footer):
 
 def render_evening(items, t, url):
     """저녁 정리 뒤 확인 메일: 오늘 날짜인데 아직 동그라미가 안 눌린 일만 (10/14 사용자 A안).
-    지난 정산까지 넣으면 매일 저녁 나가게 돼서 오늘 날짜만. 남은 일이 없으면 안 보낸다(left가 빈 목록)"""
+    지난 정산까지 넣으면 매일 저녁 나가게 돼서 오늘 날짜만. 남은 일이 없으면 따봉 메일(render_evening_done)"""
     left = sorted([x for x in items if not x.get('removed') and not x['done'] and x.get('date') == t.isoformat()],
                   key=sort_key)
+    if not left:
+        return render_evening_done(t, url) + (left,)
     subject = f'트란시스가 전하는 저녁 확인 · {md(t)}'  # 아침처럼 날짜를 붙여 Gmail이 한 대화로 묶지 않게
     # 밤 10시 전에 도착하니 오늘 밤 올릴 업로드는 아직일 수 있다 → '잊으셨다'고 단정하지 않는 말투로
     note = '끝냈다면 ✓ 완료를 눌러 주세요. 오늘 밤에 할 일이면 끝나고 눌러도 돼요.'
@@ -392,6 +396,22 @@ def render_evening(items, t, url):
     text = [f'트란시스 저녁 확인 - {md(t)}', '오늘 잊으신 건 없으셨나요?', f'일정표: {url}', '',
             f'아직 완료 표시가 없는 오늘 일 {len(left)}건', note] + text_grouped(left, t)
     return subject, body, '\n'.join(text), left
+
+
+def render_evening_done(t, url):
+    """오늘 일이 모두 완료 표시된 밤: 예전엔 아무것도 안 보냈지만 이제 따봉 프란시스로 하루를 닫는다(10/17 사용자).
+    제목은 사용자가 정한 문장 그대로 — 날짜가 없어서 Gmail이 날마다 한 대화로 묶을 수 있다"""
+    subject = '야호!! 미완 항목이 없어요. 오늘 하루도 고생 많으셨습니다.'
+    body = shell(f'트란시스 저녁 확인 · {md(t)}', '야호!! 미완 항목이 없어요', url,
+                 f'<tr><td style="{PANEL}"><div style="text-align:center;padding:4px 0 2px;">'
+                 f'<img src="{THUMBS_URL}" width="200" height="150" alt="엄지를 치켜든 프란시스" style="display:block;margin:0 auto;border:0;">'
+                 '<div style="font-size:16px;font-weight:800;margin-top:10px;">오늘 하루도 고생 많으셨습니다.</div>'
+                 '<div style="font-size:12.5px;color:#7b7e8c;margin-top:4px;">오늘 날짜의 일이 모두 완료 표시됐어요. 푹 쉬세요!</div>'
+                 '</div></td></tr>',
+                 '트란시스가 저녁 정리를 마친 뒤 보내요. 남은 일이 있는 날엔 그 목록을 보내요.')
+    text = [f'트란시스 저녁 확인 - {md(t)}', '야호!! 미완 항목이 없어요.', '오늘 하루도 고생 많으셨습니다.',
+            '오늘 날짜의 일이 모두 완료 표시됐어요. 푹 쉬세요!', f'일정표: {url}']
+    return subject, body, '\n'.join(text)
 
 
 def render(items, unclear, t, url, coverage=None):
@@ -549,15 +569,9 @@ def cmd_run(path):
     subject, body, text, due, later = render(after['items'], ext.get('unclear', []), t, env('TRANSIS_URL'), cov)
     os.makedirs(OUT, exist_ok=True)
     files = [('subject.txt', subject), ('email.html', body), ('email.txt', text)]
-    # 저녁 확인 메일은 남은 오늘 일이 있을 때만 파일을 만든다 (없으면 보낼 것도 없음)
+    # 밤 메일은 늘 만든다: 남은 오늘 일이 있으면 그 목록, 없으면 따봉 메일(10/17 사용자)
     ev_subject, ev_body, ev_text, ev_left = render_evening(after['items'], t, env('TRANSIS_URL'))
-    ev_files = [('evening_subject.txt', ev_subject), ('evening.html', ev_body), ('evening.txt', ev_text)]
-    if ev_left:
-        files += ev_files
-    else:  # run을 다시 돌렸을 때 앞 실행의 저녁 파일이 남아 잘못 보내지 않게
-        for name, _ in ev_files:
-            if os.path.exists(os.path.join(OUT, name)):
-                os.remove(os.path.join(OUT, name))
+    files += [('evening_subject.txt', ev_subject), ('evening.html', ev_body), ('evening.txt', ev_text)]
     for name, content in files:
         with open(os.path.join(OUT, name), 'w', encoding='utf-8') as f:
             f.write(content)
@@ -590,7 +604,7 @@ MAIL_FILES = {
 def cmd_send(kind, preview=False):
     paths = [os.path.join(OUT, n) for n in MAIL_FILES[kind]]
     if not all(os.path.exists(p) for p in paths):
-        sys.exit(f'no {kind} email files in {OUT} (run `run` first; the evening email exists only when work is left today)')
+        sys.exit(f'no {kind} email files in {OUT} (run `run` first)')
     subject, body, text = (open(p, encoding='utf-8').read() for p in paths)
     mail = {'token': env('MAILER_TOKEN'), 'subject': subject, 'html': body, 'text': text}
     if preview:

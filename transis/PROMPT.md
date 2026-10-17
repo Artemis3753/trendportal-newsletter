@@ -7,7 +7,7 @@ The routine prompt tells you the **MODE**:
 - `DRAFT`: create a Gmail draft (for review). Do not send anything.
 - `SEND`: send the email.
 - `SYNC`: the daytime runs (about 12:05, 16:05 and 20:05). Read only the mail that arrived since the last run (step 0) and update the sheet. Never send any email in this mode.
-- `REFRESH`: the night run (about 21:50). Update the sheet, then send only the short evening check, and only when work dated today is still not marked done (step 5). Never send the morning reminder in this mode.
+- `REFRESH`: the night run (about 21:50). Update the sheet, then send only the evening check (step 5): the work dated today that is still not marked done, or, when everything is done, a short thank-you mail. Never send the morning reminder in this mode.
 
 ## Hard rules
 
@@ -89,13 +89,13 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
 
    Send only items from threads you read in this run; the sheet keeps all the others. Rows that 성현 added by hand (keys that are not thread ids) are kept as they are; do not send items with those keys. Items marked `removed` were deleted on purpose: you may send their key again (the sheet keeps them deleted), but never create a new key for the same schedule.
 
-4. Run `python3 transis/transis.py run /tmp/transis/extracted.json`. It sends the items to the sheet, reads the sheet back (with the done marks 성현 made), picks what to remind, and writes `/tmp/transis/subject.txt`, `email.html` and `email.txt`. When work dated today is still not marked done, it also writes `evening_subject.txt`, `evening.html` and `evening.txt`, and lists that work in `evening_left_today`. If it prints `POST errors`, fix those items and run it once more.
+4. Run `python3 transis/transis.py run /tmp/transis/extracted.json`. It sends the items to the sheet, reads the sheet back (with the done marks 성현 made), picks what to remind, and writes `/tmp/transis/subject.txt`, `email.html` and `email.txt`. It also writes the evening check, `evening_subject.txt`, `evening.html` and `evening.txt`: the work dated today that is still not marked done (listed in `evening_left_today`), or a thank-you mail when that list is empty. If it prints `POST errors`, fix those items and run it once more.
 
 5. Send the email with the script (Bash timeout 600000 ms). Do not open, read or rewrite the HTML files; the script sends them as they are.
    - `DRAFT`: `python3 transis/transis.py send morning --preview` (a preview to 지환 only).
    - `SEND`: `python3 transis/transis.py send morning`.
    - `SYNC`: send nothing, even when `evening_left_today` is not empty. The night run sends the evening check.
-   - `REFRESH`: if `evening_left_today` is empty, send nothing. Otherwise `python3 transis/transis.py send evening`.
+   - `REFRESH`: always `python3 transis/transis.py send evening`, also when `evening_left_today` is empty (then it is the thank-you mail).
 
    Send at most one email per run. If the send command fails, wait 5 minutes and run it once more; that is safe, because the sender account drops a second copy of the same email on the same day.
 
