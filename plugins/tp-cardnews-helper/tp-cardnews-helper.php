@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.5.0
+ * Version: 1.6.0
  * Author: Trendportal
  */
 
@@ -60,35 +60,111 @@ function tp_cn_dir() {
 	return $dir;
 }
 
-// 주문을 지우면 zip도 같이 지운다
+// 주문에 딸린 파일(zip + 영상 카드 파일)을 지운다. 주문을 지울 때, 그리고 글이 발행·휴지통으로 갈 때
+function tp_cn_unlink_files( $order_id ) {
+	$names = array( get_post_meta( $order_id, '_tp_cn_zip', true ) );
+	foreach ( (array) get_post_meta( $order_id, '_tp_cn_files', true ) as $f ) {
+		$names[] = is_array( $f ) ? $f['file'] : '';
+	}
+	foreach ( array_filter( $names ) as $name ) {
+		if ( is_file( tp_cn_dir() . '/' . $name ) ) {
+			unlink( tp_cn_dir() . '/' . $name );
+		}
+	}
+	update_post_meta( $order_id, '_tp_cn_zip', '' );
+	update_post_meta( $order_id, '_tp_cn_files', array() );
+}
+
 add_action(
 	'before_delete_post',
 	function ( $post_id ) {
-		if ( get_post_type( $post_id ) !== TP_CN_TYPE ) {
-			return;
-		}
-		$zip = get_post_meta( $post_id, '_tp_cn_zip', true );
-		if ( $zip && is_file( tp_cn_dir() . '/' . $zip ) ) {
-			unlink( tp_cn_dir() . '/' . $zip );
+		if ( get_post_type( $post_id ) === TP_CN_TYPE ) {
+			tp_cn_unlink_files( $post_id );
 		}
 	}
 );
 
-/**
- * 영상 칸: 한 줄에 "카드 번호 = 주소". "4 https://…", "4: https://…", "4번 https://…"도 받아 준다.
- * 돌려주는 값: [ 번호 => 주소 ] 또는 못 읽은 줄이 있으면 WP_Error.
+/*
+ * 영상 카드 칸(1.6.0, 10/17 사용자 A): 한 줄 = 카드 번호 + 파일(선택) + 원본 주소(선택).
+ * 셰프는 "주소가 있느냐"로 할 일을 정한다 — 주소 있음 = 남의 영상(정지 화면 + ▶ 링크, 영상은 사이트에 안 올림),
+ * 주소 없음 + 영상 파일 = 우리가 찍은 영상(소리 빼고 사이트에서 바로 재생). 사진 파일은 정지 화면이나 카드 사진으로 쓴다.
  */
-function tp_cn_parse_videos( $text ) {
-	$out = array();
-	foreach ( preg_split( '/\R/', (string) $text ) as $line ) {
-		$line = trim( $line );
-		if ( '' === $line ) {
-			continue;
+const TP_CN_FILE_TYPES = array(
+	'mp4'  => 'video',
+	'mov'  => 'video',
+	'm4v'  => 'video',
+	'webm' => 'video',
+	'jpg'  => 'image',
+	'jpeg' => 'image',
+	'png'  => 'image',
+	'webp' => 'image',
+);
+
+// 확장자만 바꾼 엉뚱한 파일을 셰프(ffmpeg)에게 넘기지 않게, 파일 머리 몇 바이트로 종류를 한 번 더 본다
+function tp_cn_sniff( $path ) {
+	$head = (string) file_get_contents( $path, false, null, 0, 16 );
+	if ( 'ftyp' === substr( $head, 4, 4 ) || "\x1a\x45\xdf\xa3" === substr( $head, 0, 4 ) ) {
+		return 'video'; // mp4·mov·m4v는 4번째 바이트부터 ftyp, webm은 EBML 머리
+	}
+	if ( "\xff\xd8\xff" === substr( $head, 0, 3 ) || "\x89PNG" === substr( $head, 0, 4 ) || ( 'RIFF' === substr( $head, 0, 4 ) && 'WEBP' === substr( $head, 8, 4 ) ) ) {
+		return 'image';
+	}
+	return '';
+}
+
+/**
+ * 영상 카드 줄들 → array( 'videos' => [ 번호 => 주소 ], 'files' => [ 번호 => 올린 파일 정보 ] ) 또는 WP_Error.
+ * 파일은 아직 옮기지 않는다(다른 칸 검사가 다 끝난 뒤에 옮긴다).
+ */
+function tp_cn_parse_video_rows( $cards, $urls, $files ) {
+	$out = array(
+		'videos' => array(),
+		'files'  => array(),
+	);
+	foreach ( (array) $cards as $i => $card ) {
+		$raw  = trim( (string) ( $urls[ $i ] ?? '' ) );
+		$url  = esc_url_raw( $raw, array( 'http', 'https' ) );
+		$file = ( isset( $files['error'][ $i ] ) && UPLOAD_ERR_NO_FILE !== $files['error'][ $i ] )
+			? array(
+				'name'     => $files['name'][ $i ],
+				'tmp_name' => $files['tmp_name'][ $i ],
+				'error'    => $files['error'][ $i ],
+				'size'     => $files['size'][ $i ],
+			)
+			: null;
+		$card = trim( (string) $card );
+		if ( '' === $raw && ! $file ) {
+			continue; // 빈 줄 (카드 번호만 적은 줄도 넣을 게 없으니 넘긴다)
 		}
-		if ( ! preg_match( '/^(\d{1,2})\s*번?\s*[=:.]?\s*(https?:\/\/\S+)$/u', $line, $m ) ) {
-			return new WP_Error( 'tp_cn_video', "영상 칸에서 이 줄을 못 읽었어요: {$line} — \"4 = https://…\"처럼 카드 번호와 주소를 적어 주세요" );
+		if ( ! preg_match( '/^\d{1,2}$/', $card ) || (int) $card < 2 ) {
+			return new WP_Error( 'tp_cn_video', '영상 카드 줄에 카드 번호를 적어 주세요 (표지가 1번이라 2번부터)' );
 		}
-		$out[ (string) (int) $m[1] ] = esc_url_raw( $m[2] );
+		$no = (string) (int) $card;
+		if ( isset( $out['videos'][ $no ] ) || isset( $out['files'][ $no ] ) ) {
+			return new WP_Error( 'tp_cn_video', "{$no}번 카드가 영상 카드 칸에 두 번 있어요" );
+		}
+		if ( '' === $url && '' !== $raw ) {
+			return new WP_Error( 'tp_cn_video', "{$no}번 주소를 못 읽었어요 — https://로 시작하는 주소를 붙여 넣어 주세요" );
+		}
+		if ( '' !== $url ) {
+			$out['videos'][ $no ] = $url;
+		}
+		if ( $file ) {
+			if ( UPLOAD_ERR_OK !== $file['error'] ) {
+				return new WP_Error( 'tp_cn_video', "{$no}번 파일을 올리다 멈췄어요 (오류 {$file['error']}). 파일이 너무 크면 이렇게 될 수 있어요" );
+			}
+			$ext  = strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) );
+			$kind = TP_CN_FILE_TYPES[ $ext ] ?? '';
+			if ( ! $kind || tp_cn_sniff( $file['tmp_name'] ) !== $kind ) {
+				return new WP_Error( 'tp_cn_video', "{$no}번 파일은 영상(mp4·mov·m4v·webm)이나 사진(jpg·png·webp)만 받아요" );
+			}
+			$out['files'][ $no ] = array(
+				'tmp'  => $file['tmp_name'],
+				'name' => sanitize_file_name( $file['name'] ),
+				'ext'  => $ext,
+				'kind' => $kind,
+			);
+		}
 	}
 	return $out;
 }
@@ -270,9 +346,16 @@ add_action(
 		$note  = '';
 		if ( $draft && 'post' === $draft->post_type && 'publish' !== $draft->post_status ) {
 			// 셰프가 올린 사진 = 이 글이 쓰는 사진 중 파일 이름이 "order-<주문 번호>-"로 시작하는 것(cardnews.py upload가 붙이는 이름).
-			// 다른 글과 같이 쓰는 사진일 수 있는 나머지는 건드리지 않는다
-			preg_match_all( '/wp-image-(\d+)/', $draft->post_content, $m );
-			$media = array_unique( array_merge( array_map( 'intval', $m[1] ), array( (int) get_post_thumbnail_id( $draft ) ) ) );
+			// 다른 글과 같이 쓰는 사진일 수 있는 나머지는 건드리지 않는다.
+			// 본문 사진(wp-image-N)·영상 블록({"id":N})·대표 이미지에 더해, 셰프 작업 기록(media.json)도 본다 —
+			// 영상 포스터는 주소로만 쓰여서 본문에 번호가 없고, 수정 때 바꾼 정지 화면은 본문에서 빠져 있다
+			preg_match_all( '/wp-image-(\d+)|<!-- wp:video \{"id":(\d+)/', $draft->post_content, $m );
+			$ids   = array_map( 'intval', array_filter( array_merge( $m[1], $m[2] ) ) );
+			$state = json_decode( (string) get_post_meta( $id, '_tp_cn_state', true ), true );
+			foreach ( (array) json_decode( (string) ( $state['media.json'] ?? '' ), true ) as $item ) {
+				$ids[] = (int) ( $item['id'] ?? 0 );
+			}
+			$media = array_unique( array_merge( $ids, array( (int) get_post_thumbnail_id( $draft ) ) ) );
 			$gone  = 0;
 			foreach ( $media as $mid ) {
 				$file = $mid ? get_attached_file( $mid ) : '';
@@ -290,8 +373,8 @@ add_action(
 	}
 );
 
-// zip은 글이 발행되거나 휴지통에 갈 때 지운다(10/17 사용자: 수정 요청 때 "사진 바꿔"에 원본이 필요해서 완성 때 지우던 것을 바꿈).
-// 발행 전까지는 주문당 수 MB가 남는다
+// zip·영상 카드 파일은 글이 발행되거나 휴지통에 갈 때 지운다(10/17 사용자: 수정 요청 때 "사진 바꿔"·"다른 장면으로"에 원본이 필요해서 완성 때 지우던 것을 바꿈).
+// 발행 전까지는 주문당 수~수십 MB가 남는다. 남의 영상 원본도 여기서 지워져서 사이트에 오래 남지 않는다
 function tp_cn_drop_zip_for_post( $post_id ) {
 	$orders = get_posts(
 		array(
@@ -303,11 +386,7 @@ function tp_cn_drop_zip_for_post( $post_id ) {
 		)
 	);
 	foreach ( $orders as $order ) {
-		$zip = get_post_meta( $order->ID, '_tp_cn_zip', true );
-		if ( $zip && is_file( tp_cn_dir() . '/' . $zip ) ) {
-			unlink( tp_cn_dir() . '/' . $zip );
-		}
-		update_post_meta( $order->ID, '_tp_cn_zip', '' );
+		tp_cn_unlink_files( $order->ID );
 	}
 }
 add_action(
@@ -351,19 +430,36 @@ add_action(
 		if ( '' === $caption ) {
 			$fail( '인스타 캡션을 붙여 넣어 주세요' );
 		}
-		$videos = tp_cn_parse_videos( wp_unslash( $_POST['videos'] ?? '' ) );
-		if ( is_wp_error( $videos ) ) {
-			$fail( $videos->get_error_message() );
+		$rows = tp_cn_parse_video_rows( wp_unslash( $_POST['vcard'] ?? array() ), wp_unslash( $_POST['vurl'] ?? array() ), $_FILES['vfile'] ?? array() );
+		if ( is_wp_error( $rows ) ) {
+			$fail( $rows->get_error_message() );
 		}
 		$group = tp_cn_check_zip( $file['tmp_name'], $file['name'] );
 		if ( is_wp_error( $group ) ) {
 			$fail( $group->get_error_message() );
 		}
 
-		// wp_handle_upload는 허용 형식 목록에 zip이 없으면 막는다 — 관리자만 쓰는 칸이라 직접 옮기고 위에서 확장자·내용을 본다
+		// wp_handle_upload는 허용 형식 목록에 zip이 없으면 막는다 — 관리자만 쓰는 칸이라 직접 옮기고 위에서 확장자·내용을 본다.
+		// 영상 카드 파일도 미디어 라이브러리가 아니라 zip 옆에 둔다: 남의 영상 원본은 사이트에 공개되면 안 되고, 셰프만 REST로 받아 간다
 		$name = bin2hex( random_bytes( 16 ) ) . '.zip';
 		if ( ! move_uploaded_file( $file['tmp_name'], tp_cn_dir() . '/' . $name ) ) {
 			$fail( 'zip을 저장하지 못했어요. 잠시 뒤 다시 해 주세요' );
+		}
+		$stored = array();
+		foreach ( $rows['files'] as $no => $f ) {
+			$fname = bin2hex( random_bytes( 16 ) ) . '.' . $f['ext'];
+			if ( ! move_uploaded_file( $f['tmp'], tp_cn_dir() . '/' . $fname ) ) {
+				// 반쯤 저장된 주문을 남기지 않게 이미 옮긴 파일까지 치운다
+				foreach ( array_merge( array( $name ), array_column( $stored, 'file' ) ) as $gone ) {
+					unlink( tp_cn_dir() . '/' . $gone );
+				}
+				$fail( "{$no}번 파일을 저장하지 못했어요. 잠시 뒤 다시 해 주세요" );
+			}
+			$stored[ $no ] = array(
+				'file' => $fname,
+				'name' => $f['name'],
+				'kind' => $f['kind'],
+			);
 		}
 
 		$id = wp_insert_post(
@@ -376,7 +472,8 @@ add_action(
 		update_post_meta( $id, '_tp_cn_status', 'new' );
 		update_post_meta( $id, '_tp_cn_zip', $name );
 		update_post_meta( $id, '_tp_cn_caption', $caption );
-		update_post_meta( $id, '_tp_cn_videos', $videos );
+		update_post_meta( $id, '_tp_cn_videos', $rows['videos'] );
+		update_post_meta( $id, '_tp_cn_files', $stored );
 		update_post_meta( $id, '_tp_cn_memo', trim( sanitize_textarea_field( wp_unslash( $_POST['memo'] ?? '' ) ) ) );
 
 		if ( ! tp_cn_ring( $id ) ) {
@@ -387,6 +484,20 @@ add_action(
 		exit;
 	}
 );
+
+// 저장된 영상 카드 파일 목록. 발행 뒤 지운 주문은 빈 값('' 또는 빈 배열)이라 배열인 것만 센다
+function tp_cn_file_list( $id ) {
+	$files = get_post_meta( $id, '_tp_cn_files', true );
+	$out   = array();
+	foreach ( is_array( $files ) ? $files : array() as $no => $f ) {
+		$out[ (string) $no ] = array(
+			'name' => $f['name'],
+			'kind' => $f['kind'],
+			'url'  => rest_url( "tp-cardnews/v1/orders/{$id}/files/{$no}" ),
+		);
+	}
+	return $out;
+}
 
 /**
  * 주문 하나를 화면·REST에서 같이 쓰는 모양으로.
@@ -402,6 +513,8 @@ function tp_cn_order( $post, $with_state = false ) {
 		'status'  => get_post_meta( $id, '_tp_cn_status', true ) ?: 'new',
 		'caption' => get_post_meta( $id, '_tp_cn_caption', true ),
 		'videos'  => (object) ( get_post_meta( $id, '_tp_cn_videos', true ) ?: array() ),
+		// 영상 카드 파일: 카드 번호 → 원래 파일 이름·종류(video|image)·받는 주소(관리자 인증 필요)
+		'files'   => (object) tp_cn_file_list( $id ),
 		'memo'    => get_post_meta( $id, '_tp_cn_memo', true ),
 		'zip'     => rest_url( "tp-cardnews/v1/orders/{$id}/zip" ),
 		'post_id' => $draft ?: null,
@@ -548,6 +661,29 @@ add_action(
 				},
 			)
 		);
+
+		// 영상 카드 파일도 zip처럼 관리자 인증을 거쳐서만 내려준다
+		register_rest_route(
+			'tp-cardnews/v1',
+			'/orders/(?P<id>\d+)/files/(?P<no>\d+)',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => $admin,
+				'callback'            => function ( $req ) use ( $find ) {
+					$post  = $find( $req['id'] );
+					$files = $post ? get_post_meta( $post->ID, '_tp_cn_files', true ) : '';
+					$f     = is_array( $files ) ? ( $files[ (string) (int) $req['no'] ] ?? null ) : null;
+					$path  = $f ? tp_cn_dir() . '/' . $f['file'] : '';
+					if ( ! $f || ! is_file( $path ) ) {
+						return new WP_Error( 'tp_cn_none', '파일이 없어요', array( 'status' => 404 ) );
+					}
+					header( 'Content-Type: application/octet-stream' );
+					header( 'Content-Length: ' . filesize( $path ) );
+					readfile( $path );
+					exit;
+				},
+			)
+		);
 	}
 );
 
@@ -622,6 +758,8 @@ function tp_cn_page() {
 			'seen'   => isset( $GLOBALS['tp_cn_prev_seen'] ) ? (int) $GLOBALS['tp_cn_prev_seen'] : time(),
 			'bell'   => get_option( TP_CN_BELL, array() ),
 			'now'    => time(),
+			// 한 번 보낼 수 있는 크기(서버 upload_max_filesize·post_max_size 중 작은 값). 탭이 미리 막고 안내한다
+			'max'    => wp_max_upload_size(),
 		)
 	);
 }
@@ -719,6 +857,17 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-drop .tpcn-ico { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--card); font-size: 20px; }
 .tpcn-drop b { display: block; font-size: 14px; }
 .tpcn-drop span { font-size: 12px; color: var(--muted); }
+/* 영상 카드 줄: 카드 번호 · 파일 · 주소 · 지우기 */
+.tpcn-vrows { display: grid; gap: 8px; }
+.tpcn-vrow { display: grid; grid-template-columns: 72px minmax(0, 200px) minmax(0, 1fr) 32px; gap: 8px; align-items: center; }
+.tpcn-vrow input[type=number], .tpcn-vrow input[type=url] { width: 100%; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; color: var(--ink); }
+.tpcn-vrow input:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
+.tpcn-vfile { position: relative; display: block; padding: 8px 10px; border: 1.5px dashed var(--line-strong); border-radius: 12px; background: var(--bg); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.tpcn-vfile.has-file { border-style: solid; border-color: var(--done); background: var(--done-soft); }
+.tpcn-vfile input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.tpcn-vdel { width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+.tpcn-vdel:hover { background: var(--failed-soft); color: var(--failed); }
+.tpcn-vadd { margin-top: 8px; padding: 4px 12px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .tpcn-go { justify-self: start; padding: 11px 22px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font-family: var(--font-display); font-size: 17px; cursor: pointer; box-shadow: 0 4px 0 #b8401d; }
 .tpcn-go:hover { background: #ec6a43; }
 .tpcn-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #b8401d; }
@@ -776,6 +925,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
   .tpcn { margin-right: 10px; }
   .tpcn-item { grid-template-columns: 44px 1fr; }
   .tpcn-item .tpcn-chip { grid-column: 2; justify-self: start; }
+  /* 폰: 번호·파일·지우기 한 줄, 주소는 아래 줄 전체 */
+  .tpcn-vrow { grid-template-columns: 64px minmax(0, 1fr) 32px; }
+  .tpcn-vrow input[type=url] { grid-column: 1 / -1; grid-row: 2; }
 }
 </style>
 
@@ -793,7 +945,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	<div class="tpcn-bubble" id="tpcn-bubble" role="status" hidden>
 		<ol>
 			<li>피그마에서 카드 묶음을 선택하고 플러그인 <b>트란시스 카드뉴스 읽기</b> → zip 내려받기</li>
-			<li>여기에 zip · 인스타 캡션 · (있으면) 영상 주소 넣고 <b>주문 넣기</b></li>
+			<li>여기에 zip · 인스타 캡션 · (있으면) 영상 카드 넣고 <b>주문 넣기</b></li>
 			<li><b>완성</b>이 뜨면 미리보기로 맛보고, 셰프가 손본 것 확인한 뒤 발행!</li>
 		</ol>
 	</div>
@@ -807,7 +959,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 
 <section class="tpcn-panel">
 	<h2>새 주문서 <small>카드뉴스 하나 = 주문 하나</small></h2>
-	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data">
+	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data" data-max="<?php echo (int) $u['max']; ?>">
 		<input type="hidden" name="action" value="tp_cn_order">
 		<?php echo $u['nonce']; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_nonce_field 결과 ?>
 		<div class="tpcn-field">
@@ -823,18 +975,30 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 			<textarea id="tpcn-caption" name="caption" rows="7" required placeholder="인스타 게시물 본문을 그대로 붙여 넣어 주세요 (해시태그 줄은 알아서 빼요)"></textarea>
 		</div>
 		<div class="tpcn-field">
-			<label for="tpcn-videos">영상 카드 <em>있을 때만</em></label>
-			<textarea id="tpcn-videos" name="videos" rows="3" placeholder="4 = https://www.instagram.com/reel/…&#10;7 = https://youtu.be/…"></textarea>
-			<p class="tpcn-hint">한 줄에 하나씩 <b>카드 번호 = 원본 영상 주소</b> · 영상 카드가 없으면 비워 두세요</p>
+			<label>영상 카드 <em>있을 때만</em></label>
+			<div class="tpcn-vrows" id="tpcn-vrows">
+				<?php // 줄 번호(i)를 이름에 박아 둔다 — 파일을 안 고른 줄이 있어도 번호·파일·주소가 같은 줄끼리 짝지어지게 ?>
+				<div class="tpcn-vrow">
+					<input type="number" name="vcard[0]" min="2" max="99" placeholder="카드" aria-label="카드 번호">
+					<label class="tpcn-vfile"><input type="file" name="vfile[0]" accept="video/mp4,video/quicktime,video/x-m4v,video/webm,image/jpeg,image/png,image/webp" title=""><span>🎬 파일 고르기</span></label>
+					<input type="url" name="vurl[0]" placeholder="원본 영상 주소 (남의 영상일 때)" aria-label="원본 영상 주소">
+					<button type="button" class="tpcn-vdel" aria-label="이 줄 지우기">×</button>
+				</div>
+			</div>
+			<button type="button" class="tpcn-vadd" id="tpcn-vadd">+ 한 줄 더</button>
+			<p class="tpcn-hint"><b>주소가 있으면</b> 남의 영상 → 정지 화면 + ▶ 링크 · <b>주소 없이 영상만</b> 넣으면 우리가 찍은 영상 → 사이트에서 바로 재생</p>
 			<?php // 10/17 사용자: 쓰는 법을 도우미 화면에서도 알 수 있게 — 평소엔 접어 두고 필요할 때 펼친다 ?>
 			<details class="tpcn-how">
 				<summary>자세히 보기</summary>
 				<ul>
 					<li><b>카드 번호</b> = 피그마 프레임 이름 끝 숫자예요. 예: <code>트렌드포털 802-4</code> → <b>4</b> (표지가 1번이라, 카드뉴스를 넘겨 보는 순서와 같아요)</li>
-					<li><b>주소</b> = 원래 영상이 올라간 곳의 주소. 인스타 릴스·게시물, 유튜브(일반·youtu.be·쇼츠), X를 받아요</li>
-					<li><code>4 = 주소</code> · <code>4 주소</code> · <code>4: 주소</code> · <code>4번 주소</code> 모두 괜찮아요</li>
-					<li>공유할 때 붙는 <code>?igsh=…</code> 같은 꼬리는 그대로 붙여 넣어도 알아서 떼요</li>
-					<li>우리가 직접 가진 영상 파일(mp4)은 아직 이 칸으로 못 받아요 — 메모에 적어 주세요</li>
+					<li><b>주소</b> = 원래 영상이 올라간 곳의 주소. 인스타 릴스·게시물, 유튜브(일반·youtu.be·쇼츠), X를 받아요. <code>?igsh=…</code> 같은 꼬리는 알아서 떼요</li>
+					<li><b>주소 + 영상 파일</b>: 셰프가 영상에서 잘 나온 장면을 골라 정지 화면으로 써요 (인스타 정지 화면보다 선명). 영상 자체는 사이트에 안 올려요</li>
+					<li><b>주소 + 사진 파일</b>: 그 사진(직접 캡처한 장면)을 정지 화면으로 써요</li>
+					<li><b>주소만</b>: 셰프가 원본 게시물의 정지 화면을 가져와요</li>
+					<li><b>영상 파일만</b>: 우리가 찍은 영상으로 보고, 소리를 빼서 사이트에서 자동 재생돼요</li>
+					<li>장면이 마음에 안 들면 완성 뒤 "고쳐 주세요"에 <code>3번 정지 화면 5초 장면으로</code>처럼 적어 주세요</li>
+					<li>한 번에 올릴 수 있는 크기는 zip과 파일을 합쳐 <b><?php echo esc_html( size_format( $u['max'] ) ); ?></b>까지예요</li>
 				</ul>
 			</details>
 		</div>
@@ -1003,8 +1167,48 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	});
 	['dragenter', 'dragover'].forEach(e => zip.addEventListener(e, () => drop.classList.add('is-over')));
 	['dragleave', 'drop'].forEach(e => zip.addEventListener(e, () => drop.classList.remove('is-over')));
-	// 큰 zip은 올리는 데 시간이 걸려서, 두 번 누르지 않게 버튼을 잠근다
-	$('tpcn-form').addEventListener('submit', () => { $('tpcn-go').disabled = true; $('tpcn-go').textContent = '올리는 중…'; });
+	// 영상 카드 줄: 파일 이름 보여 주기, 줄 더하기·지우기. 새 줄은 첫 줄을 복사해 이름의 [번호]만 바꾼다
+	const rows = $('tpcn-vrows');
+	let next = 1;
+	const fresh = row => {
+		row.querySelectorAll('input').forEach(i => { i.value = ''; });
+		const box = row.querySelector('.tpcn-vfile');
+		box.classList.remove('has-file');
+		box.querySelector('span').textContent = '🎬 파일 고르기';
+	};
+	rows.addEventListener('change', e => {
+		if (e.target.type !== 'file') return;
+		const f = e.target.files[0], box = e.target.closest('.tpcn-vfile');
+		box.classList.toggle('has-file', !!f);
+		box.querySelector('span').textContent = f ? `${f.name} · ${(f.size / 1048576).toFixed(1)}MB` : '🎬 파일 고르기';
+	});
+	rows.addEventListener('click', e => {
+		if (!e.target.classList.contains('tpcn-vdel')) return;
+		const row = e.target.closest('.tpcn-vrow');
+		// 마지막 한 줄은 지우지 않고 비우기만 한다(칸이 사라지면 다시 넣을 곳이 없어서)
+		if (rows.children.length > 1) row.remove(); else fresh(row);
+	});
+	$('tpcn-vadd').addEventListener('click', () => {
+		const row = rows.firstElementChild.cloneNode(true);
+		row.querySelectorAll('input').forEach(i => { i.name = i.name.replace(/\[\d+\]/, `[${next}]`); });
+		next++;
+		fresh(row);
+		rows.append(row);
+		row.querySelector('input').focus();
+	});
+	// 큰 zip은 올리는 데 시간이 걸려서, 두 번 누르지 않게 버튼을 잠근다.
+	// 서버 한도를 넘으면 다 올린 뒤에야 실패해서, 보내기 전에 합계를 재서 막는다
+	$('tpcn-form').addEventListener('submit', e => {
+		const files = [...$('tpcn-form').querySelectorAll('input[type=file]')].flatMap(i => [...i.files]);
+		const total = files.reduce((s, f) => s + f.size, 0), max = Number($('tpcn-form').dataset.max);
+		if (max && total > max) {
+			e.preventDefault();
+			alert(`파일을 합쳐 ${(total / 1048576).toFixed(1)}MB라 한 번에 못 보내요 (최대 ${(max / 1048576).toFixed(0)}MB).\n영상을 짧게 자르거나, 정지 화면 사진으로 바꿔 주세요.`);
+			return;
+		}
+		$('tpcn-go').disabled = true;
+		$('tpcn-go').textContent = '올리는 중…';
+	});
 
 	// ── 알림 A(10/17 사용자 결정 A+B): 접수·요리 중인 주문이 있으면 20초마다 상태를 확인한다 ──
 	// 바뀐 게 있으면: 주문서를 쓰는 중이 아니면 새로고침해서 목록을 다시 그리고, 쓰는 중이면 알림 줄만 띄운다(쓰던 내용을 날리지 않게)
@@ -1012,7 +1216,8 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	const items = [...document.querySelectorAll('.tpcn-item')];
 	const known = Object.fromEntries(items.map(li => [li.dataset.id, li.dataset.status]));
 	const waiting = () => Object.values(known).some(s => s === 'new' || s === 'revise' || s === 'working');
-	const typing = () => zip.files.length || ['tpcn-caption', 'tpcn-videos', 'tpcn-memo'].some(id => $(id).value.trim());
+	const typing = () => zip.files.length || ['tpcn-caption', 'tpcn-memo'].some(id => $(id).value.trim())
+		|| [...rows.querySelectorAll('input')].some(i => (i.files ? i.files.length : i.value.trim()));
 	const FLASH = 'tpcn-flash', LAST = 'tpcn-reloaded';
 	const done = { done: '✅ 완성', failed: '⚠️ 주방 멈춤' };
 	const clean = location.pathname + '?page=<?php echo esc_js( TP_CN_SLUG ); ?>';
