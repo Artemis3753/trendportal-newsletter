@@ -36,7 +36,7 @@ These steps describe the usual way, and `fetch` guesses the card layout by simpl
    a. **Title** (`order.json` → `"title"`).
       - Start from the cover text (the first card) and put the nouns a reader would search for (brand, product, place, person) into it, so they come early. **Write one natural line: no dash between two parts** (`—`, `–`, ` - `; site owner, 10/18). Join with words or a comma instead, for example `포카리스웨트·칼로리메이트까지, 울림 있는 일본 광고 카피 15선` or `발가락 양말부터 카프리 팬츠까지, 요즘 촌스러움이 유행하는 이유`, not `일본 카피에는 울림이 있다 — 포카리스웨트·칼로리메이트 등 광고 카피 15선`. Keep it to about two phone lines (30 Korean characters).
       - Do not invent facts or numbers that are not on the cards.
-      - On a phone the title wraps at about 15 Korean characters. Where a line break would split a short phrase that belongs together (a name, `카피 15선`), join its words with a no-break space (` ` in JSON).
+      - On a phone the title wraps at about 15 Korean characters. Where a line break would split a short phrase that belongs together (a name, `카피 15선`), join its words with a no-break space (` ` in JSON). The middle dot `·` is also a break point, on both sides: keep `인스타·스레드` together with a word joiner (U+2060, `\u2060` in JSON) before and after the dot. Check the title at phone width with `shot` and bind only where a phrase splits, as was done for posts 729, 763 and 857 on 10/18.
       - If the memo asks for something in the title, follow it.
 
    b. **Category** (`order.json` → `"categories"`, exactly one id):
