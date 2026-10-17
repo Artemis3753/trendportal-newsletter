@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.14.1
+ * Version: 1.14.2
  * Author: Trendportal
  */
 
@@ -1083,7 +1083,13 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-field .tpcn-hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 .tpcn-field .tpcn-hint b { color: var(--ink); }
 .tpcn-how { margin-top: 6px; font-size: 12.5px; }
-.tpcn-how summary { display: inline-block; cursor: pointer; color: var(--fresh); font-weight: 700; }
+/* 10/18 사용자: 접을 수 있다는 게 보여야 해서 글자 대신 알약 버튼 + 오른쪽에 '접기 ▴ / 펼치기 ▾' */
+.tpcn-how summary { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; background: var(--fresh-soft); color: var(--fresh); font-weight: 700; cursor: pointer; list-style: none; user-select: none; }
+.tpcn-how summary::-webkit-details-marker { display: none; }
+.tpcn-how summary::after { content: "펼치기 ▾"; padding-left: 8px; border-left: 1px solid currentColor; font-size: 11.5px; font-weight: 500; }
+.tpcn-how[open] summary::after { content: "접기 ▴"; }
+.tpcn-how summary:hover { background: #f7d5c4; }
+.tpcn-how summary:focus-visible { outline: 2px solid var(--fresh); outline-offset: 2px; }
 .tpcn-how ul { margin: 8px 0 0; padding: 10px 14px 10px 28px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); }
 .tpcn-how li { margin: 3px 0; }
 .tpcn-cap { display: flex; gap: 14px; align-items: center; margin-top: 10px; padding: 10px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); font-size: 12.5px; }
