@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.8.1
+ * Version: 1.8.2
  * Author: Trendportal
  */
 
@@ -970,6 +970,8 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-form { display: grid; gap: 14px; }
 .tpcn-field label { display: block; margin-bottom: 6px; font-weight: 700; }
 .tpcn-field label em { margin-left: 4px; font-style: normal; font-weight: 500; font-size: 12px; color: var(--muted); }
+/* 필수 칸: 노란 형광펜을 아래쪽 절반에만 칠한 것처럼 (10/17 사용자) */
+.tpcn-field label em.tpcn-must { padding: 0 3px; font-weight: 700; color: var(--ink); background: linear-gradient(transparent 45%, #ffe45c 45%, #ffe45c 92%, transparent 92%); }
 .tpcn-field .tpcn-hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 .tpcn-field .tpcn-hint b { color: var(--ink); }
 .tpcn-how { margin-top: 6px; font-size: 12.5px; }
@@ -1121,7 +1123,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 			<label><input type="radio" name="kind" value="interview"><span>🎤 인터뷰</span></label>
 		</div>
 		<div class="tpcn-field">
-			<label for="tpcn-zip">피그마 zip <em>필수</em></label>
+			<label for="tpcn-zip">피그마 zip <em class="tpcn-must">필수</em></label>
 			<div class="tpcn-drop" id="tpcn-drop">
 				<span class="tpcn-ico" aria-hidden="true">📦</span>
 				<div><b id="tpcn-zipname">zip을 여기에 끌어다 놓거나 눌러서 고르기</b><span>'트란시스 카드뉴스 읽기'에서 받은 파일 그대로</span></div>
@@ -1129,12 +1131,12 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 			</div>
 		</div>
 		<div class="tpcn-field">
-			<label for="tpcn-caption">인스타 캡션 <em>필수</em></label>
+			<label for="tpcn-caption">인스타 캡션 <em class="tpcn-must">필수</em></label>
 			<textarea id="tpcn-caption" name="caption" rows="7" required placeholder="인스타 게시물 본문을 그대로 붙여 넣어 주세요 (해시태그 줄은 알아서 빼요)"></textarea>
 		</div>
 		<div class="tpcn-iv" id="tpcn-iv" hidden>
 			<div class="tpcn-field">
-				<label>인터뷰 형식 <em>필수</em></label>
+				<label>인터뷰 형식 <em class="tpcn-must">필수</em></label>
 				<div class="tpcn-layouts">
 					<label><input type="radio" name="layout" value="qa"><span><b>질문 여러 개</b>한 브랜드·사람에게 여러 질문</span></label>
 					<label><input type="radio" name="layout" value="panel"><span><b>패널</b>질문 하나에 여러 명이 답함</span></label>
