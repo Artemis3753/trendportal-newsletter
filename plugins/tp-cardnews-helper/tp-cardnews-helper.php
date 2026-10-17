@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.8.3
+ * Version: 1.9.0
  * Author: Trendportal
  */
 
@@ -31,6 +31,9 @@ const TP_CN_STATUS = array(
 	'working' => '요리 중',
 	'done'    => '완성',
 	'failed'  => '주방 멈춤',
+	// 셰프가 추측하면 틀릴 것 같아 멈추고 묻는 상태(10/17 사용자: 웹폼 결과도 대화처럼). 사람이 답하면 answered → 셰프가 이어서
+	'question' => '질문 있어요',
+	'answered' => '답 접수',
 );
 
 add_action(
@@ -339,7 +342,8 @@ add_action(
 			exit;
 		}
 		// 셰프는 '접수' 주문만 가져가니 상태를 되돌린 뒤 깨운다. 수정 요청이 남아 있으면 '수정 접수'로
-		update_post_meta( $id, '_tp_cn_status', get_post_meta( $id, '_tp_cn_feedback', true ) ? 'revise' : 'new' );
+		$again = get_post_meta( $id, '_tp_cn_answer', true ) ? 'answered' : ( get_post_meta( $id, '_tp_cn_feedback', true ) ? 'revise' : 'new' );
+		update_post_meta( $id, '_tp_cn_status', $again );
 		delete_post_meta( $id, '_tp_cn_error' );
 		$ok = tp_cn_ring( $id );
 		wp_safe_redirect( $ok ? add_query_arg( 'tp_cn_ok', $id, $back ) : add_query_arg( 'tp_cn_err', rawurlencode( get_post_meta( $id, '_tp_cn_bell_err', true ) ), $back ) );
@@ -379,6 +383,30 @@ add_action(
 			$fail( '수정 요청은 받았는데 셰프를 깨우지 못했어요. ' . get_post_meta( $id, '_tp_cn_bell_err', true ) );
 		}
 		wp_safe_redirect( add_query_arg( 'tp_cn_rev', $id, $back ) );
+		exit;
+	}
+);
+
+// 셰프의 질문에 답하기: 답을 남기고 셰프를 다시 부른다. 셰프는 질문할 때 맡긴 작업 기록을 되살려 이어서 만든다
+add_action(
+	'admin_post_tp_cn_answer',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 답할 수 있어요' );
+		}
+		$id = (int) ( $_POST['order'] ?? 0 );
+		check_admin_referer( 'tp_cn_answer_' . $id );
+		$back = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		$text = trim( sanitize_textarea_field( wp_unslash( $_POST['answer'] ?? '' ) ) );
+		if ( TP_CN_TYPE !== get_post_type( $id ) || 'question' !== get_post_meta( $id, '_tp_cn_status', true ) || '' === $text ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( '셰프가 질문한 주문에만, 답을 적어서 보낼 수 있어요' ), $back ) );
+			exit;
+		}
+		update_post_meta( $id, '_tp_cn_answer', $text );
+		update_post_meta( $id, '_tp_cn_status', 'answered' );
+		delete_post_meta( $id, '_tp_cn_error' );
+		$ok = tp_cn_ring( $id );
+		wp_safe_redirect( $ok ? add_query_arg( 'tp_cn_info', '답을 전했어요! 셰프 트란시스가 이어서 만들어요.', $back ) : add_query_arg( 'tp_cn_err', rawurlencode( '답은 받았는데 셰프를 깨우지 못했어요. ' . get_post_meta( $id, '_tp_cn_bell_err', true ) ), $back ) );
 		exit;
 	}
 );
@@ -629,7 +657,7 @@ function tp_cn_order( $post, $with_state = false ) {
 		'changes' => is_array( $changes ) ? $changes : array(),
 		'error'   => get_post_meta( $id, '_tp_cn_error', true ),
 		// 요리가 끝난(완성·멈춤) 시각. 메뉴 배지와 "방금 완성" 표시가 이걸로 "아직 안 본 결과"를 센다
-		'finished' => (int) max( (int) get_post_meta( $id, '_tp_cn_done_at', true ), (int) get_post_meta( $id, '_tp_cn_failed_at', true ) ),
+		'finished' => (int) max( (int) get_post_meta( $id, '_tp_cn_done_at', true ), (int) get_post_meta( $id, '_tp_cn_failed_at', true ), (int) get_post_meta( $id, '_tp_cn_question_at', true ) ),
 		// 초인종 기록: "셰프 다시 부르기" 버튼을 언제 보여 줄지 정하는 데 쓴다
 		'rang_at'  => (int) get_post_meta( $id, '_tp_cn_rang_at', true ),
 		'bell_err' => get_post_meta( $id, '_tp_cn_bell_err', true ),
@@ -637,6 +665,8 @@ function tp_cn_order( $post, $with_state = false ) {
 		'has_zip'  => (bool) get_post_meta( $id, '_tp_cn_zip', true ),
 		// 수정 요청: 지금 들어온 요청, 지난 수정들(요청 + 셰프가 손본 것), 셰프가 이어받을 작업 기록(파일 이름 → 내용)
 		'feedback' => get_post_meta( $id, '_tp_cn_feedback', true ),
+		'question' => get_post_meta( $id, '_tp_cn_question', true ),
+		'answer'   => get_post_meta( $id, '_tp_cn_answer', true ),
 		'rounds'   => get_post_meta( $id, '_tp_cn_rounds', true ) ?: array(),
 	);
 	// 작업 기록은 수십 KB라 셰프가 주문을 가져갈 때(상태를 골라 물을 때)만 싣는다 — 탭이 20초마다 묻는 목록엔 빼서 가볍게
@@ -708,7 +738,7 @@ add_action(
 					$id = $post->ID;
 					if ( null !== $req->get_param( 'status' ) ) {
 						if ( ! isset( TP_CN_STATUS[ $req['status'] ] ) ) {
-							return new WP_Error( 'tp_cn_status', '상태는 new·revise·working·done·failed 중 하나예요', array( 'status' => 400 ) );
+							return new WP_Error( 'tp_cn_status', '상태는 new·revise·working·done·failed·question·answered 중 하나예요', array( 'status' => 400 ) );
 						}
 						update_post_meta( $id, '_tp_cn_status', $req['status'] );
 						update_post_meta( $id, '_tp_cn_' . $req['status'] . '_at', time() );
@@ -742,6 +772,15 @@ add_action(
 					}
 					if ( null !== $req->get_param( 'error' ) ) {
 						update_post_meta( $id, '_tp_cn_error', sanitize_text_field( $req['error'] ) );
+					}
+					if ( null !== $req->get_param( 'question' ) ) {
+						update_post_meta( $id, '_tp_cn_question', sanitize_textarea_field( $req['question'] ) );
+						delete_post_meta( $id, '_tp_cn_answer' );
+					}
+					// 질문에 답을 받아 끝까지 만들었으면 질문·답은 비운다(셰프가 손본 것 목록에 남긴다)
+					if ( 'done' === $req->get_param( 'status' ) ) {
+						delete_post_meta( $id, '_tp_cn_question' );
+						delete_post_meta( $id, '_tp_cn_answer' );
 					}
 					return tp_cn_order( get_post( $id ) );
 				},
@@ -899,7 +938,7 @@ function tp_cn_page() {
  * 기다리는 시간: 초인종 뒤 셰프가 주문을 가져가기까지 보통 1~2분, 요리는 10분 안팎(711 실측 전 추정)이라 넉넉히.
  */
 function tp_cn_recall_reason( $o, $now ) {
-	$waiting = in_array( $o['status'], array( 'new', 'revise' ), true );
+	$waiting = in_array( $o['status'], array( 'new', 'revise', 'answered' ), true );
 	if ( $waiting && $o['bell_err'] ) {
 		return $o['bell_err'];
 	}
@@ -1049,6 +1088,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-rounds b { color: var(--revise); }
 .tpcn-rounds ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); }
 .s-done { --s: var(--done); --s-soft: var(--done-soft); }
+.s-question, .s-answered { --s: #d6336c; --s-soft: #fde2ec; }
+.tpcn-q { padding: 8px 10px; border-radius: 10px; background: var(--s-soft); }
+.tpcn-answer button { background: #d6336c; }
 .s-failed { --s: var(--failed); --s-soft: var(--failed-soft); }
 .tpcn-body { grid-column: 2 / -1; font-size: 13px; }
 .tpcn-body p { margin: 4px 0 0; }
@@ -1234,6 +1276,21 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 				<p>✏️ <?php echo esc_html( $o['feedback'] ); ?></p>
 				<?php if ( null === tp_cn_recall_reason( $o, $u['now'] ) ) : ?>
 				<p>셰프 트란시스가 곧 와서 같은 초안을 고쳐요.</p>
+				<?php endif; ?>
+			<?php elseif ( 'question' === $s ) : ?>
+				<?php // 셰프가 추측하지 않고 물은 것. 답하면 셰프가 하던 데서 이어 만든다 ?>
+				<p class="tpcn-q">🙋 <b>셰프가 물어봐요</b><br><?php echo nl2br( esc_html( $o['question'] ) ); ?></p>
+				<form class="tpcn-revise tpcn-answer" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
+					<input type="hidden" name="action" value="tp_cn_answer">
+					<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+					<?php wp_nonce_field( 'tp_cn_answer_' . (int) $o['id'] ); ?>
+					<textarea name="answer" rows="2" required placeholder="답을 적어 주세요"></textarea>
+					<button type="submit">💬 답하고 이어서 요리</button>
+				</form>
+			<?php elseif ( 'answered' === $s ) : ?>
+				<p class="tpcn-q">🙋 <?php echo nl2br( esc_html( $o['question'] ) ); ?><br>💬 <?php echo esc_html( $o['answer'] ); ?></p>
+				<?php if ( null === tp_cn_recall_reason( $o, $u['now'] ) ) : ?>
+				<p>셰프 트란시스가 곧 와서 이어서 만들어요.</p>
 				<?php endif; ?>
 			<?php elseif ( 'working' === $s ) : ?>
 				<p><?php echo $o['feedback'] ? '✏️ ' . esc_html( $o['feedback'] ) . ' — 고치는 중이에요.' : '사진을 고르고 글을 굽는 중이에요.'; ?></p>
@@ -1423,11 +1480,11 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	const base = document.title;
 	const items = [...document.querySelectorAll('.tpcn-item')];
 	const known = Object.fromEntries(items.map(li => [li.dataset.id, li.dataset.status]));
-	const waiting = () => Object.values(known).some(s => s === 'new' || s === 'revise' || s === 'working');
+	const waiting = () => Object.values(known).some(s => s === 'new' || s === 'revise' || s === 'answered' || s === 'working');
 	const typing = () => zip.files.length || ['tpcn-caption', 'tpcn-memo'].some(id => $(id).value.trim())
 		|| [...rows.querySelectorAll('input'), ...people.querySelectorAll('input')].some(i => (i.files ? i.files.length : i.value.trim()));
 	const FLASH = 'tpcn-flash', LAST = 'tpcn-reloaded';
-	const done = { done: '✅ 완성', failed: '⚠️ 주방 멈춤' };
+	const done = { done: '✅ 완성', failed: '⚠️ 주방 멈춤', question: '🙋 셰프가 물어봐요' };
 	const clean = location.pathname + '?page=<?php echo esc_js( TP_CN_SLUG ); ?>';
 	// 주문 직후 붙은 ?tp_cn_ok= 꼬리를 주소창에서 지운다 — 그대로 새로고침하면 "곧 시작해요" 알림이 또 뜨던 문제(10/17)
 	if (/[?&]tp_cn_(ok|err|info|rev)=/.test(location.search)) history.replaceState(null, '', clean);
