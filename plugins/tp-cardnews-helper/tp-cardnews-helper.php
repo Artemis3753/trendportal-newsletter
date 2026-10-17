@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.17.0
+ * Version: 1.18.0
  * Author: Trendportal
  */
 
@@ -1231,8 +1231,8 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
   .tpcn-prow input[type=url] { grid-column: 1 / -1; grid-row: 2; }
   .tpcn-layouts { grid-template-columns: 1fr; }
 }
-/* ── 스티커 테마(10/18 사용자, 시안 1018-8 A + 주문 현황은 C): 땡땡이 바탕 + 굵은 갈색 테두리·블록 그림자 스티커 패널,
-   주문 카드만 시안 C처럼 말랑하게(상태 색 → 흰색 그라데이션, 둥근 모서리, 부드러운 그림자).
+/* ── 스티커 테마(10/18 사용자, 시안 1018-8 A): 땡땡이 바탕 + 굵은 갈색 테두리·블록 그림자 스티커 패널,
+   10/18 사용자: 주문 카드도 그라데이션 없이 모두 A 모양으로.
    앞의 기본 모양 위에 덮어쓰는 묶음이라 .tpcn을 앞에 붙여 이긴다(테마만 통째로 갈아 끼울 수 있게) ── */
 body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(#ecd3b0 1.3px, transparent 1.5px) 0 0 / 18px 18px; }
 .tpcn .tpcn-towel { height: 16px; border: 2px solid var(--ink); }
@@ -1247,15 +1247,16 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-go { border: 2.5px solid var(--ink); border-radius: 16px; box-shadow: 5px 5px 0 var(--ink); }
 .tpcn .tpcn-go:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--ink); }
 .tpcn .tpcn-tag { border: 1.5px solid var(--ink); }
-/* 주문 현황(시안 C): 말랑한 카드 */
-.tpcn .tpcn-list { gap: 12px; }
-.tpcn .tpcn-item { border: 0; border-radius: 26px; background: linear-gradient(135deg, var(--s-soft), #fff 68%); box-shadow: 0 8px 20px rgba(59, 47, 42, .07); padding: 16px; }
-.tpcn .tpcn-item.is-pub { background: linear-gradient(135deg, #ffe7b3, #fff8ea 70%); }
-.tpcn .tpcn-item.is-fresh { box-shadow: 0 0 0 3px var(--s-soft), 0 8px 20px rgba(59, 47, 42, .07); }
-.tpcn .tpcn-no { height: 40px; border-radius: 18px 18px 18px 6px; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .15); }
-.tpcn .tpcn-chip { padding: 4px 12px; box-shadow: 0 3px 0 rgba(0, 0, 0, .08); }
-.tpcn .tpcn-links a, .tpcn .tpcn-publish button { border-radius: 16px; box-shadow: 0 4px 0 rgba(0, 0, 0, .18); }
-.tpcn .tpcn-check { border: 0; border-radius: 18px; box-shadow: inset 0 0 0 2px #f2cf7c; }
+/* 주문 현황도 스티커: 흰 카드 + 갈색 테두리 + 상태 색 블록 그림자, 번호는 기울어진 동그라미 도장 */
+.tpcn .tpcn-item { border: 2px solid var(--ink); border-radius: 20px; box-shadow: 4px 4px 0 var(--s); background: #fff; }
+.tpcn .tpcn-item.is-pub { background: #fff3d6; border-color: var(--ink); }
+.tpcn .tpcn-item.is-fresh { border-color: var(--ink); box-shadow: 4px 4px 0 var(--s), 0 0 0 4px var(--s-soft); }
+.tpcn .tpcn-no { width: 48px; height: 48px; min-width: 48px; border-radius: 50%; border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); transform: rotate(-8deg); font-size: 16px; }
+.tpcn .tpcn-chip { border: 2px solid currentColor; padding: 2px 10px; }
+.tpcn .tpcn-chip.is-pub { border-color: var(--ink); }
+.tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-revise button, .tpcn .tpcn-recall button { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+.tpcn .tpcn-check { border: 2px solid var(--ink); box-shadow: 3px 3px 0 #f2cf7c; }
+.tpcn .tpcn-revise textarea { border: 2px solid var(--ink); border-radius: 14px; background: #fff; }
 </style>
 
 <div class="tpcn-towel" aria-hidden="true"></div>
