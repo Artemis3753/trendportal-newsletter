@@ -91,27 +91,44 @@ def auth_header():
     return {"Authorization": "Basic " + token}
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    # urllib은 POST가 301·302를 받으면 몰래 GET으로 바꿔 따라간다 → 주문 보고가 "그런 창구 없음(404)"으로 끝났다(10/17 주문 816).
+    # 우리 요청은 늘 정확한 주소로 가니 넘겨받는 일 자체가 이상한 상황 → 따라가지 않고 오류로 받아서 아래에서 다시 시도한다
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect)
+
+
 def wp(path, data=None, headers=None, method=None, base=API, raw=False):
     h = dict(auth_header(), **(headers or {}))
     if isinstance(data, (dict, list)):
         data = json.dumps(data).encode()
         h["Content-Type"] = "application/json"
     url = path if path.startswith("https://") else base + path
-    # 429(요청이 너무 많음)·5xx는 잠깐 기다렸다 다시 — 클라우드에서 첫 요청이 429로 막힌 적이 있다(10/17 환경 시험).
-    # 429는 서버가 아무것도 안 하고 돌려보낸 것이라 다시 보내도 안전하다. 5xx는 드물게 저장은 된 채 오류만 올 수 있어
-    # 사진·초안이 하나 더 생길 수 있지만, 주문이 통째로 멈추는 것보다 낫다
+    # 잠깐 흔들리는 경우는 기다렸다 다시 보낸다:
+    # · 429(요청이 너무 많음)·5xx — 클라우드에서 첫 요청이 429로 막힌 적이 있다(10/17 환경 시험)
+    # · 연결 끊김, 넘겨받기(3xx), 401 — 10/17 주문 816: 클라우드와 사이트 사이 중계가 끊긴 40초 동안 비밀번호 없이 도착해 401,
+    #   보고는 GET으로 바뀌어 404가 났고, 바로 앞뒤 요청은 같은 인증으로 멀쩡했다. 비밀번호가 정말 틀렸다면 네 번 다 401이라 결국 멈춘다
+    # 5xx는 드물게 저장은 된 채 오류만 올 수 있어 사진·초안이 하나 더 생길 수 있지만, 주문이 통째로 멈추는 것보다 낫다
     for wait in (10, 30, 60, None):
         req = urllib.request.Request(url, data=data, headers=h, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=300) as r:
+            with OPENER.open(req, timeout=300) as r:
                 return r.read() if raw else json.load(r)
         except urllib.error.HTTPError as e:
-            if wait and (e.code == 429 or e.code >= 500):
+            if wait and (e.code in (401, 429) or e.code >= 500 or 300 <= e.code < 400):
                 print(f"WordPress {e.code} — {wait}초 뒤 다시 해요", file=sys.stderr)
                 time.sleep(wait)
                 continue
             # 응답 본문 앞부분만 보여 준다 (덩어리 전체를 찍으면 읽기도 어렵고 길다)
             sys.exit(f"WordPress 오류 {e.code} {path}: {e.read()[:300].decode('utf-8', 'replace')}")
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+            if not wait:
+                sys.exit(f"사이트에 연결하지 못했어요 {path}: {e}")
+            print(f"연결이 끊겼어요({e}) — {wait}초 뒤 다시 해요", file=sys.stderr)
+            time.sleep(wait)
 
 
 # ── build: 주간 총정리 틀 ───────────────────────────────
@@ -242,10 +259,18 @@ def iv_heading(label, text):
             f'<h2 class="wp-block-heading tp-iv-q"><span class="tp-q">{label}</span> {esc(text)}</h2><!-- /wp:heading -->')
 
 
-def panel_cards(media, cards, notes):
+def insta_handle(url):
+    # "https://www.instagram.com/luxmag.kr/?igsh=…" → "luxmag.kr"
+    return re.sub(r"^https?://(www\.)?instagram\.com/", "", url or "").split("/")[0].split("?")[0]
+
+
+def panel_cards(media, cards, notes, people=()):
     """인터뷰 패널형(734 — 질문 하나에 여러 명이 답한 카드, 사용자 결정 D 10/17, 시안 docs/트렌드포털-시안비교/1017-4-*).
     같은 질문 카드끼리 묶어 QUESTION 소제목 한 번 → 답한 사람(cards[].who)마다 카드 한 장 모양의 판(.tp-pn-card).
-    답한 사람이 없는 카드(734의 2번 안내 카드)는 글만 그 질문 소제목 앞에 둔다. 모양은 additional.css의 Interview panel"""
+    답한 사람이 없는 카드(734의 2번 안내 카드)는 글만 그 질문 소제목 앞에 둔다. 모양은 additional.css의 Interview panel.
+    인터뷰 폼에 대상을 넣었으면 계정이 같은 사람의 프로필 사진·인스타 주소로 판의 얼굴·알약 링크를 바꾼다
+    (사용자 결정 A 10/17 — 맨 위·맨 끝 프로필 카드를 열 명분 넣으면 판과 겹쳐서)"""
+    by_handle = {insta_handle(p.get("insta")).lower(): p for p in people if p.get("insta")}
     groups = []
     for card, note in zip(cards, notes):
         if groups and groups[-1][0] == card["title"]:
@@ -261,11 +286,14 @@ def panel_cards(media, cards, notes):
                 continue
             # 판 안은 카드 순서 그대로: 질문 머리(짧은 선은 CSS) → 얼굴 → "@계정 / 이름" 알약 → 답
             inner = para(esc(title), "tp-pn-q")
-            if c.get("image"):
-                inner += image_block(media, c["image"], note.get("alt", ""), size="large", cls="tp-pn-face", link_none=True)
             w = c["who"]
+            p = by_handle.get(w["handle"].lower(), {})
+            face = p.get("photo") or c.get("image")
+            if face:
+                inner += image_block(media, face, note.get("alt", ""), size="large", cls="tp-pn-face", link_none=True)
             label = f"@{w['handle']}" + (f" / {w['name']}" if w.get("name") else "")
-            inner += para(f'<a href="https://www.instagram.com/{attr(w["handle"])}/" target="_blank" rel="noreferrer noopener">{esc(label)}</a>', "tp-pn-pill")
+            href = f"https://www.instagram.com/{insta_handle(p['insta'])}/" if p.get("insta") else f"https://www.instagram.com/{w['handle']}/"
+            inner += para(f'<a href="{attr(href)}" target="_blank" rel="noreferrer noopener">{esc(label)}</a>', "tp-pn-pill")
             inner += "".join(para(esc(p)) for p in c["what"])
             out += group("tp-pn-card", inner)
     return out
@@ -300,7 +328,7 @@ def profile_cards(media, people):
     for p in people:
         if not p.get("insta"):
             continue
-        handle = re.sub(r"^https?://(www\.)?instagram\.com/", "", p["insta"]).split("/")[0].split("?")[0]
+        handle = insta_handle(p["insta"])
         url = f"https://www.instagram.com/{handle}/"
         avatar = ""
         if p.get("photo"):
@@ -324,7 +352,8 @@ def build_archive(order, cards, notes, media):
                            size="large", cls="tp-cover-photo", link_none=True)
     intro = [para(esc(p)) for p in cards["intro"]]
     # 인터뷰 프로필 카드: 시작 카드는 첫 줄 "[ 트포 인터뷰 : … ]" 바로 아래(광고 글 439의 [광고] 줄 자리와 같다), 끝 카드는 맨 끝
-    profiles = profile_cards(media, order.get("people") or [])
+    # 패널형은 대상을 판 안 얼굴로 쓰니 프로필 카드를 따로 안 넣는다(panel_cards 참고)
+    profiles = "" if order.get("layout") == "panel" else profile_cards(media, order.get("people") or [])
     if profiles:
         at = 1 if cards["intro"] and cards["intro"][0].lstrip().startswith("[") else 0
         intro.insert(at, profiles)
@@ -335,9 +364,11 @@ def build_archive(order, cards, notes, media):
     # order.json에 "layout": "copy"라고 적은 주문만 쓴다(10/17 사용자: 일단 764 글에만)
     copy = order.get("layout") == "copy"
     # 인터뷰 형식(패널·질문 여러 개)은 카드 줄을 따로 만든다 → 아래 일반 카드 줄은 건너뛴다
-    interview = {"panel": panel_cards, "qa": qa_cards}.get(order.get("layout"))
-    if interview:
-        out += interview(media, cards["cards"], notes["cards"])
+    interview = order.get("layout") in ("panel", "qa")
+    if order.get("layout") == "panel":
+        out += panel_cards(media, cards["cards"], notes["cards"], order.get("people") or [])
+    elif order.get("layout") == "qa":
+        out += qa_cards(media, cards["cards"], notes["cards"])
     if copy:
         out += ('<!-- wp:group {"align":"full","className":"tp-copy-stage","layout":{"type":"default"}} -->'
                 '<div class="wp-block-group alignfull tp-copy-stage">')

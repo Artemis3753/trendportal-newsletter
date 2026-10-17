@@ -77,6 +77,7 @@ One question answered by many people.
 - Each answer is a panel shaped like its card (`.tp-pn-card`): the card's question line → face (cut from the card) → white `@account / name` pill linking to Instagram → answer paragraphs, left aligned.
 - A card without an `@account` line (an intro card) goes as plain text before the heading.
 - The script reads `@account / name` from the card (`cards.json` → `who`).
+- Interviewees given in the interview form replace the face and link of the panel with the same Instagram account. No profile cards at the top or end: the panels already show everyone.
 
 ### Weekly roundup
 Built by hand, not by the helper: newsletter layout (`tp-wk`), subscriber lock from card 02, the "매주 금요일…" paragraph at the very end.
