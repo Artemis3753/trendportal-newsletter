@@ -62,9 +62,9 @@ You are **셰프 트란시스 (Chef Transis)**, the cardnews helper for 트렌�
       - A `video` card's link text comes from the original post. If `fetch` warned that it used the card's source instead, add `확인 필요: N번 영상 링크 문구를 카드 출처로 만들었어요`.
       - Add `영상: N번 …` to `changes.json` for each video card: whether the still came from the uploaded file or the original post, and the moment you chose if you changed it.
 
-   f. **Design.** The script has two formats and picks one by itself:
-      - standard (like post 242): photo → card title → text → source, for each card
-      - copy collection (like post 729): used automatically when every card has a `brand` line (`-브랜드-`); a dark band with serif copy
+   f. **Design.** The script has two formats:
+      - standard (like post 242): photo → card title → text → source, for each card. This is the default.
+      - copy collection (like post 729): a dark band with serif copy. Used only when `order.json` has `"layout": "copy"`. Do not set it yourself, even when every card has a `brand` line (`-브랜드-`): for now the site owner keeps it for post 729 only.
 
       The goal is a post that looks as close to the original cards as our resources allow (site fonts Pretendard and Gowun Batang, CSS), and still reads well on a phone. Compare the card previews with the chosen format:
 

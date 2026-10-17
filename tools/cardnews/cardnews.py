@@ -244,9 +244,11 @@ def build_archive(order, cards, notes, media):
         out += image_block(media, order["cover_photo"], notes.get("cover_alt", ""),
                            size="large", cls="tp-cover-photo", link_none=True)
     out += "".join(para(esc(p)) for p in cards["intro"])
-    # 카피 모음형(카드마다 "-브랜드-" 줄이 있는 764식)은 원본처럼 어두운 전시장 띠 하나에 카드를 이어 붙인다
+    # 카피 모음형(764식)은 원본처럼 어두운 전시장 띠 하나에 카드를 이어 붙인다
     # (사용자 결정 C, 10/17 — 시안 docs/트렌드포털-시안비교/1017-1-*). 모양은 additional.css의 .tp-copy-stage
-    copy = bool(cards["cards"]) and all(c.get("brand") for c in cards["cards"])
+    # 처음엔 카드마다 "-브랜드-" 줄이 있으면 자동으로 골랐지만, 카드 모양만 보고 틀을 붙이면 엉뚱한 글에도 띠가 생길 수 있어
+    # order.json에 "layout": "copy"라고 적은 주문만 쓴다(10/17 사용자: 일단 764 글에만)
+    copy = order.get("layout") == "copy"
     if copy:
         out += ('<!-- wp:group {"align":"full","className":"tp-copy-stage","layout":{"type":"default"}} -->'
                 '<div class="wp-block-group alignfull tp-copy-stage">')
