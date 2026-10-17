@@ -123,6 +123,10 @@ function doPost(e) {
     items.forEach(it => { byKey[it.key] = it; });
     let maxNo = items.reduce((m, it) => Math.max(m, it.no), 0);
     const errors = [];
+    // 이번에 바뀐 것: 일정표의 "최근 바뀐 일정"에 띄운다(10/17 사용자: 동기화 뒤 무엇이 바뀌었는지 보고 싶다).
+    // 다시 보내도 똑같은 항목은 안 적는다 — 새 일정·날짜 변경·확정·취소만
+    const changes = [];
+    const note = (k, it, extra) => changes.push(Object.assign({ k: k, type: it.type, brand: it.brand, title: it.title, date: it.date, time: it.time }, extra || {}));
 
     (body.items || []).forEach((raw, i) => {
       const it = clean_(raw);
@@ -132,6 +136,7 @@ function doPost(e) {
       }
       const old = byKey[it.key];
       if (old) {
+        const was = { date: old.date, time: old.time, tentative: old.tentative, removed: old.removed };
         ['type', 'brand', 'title', 'source', 'payer', 'amount', 'tentative'].forEach(f => { old[f] = it[f]; });
         // 손으로 바꾼 날짜는 메일 날짜가 그대로면 지키고, 메일 날짜가 달라졌으면 메일을 따른다(손 표시도 지움)
         if (!(old.manual && it.date === old.mailDate && it.time === old.mailTime)) {
@@ -144,6 +149,11 @@ function doPost(e) {
         if (raw.done === true && !old.done) { old.done = true; old.doneAt = now_(); }
         if (raw.cancelled === true && !old.done && !old.removed) { old.removed = true; old.doneBy = CANCELLED; old.doneAt = now_(); }
         old.updatedAt = now_();
+        if (!old.removed && !old.done) {
+          if (old.date !== was.date || old.time !== was.time) note('date', old, { from: was.date, fromTime: was.time });
+          else if (was.tentative && !old.tentative) note('confirmed', old);
+        }
+        if (old.removed && !was.removed) note('cancelled', old);
       } else if (raw.cancelled === true) {
         return;  // 시트에 없던 일이 이미 취소된 거면 새로 넣지 않는다
       } else {
@@ -153,8 +163,10 @@ function doPost(e) {
         it.updatedAt = now_();
         items.push(it);
         byKey[it.key] = it;
+        if (!it.done) note('new', it);
       }
     });
+    if (changes.length) addChanges_(changes);
 
     writeItems_(items);
     setMeta_('updatedAt', body.updatedAt || now_());
@@ -365,7 +377,26 @@ function publicData_() {
     o.cancelled = isCancelled_(it);
     return o;
   });
-  return { updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')), items: items };
+  return { updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')), items: items, changes: getChanges_() };
+}
+
+// 최근 바뀐 일정 기록: 메타 시트 'changeLog'에 JSON 목록으로. 정리할 때마다 쌓고, 사흘 넘은 것과 50개 넘는 것은 버린다.
+// 일정표는 그중 최근 24시간 치만 보여 준다(화면 쪽에서 거른다). 입금자명·금액은 담지 않는다
+function addChanges_(list) {
+  const at = now_();
+  const keep = Date.now() - 3 * 86400000;
+  const log = getChanges_().filter(c => new Date(c.at).getTime() > keep)
+    .concat(list.map(c => Object.assign({ at: at }, c)));
+  setMeta_('changeLog', JSON.stringify(log.slice(-50)));
+}
+
+function getChanges_() {
+  try {
+    const log = JSON.parse(getMeta_('changeLog') || '[]');
+    return Array.isArray(log) ? log : [];
+  } catch (err) {
+    return [];
+  }
 }
 
 /** 앞으로 FIXED_DAYS 안에 고정 일정이 빠진 날이 있으면 items에 새 줄로 넣는다 */
