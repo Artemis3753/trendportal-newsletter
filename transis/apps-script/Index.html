@@ -68,11 +68,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .head #updated.stale .dot { background: var(--muted); box-shadow: 0 0 0 3px var(--line); }
 /* 최근 바뀐 일정: 갱신 줄 바로 아래 작은 접기. 펼치면 정리한 시각별로 묶고, 항목마다 종류 색 옅은 칸(10/18 사용자 시안 1018-3 C).
    날짜만 있는 항목은 한 줄(날짜 오른쪽 끝), 날짜 변경은 두 줄(옛 날짜 줄긋기 → 새 날짜) */
-.changes { margin-top: 3px; font-size: 12.5px; color: var(--muted); }
-/* 펼치면 머리가 길어져서, 인형 얼굴이 가운데로 내려가지 않고 제목 옆에 남게 */
-.head:has(.changes[open]) { align-items: flex-start; }
-.changes summary { cursor: pointer; color: var(--fresh); font-weight: 700; width: max-content; }
-.changes .ch-box { margin-top: 6px; padding: 8px 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.head { flex-wrap: wrap; row-gap: 0; }
+.changes { flex-basis: 100%; margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+/* 접힌 줄은 제목 글자 아래에 맞춘다(얼굴 48px + 간격 12px). 펼친 목록은 머리 폭 전체, PC에선 너무 늘어지지 않게 640px까지 */
+.changes summary { margin-left: 60px; cursor: pointer; color: var(--fresh); font-weight: 700; width: max-content; }
+.changes .ch-box { max-width: 640px; margin-top: 6px; padding: 8px 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
 .changes .ch-at { margin: 8px 0 3px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
 .changes .ch-at:first-child { margin-top: 0; }
 .changes ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
@@ -274,10 +274,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     <div class="title">
       <h1>트란시스 일정표<span class="sample" id="sample" hidden>예시 데이터</span></h1>
       <p id="updated">불러오는 중</p>
-      <!-- 최근 24시간 동안 트란시스가 바꾼 것 (10/17 사용자). 평소엔 접어 두고 건수만 -->
-      <details class="changes" id="changes" hidden><summary></summary><div class="ch-box"></div></details>
     </div>
     <button type="button" class="theme" id="theme"></button>
+    <!-- 최근 24시간 동안 트란시스가 바꾼 것 (10/17 사용자). 평소엔 접어 두고 건수만.
+         제목 칸 밖 머리의 새 줄에 둬서, 펼친 목록이 얼굴·버튼 폭까지 가로로 다 쓴다(10/18 사용자) -->
+    <details class="changes" id="changes" hidden><summary></summary><div class="ch-box"></div></details>
     <!-- 마스코트 인형의 원래 이름은 프란시스, 트렌드포털의 '트'를 따서 트란시스가 됐다 -->
     <div class="bubble" id="bubble" role="status" hidden>
       <p>그거 아셨나요? 프란시스는 멋있는 주인과 12년+@을 함께한 충성스러운 강아지입니다. 🐾</p>
