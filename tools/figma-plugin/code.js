@@ -28,7 +28,7 @@ function walk(node, out) {
   if ('children' in node) node.children.forEach(c => walk(c, out));
 }
 
-// 사진이 채워진 레이어면 그 사진의 이름표(hash). 사진 원본을 꺼낼 때(다음 조각) 이걸로 찾는다
+// 사진이 채워진 레이어면 그 사진의 이름표(hash). 사진 원본을 꺼낼 때 이걸로 찾는다
 function imageHash(n) {
   if (!('fills' in n) || n.fills === figma.mixed) return null;
   const f = n.fills.find(p => p.type === 'IMAGE' && p.visible !== false);
@@ -79,19 +79,52 @@ function sendSelection() {
 figma.on('selectionchange', sendSelection);
 sendSelection();
 
-figma.ui.onmessage = msg => {
+// 파일 앞 몇 바이트로 사진 형식을 알아낸다 (피그마는 원본 형식 그대로 돌려준다)
+function ext(b) {
+  if (b[0] === 0x89 && b[1] === 0x50) return 'png';
+  if (b[0] === 0xFF && b[1] === 0xD8) return 'jpg';
+  if (b[0] === 0x47 && b[1] === 0x49) return 'gif';
+  if (b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'webp';
+  return 'bin';
+}
+
+const say = text => figma.ui.postMessage({ type: 'progress', text: text });
+
+figma.ui.onmessage = async msg => {
   if (msg.type !== 'scan') return;
   const got = pickGroup();
   if (got.error) { figma.ui.postMessage({ type: 'error', error: got.error }); return; }
   const g = got.group;
+  const frames = got.frames.map(readFrame);
   const scan = {
     tool: 'transis-cardnews-reader',
-    version: 1,
+    version: 2,
     scannedAt: new Date().toISOString(),
     file: figma.fileKey || null,  // 개발용 플러그인에서만 채워진다 (manifest의 enablePrivatePluginApi)
     page: figma.currentPage.name,
     group: Object.assign({ id: g.id, name: g.name }, box(g)),
-    frames: got.frames.map(readFrame),
+    frames: frames,
   };
-  figma.ui.postMessage({ type: 'scan', scan: scan });
+  const files = [];
+  try {
+    // 사진 원본: 카드에서 잘라 보여 준 구도가 아니라 올린 파일 그대로 (사용자 결정 A, 10/17)
+    // 같은 사진이 여러 레이어에 쓰여도 hash가 같아서 한 번만 담는다
+    const hashes = Array.from(new Set([].concat(...frames.map(f => f.images.map(im => im.hash)))));
+    for (let i = 0; i < hashes.length; i++) {
+      say(`사진 원본 꺼내는 중… ${i + 1}/${hashes.length}`);
+      const img = figma.getImageByHash(hashes[i]);
+      if (!img) continue;
+      const bytes = await img.getBytesAsync();
+      files.push({ name: `figma/images/${hashes[i]}.${ext(bytes)}`, bytes: bytes });
+    }
+    // 대표 이미지 = 글자까지 다 있는 표지. 표지는 맨 왼쪽 카드다 (fetch가 x 순서로 세는 것과 같은 기준)
+    say('표지 내보내는 중…');
+    const cover = got.frames.reduce((a, b) => (box(b).x < box(a).x ? b : a));
+    const png = await cover.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 1 } });
+    files.push({ name: 'figma/cover-export.png', bytes: png });
+  } catch (e) {
+    figma.ui.postMessage({ type: 'error', error: `사진을 꺼내다 멈췄어요: ${e.message || e}` });
+    return;
+  }
+  figma.ui.postMessage({ type: 'scan', scan: scan, files: files });
 };

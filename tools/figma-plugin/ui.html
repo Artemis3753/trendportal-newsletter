@@ -14,7 +14,7 @@
   #out { margin-top: 10px; color: #7b7e8c; }
 </style>
 <h1>카드뉴스 읽기</h1>
-<p>카드 묶음을 선택하고 읽기를 누르면, 카드 글자를 zip 하나로 내려받아요.</p>
+<p>카드 묶음을 선택하고 읽기를 누르면, 카드 글자·사진 원본·표지를 zip 하나로 내려받아요.</p>
 <div id="sel">선택한 게 없어요</div>
 <button id="scan" disabled>선택한 묶음 읽기</button>
 <a class="dl" id="dl" hidden>zip 내려받기</a>
@@ -82,10 +82,12 @@ onmessage = e => {
   } else if (msg.type === 'error') {
     $('out').textContent = msg.error;
     $('scan').disabled = false;
+  } else if (msg.type === 'progress') {
+    $('out').textContent = msg.text;
   } else if (msg.type === 'scan') {
     const s = msg.scan;
     const json = new TextEncoder().encode(JSON.stringify(s, null, 1));
-    const blob = makeZip([{ name: 'figma/scan.json', bytes: json }]);
+    const blob = makeZip([{ name: 'figma/scan.json', bytes: json }].concat(msg.files));
     // 링크를 사람이 직접 누르게 한다 (플러그인 창에서 저절로 내려받기는 막힐 수 있어서)
     const old = $('dl').href;
     if (old) URL.revokeObjectURL(old);
@@ -95,7 +97,8 @@ onmessage = e => {
     $('dl').hidden = false;
     const texts = s.frames.reduce((n, f) => n + f.texts.length, 0);
     const imgs = s.frames.reduce((n, f) => n + f.images.length, 0);
-    $('out').textContent = `카드 ${s.frames.length}장 · 글자 ${texts}개 · 사진 레이어 ${imgs}개`;
+    const mb = (blob.size / 1048576).toFixed(1);
+    $('out').textContent = `카드 ${s.frames.length}장 · 글자 ${texts}개 · 사진 레이어 ${imgs}개 · 사진 파일 ${msg.files.length - 1}개 + 표지 · ${mb}MB`;
     $('scan').disabled = false;
   }
 };

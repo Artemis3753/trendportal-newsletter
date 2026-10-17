@@ -260,7 +260,11 @@ def build(d, quiet=False):
 
 
 # ── fetch: 피그마 묶음 → cards.json (+ 커버·대표 사진, 영상 정지 화면) ──
-# 피그마는 1단계에선 MCP로 받는다(사용자 결정 A'). Claude가 MCP 결과를 figma/ 폴더에 파일로 두면 여기서 읽는다:
+# 기본은 피그마 플러그인(tools/figma-plugin)의 zip을 주문 폴더에 푼 것 (10/17, 한도 없음):
+#   figma/scan.json          카드별 글자·사진 레이어(hash)
+#   figma/images/<hash>.*    사진 원본 (카드에서 잘라 보인 구도가 아니라 올린 파일 그대로)
+#   figma/cover-export.png   글자까지 다 있는 표지
+# 예비로 MCP 결과도 읽는다(성현 님이 데스크톱 앱을 못 쓰면 필요 — 그 답 전까지 남겨 둠, 10/17 사용자 결정 A):
 #   figma/metadata.xml   get_metadata(묶음 노드) 결과 XML (MCP 결과 파일 통째로 둬도 됨)
 #   figma/cover-export.png, figma/cover-raw-N.*   download_assets(표지 프레임)의 export와 rawImages
 #   figma/card02-raw-N.*                          download_assets(카드 프레임)의 rawImages — 카드 1장에 1회
@@ -301,9 +305,15 @@ def scan_group(d):
             ET.SubElement(fr, "text", name=text, x=str(t["x"]), y=str(t["y"]),
                           width=str(t["width"]), height=str(t["height"]))
         for im in f["images"]:
-            ET.SubElement(fr, "rounded-rectangle", name=im["name"], x=str(im["x"]), y=str(im["y"]),
+            ET.SubElement(fr, "rounded-rectangle", name=im["name"], hash=im["hash"], x=str(im["x"]), y=str(im["y"]),
                           width=str(im["width"]), height=str(im["height"]))
     return g
+
+
+def scan_image(d, el):
+    # 플러그인이 담은 사진 원본(figma/images/<hash>.*). MCP 메타데이터에서 온 레이어는 hash가 없어 None
+    h = el.get("hash") if el is not None else None
+    return next(iter(sorted((d / "figma" / "images").glob(f"{h}.*"))), None) if h else None
 
 
 def frame_no(fr, i):
@@ -443,9 +453,10 @@ def read_caption(d):
 
 
 def photo_layer(fr):
-    # 카드에 깔린 사진 = 카드 안에서 가장 넓은 "image …" 레이어 (그라데이션 판·국기·로고보다 크다)
-    imgs = [e for e in fr if e.get("name", "").startswith("image")]
-    return max(imgs, key=lambda e: float(e.get("width")) * float(e.get("height"))).get("name") if imgs else None
+    # 카드에 깔린 사진 = 카드 안에서 가장 넓은 사진 레이어 (그라데이션 판·국기·로고보다 크다)
+    # MCP 메타데이터는 사진인지 표시가 없어 이름("image …")으로, 플러그인 결과는 hash가 있으면 사진
+    imgs = [e for e in fr if e.get("hash") or e.get("name", "").startswith("image")]
+    return max(imgs, key=lambda e: float(e.get("width")) * float(e.get("height"))) if imgs else None
 
 
 def find_image(d, n, layer=None):
@@ -504,25 +515,36 @@ def fetch(d):
             if note:
                 warn.append(f"{n}번 영상: {note}")
         else:
-            # 사람이 내보낸 사진(images/NN.*)이 먼저, 없으면 피그마 rawImages(figma/cardNN-raw-*)에서 고른다
-            fn = find_image(d, n, photo_layer(fr))
+            # 사람이 내보낸 사진(images/NN.*)이 먼저 — 여러 장을 합친 카드(트윗 캡처 겹침 등)는 원본 한 장으론 안 돼서
+            # 없으면 플러그인 사진 원본, 그것도 없으면 MCP rawImages(figma/cardNN-raw-*)에서 고른다
+            el = photo_layer(fr)
+            layer = el.get("name") if el is not None else None
+            fn = find_image(d, n, layer)
+            if not fn and scan_image(d, el):
+                fn = to_web(scan_image(d, el), d / "images" / f"{n:02d}.jpg")
+                # 사진 위에 다른 사진(트윗 캡처·브랜드 로고 등)이 겹친 카드는 원본만 들어간다 — 242의 3·6번(10/17)
+                deco = [e.get("name") for e in fr if e.get("hash") and e.get("hash") != el.get("hash")]
+                if deco:
+                    warn.append(f"{n}번 사진 위에 겹친 그림 {deco}은 빠져요 — 필요하면 카드에서 글자만 숨겨 images/{n:02d}.jpg로")
             if not fn and raws(d, f"card{n:02d}"):
                 fn = to_web(pick_photo(raws(d, f"card{n:02d}")), d / "images" / f"{n:02d}.jpg")
             if fn:
                 card["image"] = fn
             else:
-                warn.append(f"{n}번 사진이 없어요 — 피그마 '{photo_layer(fr)}' 레이어를 images/에 내보내 주세요")
+                warn.append(f"{n}번 사진이 없어요 — 피그마 '{layer}' 레이어를 images/에 내보내 주세요")
         cards.append(card)
 
-    # 표지: rawImages 중 진짜 사진 = 글자 없는 커버, export = 글자 있는 표지(대표 이미지)
-    if raws(d, "cover"):
-        order["cover_photo"] = to_web(pick_photo(raws(d, "cover")), d / "images" / "cover.jpg")
+    # 표지: 표지에 쓰인 사진 중 진짜 사진 = 글자 없는 커버, export = 글자 있는 표지(대표 이미지)
+    cover_raws = [p for p in (scan_image(d, e) for e in frames[0]) if p] if frames else []
+    cover_raws = cover_raws or raws(d, "cover")
+    if cover_raws:
+        order["cover_photo"] = to_web(pick_photo(cover_raws), d / "images" / "cover.jpg")
     else:
-        warn.append("figma/cover-raw-1.* 가 없어요 (표지 프레임 download_assets의 rawImages)")
+        warn.append("표지 사진 원본이 없어요 (플러그인 zip의 figma/images/, 또는 MCP figma/cover-raw-*)")
     if (d / "figma" / "cover-export.png").exists():
         order["featured"] = to_web(d / "figma" / "cover-export.png", d / "images" / "featured.jpg")
     else:
-        warn.append("figma/cover-export.png 가 없어요 (표지 프레임 download_assets의 export)")
+        warn.append("figma/cover-export.png 가 없어요 (플러그인 zip, 또는 표지 프레임 download_assets의 export)")
 
     intro, outro, w = read_caption(d)
     warn += w
