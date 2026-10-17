@@ -24,7 +24,7 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
 0. **`SYNC` only.** Run `python3 transis/transis.py since`. It prints one Gmail search operator, such as `after:1792150000` (the sheet's last update minus 30 minutes).
    - If it also prints a line `scan: FULL`, ignore the operator and do steps 1 to 6 as usual.
    - Otherwise search `<operator> -in:drafts` the way step 2a describes (`pageSize` 50, `THREAD_VIEW_METADATA_ONLY`, follow `nextPageToken`) and apply the candidate rule of step 2b.
-   - **If no candidate thread is left, stop here.** Do not run `state` or `run`, and send nothing. Report only `no new mail since <operator>` and how many threads the search returned.
+   - **If no candidate thread is left, stop here.** Do not run `state` or `run`, and send nothing. Report only, in Korean, `<operator> 이후 새 메일 없음` and how many threads the search returned.
    - Otherwise do steps 1 to 6. In step 2a, use these candidates in place of the `newer_than:1d` search.
 
 1. Run `python3 transis/transis.py state`. The first line says the scan mode, `FULL` or `DAILY`. In `FULL` mode the next line is about the **full queue** (see step 2). The rest lists the items already in the sheet, one per line (no, key, type, brand, title, date, time, tentative, done, removed, source). An empty date means the date is still open (일정 미정). Use the list to keep keys stable and to notice date changes.
@@ -99,4 +99,4 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
 
    Send at most one email per run. If the send command fails, wait 5 minutes and run it once more; that is safe, because the sender account drops a second copy of the same email on the same day.
 
-6. Finish with a short report: the scan mode, how many threads you scanned and read, the script's `full_queue_left`, each extracted item (number if known, type, brand, date, time; no payer or amount), the unclear list, the script's `due_today` list (in `SYNC` and `REFRESH` mode, `evening_left_today` instead), and what the send command printed, if it ran.
+6. Finish with a short report **in Korean** (the person who reads the run log reads Korean; keep thread ids, keys, numbers and command output as they are): the scan mode, how many threads you scanned and read, the script's `full_queue_left`, each extracted item (number if known, type, brand, date, time; no payer or amount), the unclear list, the script's `due_today` list (in `SYNC` and `REFRESH` mode, `evening_left_today` instead), and what the send command printed, if it ran.
