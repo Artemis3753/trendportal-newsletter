@@ -3,10 +3,12 @@
 
 주문 폴더 하나(local/cardnews/<주문>/)를 받아 단계별로 처리한다.
 
+    python3 tools/cardnews/cardnews.py pull                (관리자 탭 "트란시스 카드뉴스 도우미"의 새 주문 → local/cardnews/order-<번호>/)
     python3 tools/cardnews/cardnews.py fetch   <주문>     (아카이빙만, 피그마 플러그인의 figma/scan.json 또는 MCP 결과 파일 필요)
     python3 tools/cardnews/cardnews.py build   <주문>
     python3 tools/cardnews/cardnews.py publish <주문>
     python3 tools/cardnews/cardnews.py verify  <주문> [--against 글번호]
+    python3 tools/cardnews/cardnews.py report  <주문> [--fail "이유"]   (결과를 관리자 탭에 적는다)
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
@@ -18,6 +20,7 @@
     media.json   publish가 채움: 파일 이름 → 미디어 번호·주소 (다시 돌려도 두 번 올리지 않게)
     post.html    build 결과 (블록 HTML)
     result.json  publish·verify 결과 (초안 번호·미리보기 링크·대조 결과)
+    changes.json Claude가 고친 것·확인할 것 목록(문장 배열) — report가 탭에 그대로 보여 준다
 
 표준 라이브러리만 쓴다 — 나중에 클라우드 routine에서 설치 없이 돌리려고.
 """
@@ -30,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+import zipfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -40,6 +44,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ORDERS = ROOT / "local" / "cardnews"
 ENV = ROOT / "local" / "cardnews.env"
 API = "https://trendportal.kr/wp-json/wp/v2/"
+ORDER_API = "https://trendportal.kr/wp-json/tp-cardnews/v1/"  # TP Cardnews Helper 플러그인의 주문 창구
 
 
 # ── 파일 ────────────────────────────────────────────────
@@ -76,15 +81,16 @@ def auth_header():
     return {"Authorization": "Basic " + token}
 
 
-def wp(path, data=None, headers=None, method=None):
+def wp(path, data=None, headers=None, method=None, base=API, raw=False):
     h = dict(auth_header(), **(headers or {}))
     if isinstance(data, (dict, list)):
         data = json.dumps(data).encode()
         h["Content-Type"] = "application/json"
-    req = urllib.request.Request(API + path, data=data, headers=h, method=method)
+    url = path if path.startswith("https://") else base + path
+    req = urllib.request.Request(url, data=data, headers=h, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
-            return json.load(r)
+        with urllib.request.urlopen(req, timeout=300) as r:
+            return r.read() if raw else json.load(r)
     except urllib.error.HTTPError as e:
         # 응답 본문 앞부분만 보여 준다 (덩어리 전체를 찍으면 읽기도 어렵고 길다)
         sys.exit(f"WordPress 오류 {e.code} {path}: {e.read()[:300].decode('utf-8', 'replace')}")
@@ -739,8 +745,54 @@ def verify(d, against=None):
     print("\n".join(problems) if problems else f"초안 {result['post_id']}: 차이 없음")
 
 
+# ── pull·report: 관리자 탭(TP Cardnews Helper)과 주고받기 ────────
+# 탭은 주문을 받아 두기만 하고, 요리는 여기서 한다. 클라우드 routine도 같은 명령을 쓴다(10/17 사용자 결정 A)
+
+def pull():
+    """접수된 주문 → local/cardnews/order-<번호>/ (zip 풀기 + caption.txt + order.json), 탭 상태는 '만드는 중'으로."""
+    orders = wp("orders?status=new", base=ORDER_API)
+    if not orders:
+        print("새 주문 없음")
+        return
+    for o in orders:
+        d = ORDERS / f"order-{o['id']}"
+        d.mkdir(parents=True, exist_ok=True)
+        z = d / "order.zip"
+        z.write_bytes(wp(o["zip"], raw=True))
+        with zipfile.ZipFile(z) as zf:
+            # 플러그인이 만든 zip이지만 내려받은 파일이라 폴더 밖으로 나가는 이름은 막는다
+            bad = [n for n in zf.namelist() if n.startswith("/") or ".." in Path(n).parts]
+            if bad:
+                wp(f"orders/{o['id']}", {"status": "failed", "error": f"zip 안 파일 이름이 이상해요: {bad[0]}"}, base=ORDER_API)
+                continue
+            zf.extractall(d)
+        (d / "caption.txt").write_text(o["caption"] + "\n", encoding="utf-8")
+        order = load(d, "order.json", {})
+        order.update(kind="archive", order_id=o["id"], group=o["group"], videos=o["videos"], memo=o["memo"])
+        save(d, "order.json", order)
+        wp(f"orders/{o['id']}", {"status": "working"}, base=ORDER_API)
+        print(f"주문 {o['id']} {o['group']} → {d.relative_to(ROOT)}" + (f"  · 메모: {o['memo']}" if o["memo"] else ""))
+
+
+def report(d, fail=None):
+    """결과를 탭에 적는다: 초안 번호·제목·고친 것 목록(changes.json), 또는 멈춘 이유."""
+    order = load(d, "order.json")
+    if "order_id" not in order:
+        sys.exit("탭에서 온 주문이 아니에요 (order.json에 order_id가 없음)")
+    if fail:
+        body = {"status": "failed", "error": fail}
+    else:
+        result = load(d, "result.json")
+        body = {"status": "done", "post_id": result["post_id"], "title": title_of(order),
+                "changes": load(d, "changes.json", [])}
+    o = wp(f"orders/{order['order_id']}", body, base=ORDER_API)
+    print(f"탭에 적었어요: 주문 {o['id']} → {o['status']}" + (f" · 초안 {o['post_id']}" if o.get("post_id") else ""))
+
+
 def main(argv):
-    if len(argv) < 2 or argv[0] not in ("fetch", "build", "publish", "verify"):
+    if argv[:1] == ["pull"]:
+        return pull()
+    if len(argv) < 2 or argv[0] not in ("fetch", "build", "publish", "verify", "report"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
     if not d.is_dir():
@@ -751,6 +803,8 @@ def main(argv):
         build(d)
     elif argv[0] == "publish":
         publish(d)
+    elif argv[0] == "report":
+        report(d, argv[argv.index("--fail") + 1] if "--fail" in argv else None)
     else:
         against = argv[argv.index("--against") + 1] if "--against" in argv else None
         verify(d, against)

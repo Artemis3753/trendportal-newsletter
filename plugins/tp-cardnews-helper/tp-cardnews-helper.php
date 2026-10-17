@@ -1,0 +1,570 @@
+<?php
+/**
+ * Plugin Name: TP Cardnews Helper
+ * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
+ * Version: 1.0.0
+ * Author: Trendportal
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/*
+ * 10/17 사용자 결정(A, 탭 먼저): 주문 창구는 사이트 관리자 탭, 요리는 사이트 밖.
+ * 워드프레스(PHP) 안에서는 큰 사진 처리에 시간·메모리 제한이 있고, alt·제목·오타 같은 판단을 할 Claude도 없어서다.
+ * 그래서 이 플러그인은 주문을 받아 두고 상태만 보여 준다. 가져가는 쪽은 REST(아래 tp-cardnews/v1)로 온다.
+ *
+ * 저장: 주문 = 비공개 글 유형(tp_cn_order) 하나 + 메타. 따로 DB 표를 만들지 않아 지우기·백업이 글과 같다.
+ * zip = uploads/tp-cardnews/ 아래 무작위 이름. 미디어 라이브러리에 섞이지 않게 하고, 주소를 추측할 수 없게 한다.
+ */
+
+const TP_CN_TYPE = 'tp_cn_order';
+const TP_CN_DIR  = 'tp-cardnews';
+const TP_CN_SLUG = 'tp-cardnews';
+const TP_CN_MAX  = 200 * 1024 * 1024; // zip 상한. 764(카드 17장)가 16MB였다
+
+// 상태 이름은 영어로 저장하고, 화면에는 한국어로 (REST로 오가는 값이 글자 깨짐 걱정 없게)
+const TP_CN_STATUS = array(
+	'new'     => '접수',
+	'working' => '만드는 중',
+	'done'    => '초안 완료',
+	'failed'  => '멈춤',
+);
+
+add_action(
+	'init',
+	function () {
+		register_post_type(
+			TP_CN_TYPE,
+			array(
+				'label'    => '카드뉴스 주문',
+				'public'   => false,
+				'show_ui'  => false, // 목록은 도우미 탭이 직접 그린다
+				'supports' => array( 'title' ),
+			)
+		);
+	}
+);
+
+// ── 파일 ────────────────────────────────────────────────
+
+function tp_cn_dir() {
+	$dir = wp_upload_dir()['basedir'] . '/' . TP_CN_DIR;
+	if ( ! is_dir( $dir ) ) {
+		wp_mkdir_p( $dir );
+		// 폴더 목록이 열리지 않게 빈 index.php
+		file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" );
+	}
+	return $dir;
+}
+
+// 주문을 지우면 zip도 같이 지운다
+add_action(
+	'before_delete_post',
+	function ( $post_id ) {
+		if ( get_post_type( $post_id ) !== TP_CN_TYPE ) {
+			return;
+		}
+		$zip = get_post_meta( $post_id, '_tp_cn_zip', true );
+		if ( $zip && is_file( tp_cn_dir() . '/' . $zip ) ) {
+			unlink( tp_cn_dir() . '/' . $zip );
+		}
+	}
+);
+
+/**
+ * 영상 칸: 한 줄에 "카드 번호 = 주소". "4 https://…", "4: https://…", "4번 https://…"도 받아 준다.
+ * 돌려주는 값: [ 번호 => 주소 ] 또는 못 읽은 줄이 있으면 WP_Error.
+ */
+function tp_cn_parse_videos( $text ) {
+	$out = array();
+	foreach ( preg_split( '/\R/', (string) $text ) as $line ) {
+		$line = trim( $line );
+		if ( '' === $line ) {
+			continue;
+		}
+		if ( ! preg_match( '/^(\d{1,2})\s*번?\s*[=:.]?\s*(https?:\/\/\S+)$/u', $line, $m ) ) {
+			return new WP_Error( 'tp_cn_video', "영상 칸에서 이 줄을 못 읽었어요: {$line} — \"4 = https://…\"처럼 카드 번호와 주소를 적어 주세요" );
+		}
+		$out[ (string) (int) $m[1] ] = esc_url_raw( $m[2] );
+	}
+	return $out;
+}
+
+/**
+ * 받은 zip이 피그마 플러그인 결과인지 본다 (figma/scan.json이 있어야 한다).
+ * 돌려주는 값: 묶음 이름(scan.json의 group.name) 또는 WP_Error. ZipArchive가 없는 서버면 검사를 건너뛴다.
+ */
+function tp_cn_check_zip( $path, $filename ) {
+	$fallback = preg_replace( '/\.zip$/i', '', $filename );
+	if ( ! class_exists( 'ZipArchive' ) ) {
+		return $fallback;
+	}
+	$zip = new ZipArchive();
+	if ( true !== $zip->open( $path ) ) {
+		return new WP_Error( 'tp_cn_zip', 'zip 파일을 열 수 없어요. 내려받다 끊긴 파일일 수 있어요 — 다시 받아 주세요' );
+	}
+	$scan = $zip->getFromName( 'figma/scan.json' );
+	$zip->close();
+	if ( false === $scan ) {
+		return new WP_Error( 'tp_cn_zip', "이 zip에는 figma/scan.json이 없어요. 피그마 플러그인 '트란시스 카드뉴스 읽기'로 받은 zip인지 확인해 주세요" );
+	}
+	$data = json_decode( $scan, true );
+	return ! empty( $data['group']['name'] ) ? $data['group']['name'] : $fallback;
+}
+
+// ── 주문 받기 (탭의 폼) ──────────────────────────────────
+
+add_action(
+	'admin_post_tp_cn_order',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 주문할 수 있어요' );
+		}
+		check_admin_referer( 'tp_cn_order' );
+		$back = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		$fail = function ( $msg ) use ( $back ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( $msg ), $back ) );
+			exit;
+		};
+
+		$file = isset( $_FILES['zip'] ) ? $_FILES['zip'] : null;
+		if ( ! $file || UPLOAD_ERR_NO_FILE === $file['error'] ) {
+			$fail( 'zip 파일을 골라 주세요' );
+		}
+		if ( UPLOAD_ERR_OK !== $file['error'] ) {
+			$fail( "zip을 올리다 멈췄어요 (오류 {$file['error']}). 파일이 너무 크면 이렇게 될 수 있어요" );
+		}
+		if ( ! preg_match( '/\.zip$/i', $file['name'] ) || $file['size'] > TP_CN_MAX ) {
+			$fail( 'zip 파일만, 200MB까지 받을 수 있어요' );
+		}
+		$caption = trim( sanitize_textarea_field( wp_unslash( $_POST['caption'] ?? '' ) ) );
+		if ( '' === $caption ) {
+			$fail( '인스타 캡션을 붙여 넣어 주세요' );
+		}
+		$videos = tp_cn_parse_videos( wp_unslash( $_POST['videos'] ?? '' ) );
+		if ( is_wp_error( $videos ) ) {
+			$fail( $videos->get_error_message() );
+		}
+		$group = tp_cn_check_zip( $file['tmp_name'], $file['name'] );
+		if ( is_wp_error( $group ) ) {
+			$fail( $group->get_error_message() );
+		}
+
+		// wp_handle_upload는 허용 형식 목록에 zip이 없으면 막는다 — 관리자만 쓰는 칸이라 직접 옮기고 위에서 확장자·내용을 본다
+		$name = bin2hex( random_bytes( 16 ) ) . '.zip';
+		if ( ! move_uploaded_file( $file['tmp_name'], tp_cn_dir() . '/' . $name ) ) {
+			$fail( 'zip을 저장하지 못했어요. 잠시 뒤 다시 해 주세요' );
+		}
+
+		$id = wp_insert_post(
+			array(
+				'post_type'   => TP_CN_TYPE,
+				'post_status' => 'private',
+				'post_title'  => sanitize_text_field( $group ),
+			)
+		);
+		update_post_meta( $id, '_tp_cn_status', 'new' );
+		update_post_meta( $id, '_tp_cn_zip', $name );
+		update_post_meta( $id, '_tp_cn_caption', $caption );
+		update_post_meta( $id, '_tp_cn_videos', $videos );
+		update_post_meta( $id, '_tp_cn_memo', trim( sanitize_textarea_field( wp_unslash( $_POST['memo'] ?? '' ) ) ) );
+
+		wp_safe_redirect( add_query_arg( 'tp_cn_ok', $id, $back ) );
+		exit;
+	}
+);
+
+/**
+ * 주문 하나를 화면·REST에서 같이 쓰는 모양으로.
+ */
+function tp_cn_order( $post ) {
+	$id      = $post->ID;
+	$draft   = (int) get_post_meta( $id, '_tp_cn_post', true );
+	$changes = get_post_meta( $id, '_tp_cn_changes', true );
+	return array(
+		'id'      => $id,
+		'group'   => $post->post_title,
+		'created' => get_post_time( 'c', true, $post ),
+		'status'  => get_post_meta( $id, '_tp_cn_status', true ) ?: 'new',
+		'caption' => get_post_meta( $id, '_tp_cn_caption', true ),
+		'videos'  => (object) ( get_post_meta( $id, '_tp_cn_videos', true ) ?: array() ),
+		'memo'    => get_post_meta( $id, '_tp_cn_memo', true ),
+		'zip'     => rest_url( "tp-cardnews/v1/orders/{$id}/zip" ),
+		'post_id' => $draft ?: null,
+		'title'   => get_post_meta( $id, '_tp_cn_title', true ),
+		'changes' => is_array( $changes ) ? $changes : array(),
+		'error'   => get_post_meta( $id, '_tp_cn_error', true ),
+	);
+}
+
+function tp_cn_orders( $status = null, $limit = 30 ) {
+	$args = array(
+		'post_type'      => TP_CN_TYPE,
+		'post_status'    => 'private',
+		'posts_per_page' => $limit,
+		'orderby'        => 'date',
+		'order'          => 'DESC',
+	);
+	if ( $status ) {
+		$args['meta_key']   = '_tp_cn_status';
+		$args['meta_value'] = $status;
+		$args['order']      = 'ASC'; // 가져가는 쪽은 먼저 들어온 주문부터
+	}
+	return array_map( 'tp_cn_order', get_posts( $args ) );
+}
+
+// ── REST: 사이트 밖 주방이 주문을 가져가고 결과를 적는 곳 ───────────
+
+add_action(
+	'rest_api_init',
+	function () {
+		$admin = function () {
+			return current_user_can( 'manage_options' ); // 애플리케이션 비밀번호로 들어온 관리자만
+		};
+		$find  = function ( $id ) {
+			$post = get_post( (int) $id );
+			return ( $post && TP_CN_TYPE === $post->post_type ) ? $post : null;
+		};
+
+		register_rest_route(
+			'tp-cardnews/v1',
+			'/orders',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => $admin,
+				'callback'            => function ( $req ) {
+					$status = $req->get_param( 'status' );
+					return tp_cn_orders( isset( TP_CN_STATUS[ $status ] ) ? $status : null, 50 );
+				},
+			)
+		);
+
+		register_rest_route(
+			'tp-cardnews/v1',
+			'/orders/(?P<id>\d+)',
+			array(
+				'methods'             => 'POST',
+				'permission_callback' => $admin,
+				'callback'            => function ( $req ) use ( $find ) {
+					$post = $find( $req['id'] );
+					if ( ! $post ) {
+						return new WP_Error( 'tp_cn_none', '없는 주문이에요', array( 'status' => 404 ) );
+					}
+					$id = $post->ID;
+					if ( null !== $req->get_param( 'status' ) ) {
+						if ( ! isset( TP_CN_STATUS[ $req['status'] ] ) ) {
+							return new WP_Error( 'tp_cn_status', '상태는 new·working·done·failed 중 하나예요', array( 'status' => 400 ) );
+						}
+						update_post_meta( $id, '_tp_cn_status', $req['status'] );
+						update_post_meta( $id, '_tp_cn_' . $req['status'] . '_at', time() );
+					}
+					if ( null !== $req->get_param( 'post_id' ) ) {
+						update_post_meta( $id, '_tp_cn_post', (int) $req['post_id'] );
+					}
+					if ( null !== $req->get_param( 'title' ) ) {
+						update_post_meta( $id, '_tp_cn_title', sanitize_text_field( $req['title'] ) );
+					}
+					if ( is_array( $req->get_param( 'changes' ) ) ) {
+						update_post_meta( $id, '_tp_cn_changes', array_values( array_map( 'sanitize_text_field', $req['changes'] ) ) );
+					}
+					if ( null !== $req->get_param( 'error' ) ) {
+						update_post_meta( $id, '_tp_cn_error', sanitize_text_field( $req['error'] ) );
+					}
+					return tp_cn_order( get_post( $id ) );
+				},
+			)
+		);
+
+		// zip은 공개 주소로 열어 두지 않고, 관리자 인증을 거쳐 여기서 내려준다
+		register_rest_route(
+			'tp-cardnews/v1',
+			'/orders/(?P<id>\d+)/zip',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => $admin,
+				'callback'            => function ( $req ) use ( $find ) {
+					$post = $find( $req['id'] );
+					$path = $post ? tp_cn_dir() . '/' . get_post_meta( $post->ID, '_tp_cn_zip', true ) : '';
+					if ( ! $post || ! is_file( $path ) ) {
+						return new WP_Error( 'tp_cn_none', 'zip이 없어요', array( 'status' => 404 ) );
+					}
+					header( 'Content-Type: application/zip' );
+					header( 'Content-Length: ' . filesize( $path ) );
+					readfile( $path );
+					exit;
+				},
+			)
+		);
+	}
+);
+
+// ── 탭 화면 ──────────────────────────────────────────────
+
+add_action(
+	'admin_menu',
+	function () {
+		add_menu_page( '트란시스 카드뉴스 도우미', '카드뉴스 도우미', 'manage_options', TP_CN_SLUG, 'tp_cn_page', 'dashicons-pets', 3 );
+	}
+);
+
+add_action(
+	'admin_enqueue_scripts',
+	function ( $hook ) {
+		if ( 'toplevel_page_' . TP_CN_SLUG !== $hook ) {
+			return;
+		}
+		// 일정표와 같은 글꼴(둘 다 SIL OFL 1.1 — 10/17 라이선스 원문 확인)
+		wp_enqueue_style( 'tp-cn-fonts', 'https://fonts.googleapis.com/css2?family=Jua&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap', array(), null );
+	}
+);
+
+function tp_cn_page() {
+	$msg = array();
+	if ( isset( $_GET['tp_cn_err'] ) ) {
+		$msg = array( 'bad', sanitize_text_field( wp_unslash( $_GET['tp_cn_err'] ) ) );
+	} elseif ( isset( $_GET['tp_cn_ok'] ) ) {
+		$msg = array( 'ok', '주문을 받았어요! 트란시스가 가져가서 초안으로 만들어 둘게요.' );
+	}
+	tp_cn_render(
+		tp_cn_orders(),
+		$msg,
+		array(
+			'face'   => plugins_url( 'mascot.jpg', __FILE__ ),
+			'rest'   => plugins_url( 'mascot-rest.png', __FILE__ ),
+			'action' => admin_url( 'admin-post.php' ),
+			'nonce'  => wp_nonce_field( 'tp_cn_order', '_wpnonce', true, false ),
+		)
+	);
+}
+
+/**
+ * 화면 그리기. 주문 목록·알림·주소를 넘겨받기만 해서, 워드프레스 없이도 가짜 주문으로 그려 볼 수 있다(시안·검증용).
+ */
+function tp_cn_render( $orders, $msg, $u ) {
+	$fmt = function ( $iso ) {
+		return $iso ? wp_date( 'n월 j일 H:i', strtotime( $iso ) ) : '';
+	};
+	?>
+<div class="tpcn">
+<style>
+/* 일정표(transis/apps-script/Index.html)와 같은 말투: 둥근 패널, 파스텔 칩, Jua 제목. 관리자 화면 기본 글꼴 위에 덮어쓴다 */
+.tpcn { --bg: #f5f6fa; --card: #fff; --ink: #23242b; --muted: #7b7e8c; --line: #e6e8ef;
+  --new: #3a86ff; --new-soft: #dde9ff; --working: #c49a1c; --working-soft: #f6edd0;
+  --done: #1fa971; --done-soft: #d9f3e7; --failed: #ec4a5a; --failed-soft: #ffe2e5; --fresh: #7a5af8; --fresh-soft: #e8e2ff;
+  --font-display: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  max-width: 980px; margin: 18px 20px 40px 0; display: grid; gap: 18px; color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.55; word-break: keep-all; }
+.tpcn * { box-sizing: border-box; }
+.tpcn [hidden] { display: none !important; }
+.tpcn-head { position: relative; display: flex; align-items: center; gap: 12px; }
+.tpcn-face { position: relative; flex: none; border: 0; padding: 0; background: none; border-radius: 50%; cursor: pointer; }
+.tpcn-face img { display: block; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.tpcn-face:focus-visible { outline: 2px solid var(--new); outline-offset: 2px; }
+/* 오른쪽 위 반짝이: 눌러 볼 수 있다는 작은 신호(일정표와 같음) */
+.tpcn-spark { position: absolute; top: -6px; right: -8px; font-size: 17px; line-height: 1; pointer-events: none; }
+.tpcn-head h1 { margin: 0; padding: 0; font-family: var(--font-display); font-weight: 400; font-size: 27px; line-height: 1.15; color: var(--ink); }
+.tpcn-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+/* 얼굴을 누르면 쓰는 법이 말풍선으로 */
+.tpcn-bubble { position: absolute; z-index: 5; top: 64px; left: 0; width: min(380px, 100%); margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); font-size: 13px; box-shadow: 0 8px 24px rgba(20, 22, 40, .18); }
+.tpcn-bubble::before { content: ""; position: absolute; top: -7px; left: 20px; width: 12px; height: 12px; background: var(--card); border: solid var(--line); border-width: 1px 0 0 1px; transform: rotate(45deg); border-radius: 2px; }
+.tpcn-bubble ol { margin: 0; padding-left: 18px; }
+.tpcn-bubble li { margin: 2px 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .tpcn-spark { animation: tpcn-twinkle 2.4s ease-in-out infinite; }
+  .tpcn-face.wag { animation: tpcn-wag .5s ease; }
+  @keyframes tpcn-twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.75); } }
+  @keyframes tpcn-wag { 25% { transform: rotate(-10deg); } 75% { transform: rotate(10deg); } }
+}
+.tpcn-msg { margin: 0; padding: 12px 16px; border-radius: 14px; font-weight: 700; }
+.tpcn-msg.ok { background: var(--done-soft); color: #13784f; }
+.tpcn-msg.bad { background: var(--failed-soft); color: #b42333; }
+.tpcn-panel { background: var(--card); border-radius: 22px; padding: 18px; box-shadow: 0 1px 2px rgba(20, 22, 40, .04), 0 8px 24px rgba(20, 22, 40, .05); min-width: 0; }
+.tpcn-panel h2 { margin: 0 0 14px; font-family: var(--font-display); font-weight: 400; font-size: 20px; display: flex; align-items: baseline; gap: 8px; color: var(--ink); }
+.tpcn-panel h2 small { font-family: var(--font-body); font-size: 12px; color: var(--muted); font-weight: 500; }
+.tpcn-form { display: grid; gap: 14px; }
+.tpcn-field label { display: block; margin-bottom: 6px; font-weight: 700; }
+.tpcn-field label em { margin-left: 4px; font-style: normal; font-weight: 500; font-size: 12px; color: var(--muted); }
+.tpcn-field .tpcn-hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.tpcn textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; color: var(--ink); resize: vertical; }
+.tpcn textarea:focus { border-color: var(--new); outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
+/* zip 넣는 칸: 점선 상자. 고르면 파일 이름이 상자 안에 뜬다 */
+.tpcn-drop { position: relative; display: flex; align-items: center; gap: 12px; padding: 16px; border: 2px dashed #c9ccda; border-radius: 16px; background: var(--bg); cursor: pointer; }
+.tpcn-drop:hover, .tpcn-drop.is-over { border-color: var(--new); background: var(--new-soft); }
+.tpcn-drop.has-file { border-style: solid; border-color: var(--done); background: var(--done-soft); }
+.tpcn-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.tpcn-drop .tpcn-ico { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--card); font-size: 20px; }
+.tpcn-drop b { display: block; font-size: 14px; }
+.tpcn-drop span { font-size: 12px; color: var(--muted); }
+.tpcn-go { justify-self: start; padding: 11px 22px; border: 0; border-radius: 999px; background: var(--ink); color: #fff; font-family: var(--font-display); font-size: 17px; cursor: pointer; }
+.tpcn-go:hover { background: #3a3c48; }
+.tpcn-go:disabled { opacity: .5; cursor: wait; }
+.tpcn-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.tpcn-item { display: grid; grid-template-columns: 44px 1fr auto; gap: 4px 12px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 16px; }
+.tpcn-no { min-width: 44px; height: 36px; padding: 0 6px; border-radius: 12px; display: grid; place-items: center; font-family: var(--font-display); font-size: 15px; color: #fff; background: var(--s); }
+.tpcn-item h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); }
+.tpcn-item .tpcn-when { margin: 0; font-size: 12px; color: var(--muted); }
+.tpcn-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; background: var(--s-soft); color: var(--s); }
+.tpcn-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.tpcn-item.is-working .tpcn-chip::before { animation: tpcn-blink 1.2s ease-in-out infinite; }
+@keyframes tpcn-blink { 50% { opacity: .2; } }
+.s-new { --s: var(--new); --s-soft: var(--new-soft); }
+.s-working { --s: var(--working); --s-soft: var(--working-soft); }
+.s-done { --s: var(--done); --s-soft: var(--done-soft); }
+.s-failed { --s: var(--failed); --s-soft: var(--failed-soft); }
+.tpcn-body { grid-column: 2 / -1; font-size: 13px; }
+.tpcn-body p { margin: 4px 0 0; }
+.tpcn-body .tpcn-title { font-weight: 700; }
+.tpcn-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tpcn-links a { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; }
+.tpcn-links a.main { background: var(--ink); border-color: var(--ink); color: #fff; }
+.tpcn-links a:hover { border-color: var(--muted); }
+.tpcn-body details { margin-top: 8px; }
+.tpcn-body summary { cursor: pointer; color: var(--fresh); font-weight: 700; }
+.tpcn-body details ul { margin: 6px 0 0; padding-left: 18px; }
+.tpcn-empty { display: grid; justify-items: center; gap: 6px; padding: 18px 0 8px; color: var(--muted); text-align: center; }
+.tpcn-empty img { width: 180px; height: auto; }
+@media (max-width: 782px) {
+  .tpcn { margin-right: 10px; }
+  .tpcn-item { grid-template-columns: 44px 1fr; }
+  .tpcn-item .tpcn-chip { grid-column: 2; justify-self: start; }
+}
+</style>
+
+<header class="tpcn-head">
+	<button type="button" class="tpcn-face" id="tpcn-face" aria-label="쓰는 법 보기" aria-controls="tpcn-bubble">
+		<img src="<?php echo esc_url( $u['face'] ); ?>" width="52" height="52" alt="트란시스 마스코트, 허스키 인형"><span class="tpcn-spark" aria-hidden="true">✨</span>
+	</button>
+	<div>
+		<h1>트란시스 카드뉴스 도우미</h1>
+		<p>피그마 zip을 넣어 주면 사이트 초안으로 만들어 둘게요</p>
+	</div>
+	<div class="tpcn-bubble" id="tpcn-bubble" role="status" hidden>
+		<ol>
+			<li>피그마에서 카드 묶음을 선택하고 플러그인 <b>트란시스 카드뉴스 읽기</b> → zip 내려받기</li>
+			<li>여기에 zip · 인스타 캡션 · (있으면) 영상 주소 넣고 <b>주문 넣기</b></li>
+			<li><b>초안 완료</b>가 뜨면 미리보기 보고, 고친 것 목록 확인한 뒤 발행!</li>
+		</ol>
+	</div>
+</header>
+
+	<?php if ( $msg ) : ?>
+<p class="tpcn-msg <?php echo esc_attr( $msg[0] ); ?>"><?php echo esc_html( $msg[1] ); ?></p>
+	<?php endif; ?>
+
+<section class="tpcn-panel">
+	<h2>새 주문 <small>카드뉴스 하나 = 주문 하나</small></h2>
+	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data">
+		<input type="hidden" name="action" value="tp_cn_order">
+		<?php echo $u['nonce']; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_nonce_field 결과 ?>
+		<div class="tpcn-field">
+			<label for="tpcn-zip">피그마 zip <em>필수</em></label>
+			<div class="tpcn-drop" id="tpcn-drop">
+				<span class="tpcn-ico" aria-hidden="true">📦</span>
+				<div><b id="tpcn-zipname">zip을 여기에 끌어다 놓거나 눌러서 고르기</b><span>'트란시스 카드뉴스 읽기'에서 받은 파일 그대로</span></div>
+				<input type="file" id="tpcn-zip" name="zip" accept=".zip,application/zip" required>
+			</div>
+		</div>
+		<div class="tpcn-field">
+			<label for="tpcn-caption">인스타 캡션 <em>필수</em></label>
+			<textarea id="tpcn-caption" name="caption" rows="7" required placeholder="인스타 게시물 본문을 그대로 붙여 넣어 주세요 (해시태그 줄은 알아서 빼요)"></textarea>
+		</div>
+		<div class="tpcn-field">
+			<label for="tpcn-videos">영상 카드 <em>있을 때만</em></label>
+			<textarea id="tpcn-videos" name="videos" rows="2" placeholder="4 = https://www.instagram.com/reel/…"></textarea>
+			<p class="tpcn-hint">한 줄에 하나씩, 카드 번호 = 원본 영상 주소 (인스타·유튜브·X)</p>
+		</div>
+		<div class="tpcn-field">
+			<label for="tpcn-memo">메모 <em>선택</em></label>
+			<textarea id="tpcn-memo" name="memo" rows="2" placeholder="예: 제목에 '팝업' 넣어 주세요"></textarea>
+		</div>
+		<button type="submit" class="tpcn-go" id="tpcn-go">주문 넣기</button>
+	</form>
+</section>
+
+<section class="tpcn-panel">
+	<h2>주문 목록 <small>최근 30개</small></h2>
+	<?php if ( ! $orders ) : ?>
+	<div class="tpcn-empty">
+		<img src="<?php echo esc_url( $u['rest'] ); ?>" width="180" alt="쉬고 있는 트란시스">
+		<p>아직 주문이 없어요. 트란시스는 쉬는 중!</p>
+	</div>
+	<?php else : ?>
+	<ol class="tpcn-list">
+		<?php
+		foreach ( $orders as $o ) :
+			$s = isset( TP_CN_STATUS[ $o['status'] ] ) ? $o['status'] : 'new';
+			?>
+		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?>">
+			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
+			<div>
+				<h3><?php echo esc_html( $o['group'] ); ?></h3>
+				<p class="tpcn-when"><?php echo esc_html( $fmt( $o['created'] ) ); ?> 주문</p>
+			</div>
+			<span class="tpcn-chip"><?php echo esc_html( TP_CN_STATUS[ $s ] ); ?></span>
+			<div class="tpcn-body">
+			<?php if ( 'new' === $s ) : ?>
+				<p>트란시스가 곧 가져가요.</p>
+			<?php elseif ( 'working' === $s ) : ?>
+				<p>사진을 고르고 글을 짜는 중이에요.</p>
+			<?php elseif ( 'failed' === $s ) : ?>
+				<p><?php echo esc_html( $o['error'] ?: '이유를 남기지 못하고 멈췄어요.' ); ?></p>
+			<?php else : ?>
+				<?php if ( $o['title'] ) : ?>
+				<p class="tpcn-title"><?php echo esc_html( $o['title'] ); ?></p>
+				<?php endif; ?>
+				<?php if ( $o['post_id'] ) : ?>
+				<div class="tpcn-links">
+					<a class="main" href="<?php echo esc_url( home_url( '/?p=' . (int) $o['post_id'] . '&preview=true' ) ); ?>" target="_blank" rel="noopener">미리보기</a>
+					<a href="<?php echo esc_url( admin_url( 'post.php?post=' . (int) $o['post_id'] . '&action=edit' ) ); ?>">편집기에서 열기 · 발행</a>
+				</div>
+				<?php endif; ?>
+				<?php if ( $o['changes'] ) : ?>
+				<details>
+					<summary>트란시스가 고친 것 <?php echo count( $o['changes'] ); ?>건</summary>
+					<ul>
+						<?php foreach ( $o['changes'] as $c ) : ?>
+						<li><?php echo esc_html( $c ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				</details>
+				<?php endif; ?>
+			<?php endif; ?>
+			</div>
+		</li>
+		<?php endforeach; ?>
+	</ol>
+	<?php endif; ?>
+</section>
+
+<script>
+(() => {
+	const $ = id => document.getElementById(id);
+	// 얼굴을 누르면 꼬리 흔들기 + 쓰는 법 말풍선 (8초 뒤 저절로 닫힘)
+	let t;
+	$('tpcn-face').addEventListener('click', () => {
+		const open = $('tpcn-bubble').hidden;
+		$('tpcn-bubble').hidden = !open;
+		$('tpcn-face').classList.remove('wag');
+		void $('tpcn-face').offsetWidth;
+		$('tpcn-face').classList.add('wag');
+		clearTimeout(t);
+		if (open) t = setTimeout(() => { $('tpcn-bubble').hidden = true; }, 8000);
+	});
+	// zip 칸: 고른 파일 이름을 보여 주고, 끌어다 놓을 때 상자 색을 바꾼다
+	const drop = $('tpcn-drop'), zip = $('tpcn-zip');
+	zip.addEventListener('change', () => {
+		const f = zip.files[0];
+		drop.classList.toggle('has-file', !!f);
+		$('tpcn-zipname').textContent = f ? `${f.name} · ${(f.size / 1048576).toFixed(1)}MB` : 'zip을 여기에 끌어다 놓거나 눌러서 고르기';
+	});
+	['dragenter', 'dragover'].forEach(e => zip.addEventListener(e, () => drop.classList.add('is-over')));
+	['dragleave', 'drop'].forEach(e => zip.addEventListener(e, () => drop.classList.remove('is-over')));
+	// 큰 zip은 올리는 데 시간이 걸려서, 두 번 누르지 않게 버튼을 잠근다
+	$('tpcn-form').addEventListener('submit', () => { $('tpcn-go').disabled = true; $('tpcn-go').textContent = '올리는 중…'; });
+})();
+</script>
+</div>
+	<?php
+}
