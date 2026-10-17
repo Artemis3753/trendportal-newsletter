@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Trendportal
  */
 
@@ -196,6 +196,8 @@ function tp_cn_order( $post ) {
 		'title'   => get_post_meta( $id, '_tp_cn_title', true ),
 		'changes' => is_array( $changes ) ? $changes : array(),
 		'error'   => get_post_meta( $id, '_tp_cn_error', true ),
+		// 요리가 끝난(완성·멈춤) 시각. 메뉴 배지와 "방금 완성" 표시가 이걸로 "아직 안 본 결과"를 센다
+		'finished' => (int) max( (int) get_post_meta( $id, '_tp_cn_done_at', true ), (int) get_post_meta( $id, '_tp_cn_failed_at', true ) ),
 	);
 }
 
@@ -259,6 +261,15 @@ add_action(
 						}
 						update_post_meta( $id, '_tp_cn_status', $req['status'] );
 						update_post_meta( $id, '_tp_cn_' . $req['status'] . '_at', time() );
+						// 완성되면 zip은 지운다(10/17 사용자): 주문당 16MB쯤이라 쌓이면 사이트 저장 공간을 먹고,
+						// 원본은 피그마와 받은 사람 컴퓨터에 남아 있다. 멈춤일 땐 다시 시도할 수 있게 남겨 둔다
+						$zip = get_post_meta( $id, '_tp_cn_zip', true );
+						if ( 'done' === $req['status'] && $zip ) {
+							if ( is_file( tp_cn_dir() . '/' . $zip ) ) {
+								unlink( tp_cn_dir() . '/' . $zip );
+							}
+							update_post_meta( $id, '_tp_cn_zip', '' );
+						}
 					}
 					if ( null !== $req->get_param( 'post_id' ) ) {
 						update_post_meta( $id, '_tp_cn_post', (int) $req['post_id'] );
@@ -302,10 +313,34 @@ add_action(
 
 // ── 탭 화면 ──────────────────────────────────────────────
 
+/*
+ * 알림 B(10/17 사용자 결정 A+B): wp-admin 어느 화면에서든 메뉴에 "아직 안 본 결과" 수를 배지로 (업데이트 수가 뜨는 것과 같은 모양).
+ * "봤다" = 사람마다 도우미 탭을 마지막으로 연 시각(사용자 메타). 탭을 여는 순간 배지가 사라지고,
+ * 그 전 시각은 남겨 두었다가 그 뒤에 끝난 주문에 "방금 완성" 표시를 붙인다.
+ */
 add_action(
 	'admin_menu',
 	function () {
-		add_menu_page( '트란시스 카드뉴스 도우미', '카드뉴스 도우미', 'manage_options', TP_CN_SLUG, 'tp_cn_page', 'dashicons-pets', 3 );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$uid  = get_current_user_id();
+		$seen = (int) get_user_meta( $uid, '_tp_cn_seen', true );
+		$on   = isset( $_GET['page'] ) && TP_CN_SLUG === $_GET['page'];
+		$GLOBALS['tp_cn_prev_seen'] = $seen;
+		if ( $on ) {
+			update_user_meta( $uid, '_tp_cn_seen', time() );
+		}
+		$unseen = $on ? 0 : count(
+			array_filter(
+				tp_cn_orders(),
+				function ( $o ) use ( $seen ) {
+					return $o['finished'] > $seen;
+				}
+			)
+		);
+		$title = '카드뉴스 도우미' . ( $unseen ? sprintf( ' <span class="awaiting-mod count-%1$d"><span class="pending-count">%1$d</span></span>', $unseen ) : '' );
+		add_menu_page( '트란시스 카드뉴스 도우미', $title, 'manage_options', TP_CN_SLUG, 'tp_cn_page', 'dashicons-pets', 3 );
 	}
 );
 
@@ -324,7 +359,8 @@ function tp_cn_page() {
 	$msg = array();
 	if ( isset( $_GET['tp_cn_err'] ) ) {
 		$msg = array( 'bad', sanitize_text_field( wp_unslash( $_GET['tp_cn_err'] ) ) );
-	} elseif ( isset( $_GET['tp_cn_ok'] ) ) {
+	} elseif ( isset( $_GET['tp_cn_ok'] ) && 'new' === get_post_meta( (int) $_GET['tp_cn_ok'], '_tp_cn_status', true ) ) {
+		// 아직 접수 상태일 때만. 요리가 시작·끝난 뒤엔 목록이 상태를 말해 주니 "곧 시작해요"가 남아 있으면 헷갈린다
 		$msg = array( 'ok', '주문 받았어요! 셰프 트란시스가 곧 요리를 시작해요.' );
 	}
 	tp_cn_render(
@@ -335,6 +371,10 @@ function tp_cn_page() {
 			'rest'   => plugins_url( 'mascot-rest.png', __FILE__ ),
 			'action' => admin_url( 'admin-post.php' ),
 			'nonce'  => wp_nonce_field( 'tp_cn_order', '_wpnonce', true, false ),
+			// 알림 A: 탭이 스스로 상태를 확인할 때 쓰는 주소와 로그인 확인 값(쿠키 인증에는 wp_rest nonce가 필요)
+			'poll'   => rest_url( 'tp-cardnews/v1/orders' ),
+			'rnonce' => wp_create_nonce( 'wp_rest' ),
+			'seen'   => isset( $GLOBALS['tp_cn_prev_seen'] ) ? (int) $GLOBALS['tp_cn_prev_seen'] : time(),
 		)
 	);
 }
@@ -347,7 +387,7 @@ function tp_cn_render( $orders, $msg, $u ) {
 		return $iso ? wp_date( 'n월 j일 H:i', strtotime( $iso ) ) : '';
 	};
 	?>
-<div class="tpcn">
+<div class="tpcn" id="tpcn" data-poll="<?php echo esc_url( $u['poll'] ); ?>" data-nonce="<?php echo esc_attr( $u['rnonce'] ); ?>">
 <style>
 /* 셰프 트란시스의 주방(10/17 사용자: "요리사 컨셉, 빵모자, 테마·배경도"). 둥근 패널·파스텔 칩·Jua 제목은 일정표와 같은 말투,
    색은 주방 쪽으로: 크림 바탕, 갈색 글자, 상태 = 주문서 파랑 · 버터(요리 중) · 바질(완성) · 토마토(멈춤) */
@@ -417,6 +457,10 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; background: var(--s-soft); color: var(--s); }
 .tpcn-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .tpcn-item.is-working .tpcn-chip::before { animation: tpcn-blink 1.2s ease-in-out infinite; }
+/* 마지막으로 탭을 본 뒤에 끝난 주문: 테두리를 상태 색으로, 이름 옆에 작은 표 */
+.tpcn-item.is-fresh { border-color: var(--s); box-shadow: 0 0 0 3px var(--s-soft); }
+.tpcn-fresh { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--s); color: #fff; font-size: 11px; font-weight: 700; vertical-align: 2px; }
+.tpcn-live-btn { margin-left: 8px; padding: 3px 12px; border: 0; border-radius: 999px; background: var(--done); color: #fff; font: inherit; font-size: 12.5px; cursor: pointer; }
 @keyframes tpcn-blink { 50% { opacity: .2; } }
 .s-new { --s: var(--new); --s-soft: var(--new-soft); }
 .s-working { --s: var(--working); --s-soft: var(--working-soft); }
@@ -462,8 +506,10 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 </header>
 
 	<?php if ( $msg ) : ?>
-<p class="tpcn-msg <?php echo esc_attr( $msg[0] ); ?>"><?php echo esc_html( $msg[1] ); ?></p>
+<p class="tpcn-msg <?php echo esc_attr( $msg[0] ); ?>" id="tpcn-msg"><?php echo esc_html( $msg[1] ); ?></p>
 	<?php endif; ?>
+<?php // 알림 A: 요리가 끝나면 여기에 뜬다 (주문서를 쓰는 중이면 새로고침 대신 이 줄로 알린다) ?>
+<p class="tpcn-msg ok" id="tpcn-live" role="status" hidden></p>
 
 <section class="tpcn-panel">
 	<h2>새 주문서 <small>카드뉴스 하나 = 주문 하나</small></h2>
@@ -475,7 +521,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 			<div class="tpcn-drop" id="tpcn-drop">
 				<span class="tpcn-ico" aria-hidden="true">📦</span>
 				<div><b id="tpcn-zipname">zip을 여기에 끌어다 놓거나 눌러서 고르기</b><span>'트란시스 카드뉴스 읽기'에서 받은 파일 그대로</span></div>
-				<input type="file" id="tpcn-zip" name="zip" accept=".zip,application/zip" required>
+				<input type="file" id="tpcn-zip" name="zip" accept=".zip,application/zip" required title=""><?php // title을 비워야 브라우저 기본 말풍선("No file chosen")이 안 뜬다 ?>
 			</div>
 		</div>
 		<div class="tpcn-field">
@@ -508,10 +554,10 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 		foreach ( $orders as $o ) :
 			$s = isset( TP_CN_STATUS[ $o['status'] ] ) ? $o['status'] : 'new';
 			?>
-		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?>">
+		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
 			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
 			<div>
-				<h3><?php echo esc_html( $o['group'] ); ?></h3>
+				<h3><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
 				<p class="tpcn-when"><?php echo esc_html( $fmt( $o['created'] ) ); ?> 주문</p>
 			</div>
 			<span class="tpcn-chip"><?php echo esc_html( TP_CN_STATUS[ $s ] ); ?></span>
@@ -575,6 +621,63 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 	['dragleave', 'drop'].forEach(e => zip.addEventListener(e, () => drop.classList.remove('is-over')));
 	// 큰 zip은 올리는 데 시간이 걸려서, 두 번 누르지 않게 버튼을 잠근다
 	$('tpcn-form').addEventListener('submit', () => { $('tpcn-go').disabled = true; $('tpcn-go').textContent = '올리는 중…'; });
+
+	// ── 알림 A(10/17 사용자 결정 A+B): 접수·요리 중인 주문이 있으면 20초마다 상태를 확인한다 ──
+	// 바뀐 게 있으면: 주문서를 쓰는 중이 아니면 새로고침해서 목록을 다시 그리고, 쓰는 중이면 알림 줄만 띄운다(쓰던 내용을 날리지 않게)
+	const base = document.title;
+	const items = [...document.querySelectorAll('.tpcn-item')];
+	const known = Object.fromEntries(items.map(li => [li.dataset.id, li.dataset.status]));
+	const waiting = () => Object.values(known).some(s => s === 'new' || s === 'working');
+	const typing = () => zip.files.length || ['tpcn-caption', 'tpcn-videos', 'tpcn-memo'].some(id => $(id).value.trim());
+	const FLASH = 'tpcn-flash', LAST = 'tpcn-reloaded';
+	const done = { done: '✅ 완성', failed: '⚠️ 주방 멈춤' };
+	const clean = location.pathname + '?page=<?php echo esc_js( TP_CN_SLUG ); ?>';
+	// 주문 직후 붙은 ?tp_cn_ok= 꼬리를 주소창에서 지운다 — 그대로 새로고침하면 "곧 시작해요" 알림이 또 뜨던 문제(10/17)
+	if (/[?&]tp_cn_(ok|err)=/.test(location.search)) history.replaceState(null, '', clean);
+
+	// 새로고침 뒤: 무엇이 끝났는지 위에 띄우고, 다른 탭을 보고 있었다면 탭 제목으로도 알린다
+	try {
+		const f = sessionStorage.getItem(FLASH);
+		if (f) {
+			sessionStorage.removeItem(FLASH);
+			$('tpcn-live').textContent = f;
+			$('tpcn-live').hidden = false;
+			if (document.hidden) document.title = f.split(' · ')[0] + ' · ' + base;
+		}
+	} catch (e) {}
+	document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => { document.title = base; }, 2500); });
+
+	async function check() {
+		let list;
+		try {
+			const r = await fetch(document.getElementById('tpcn').dataset.poll, { headers: { 'X-WP-Nonce': document.getElementById('tpcn').dataset.nonce }, credentials: 'same-origin' });
+			if (!r.ok) return;
+			list = await r.json();
+		} catch (e) { return; }
+		const changed = list.filter(o => known[o.id] !== undefined && known[o.id] !== o.status);
+		if (!changed.length) return;
+		changed.forEach(o => { known[o.id] = o.status; });
+		const ends = changed.filter(o => done[o.status]);
+		const text = ends.length
+			? ends.map(o => `${done[o.status]} · 주문 ${o.id} ${o.group}`).join('  /  ') + (ends.some(o => o.status === 'done') ? ' — 미리보기로 맛보세요!' : '')
+			: `🍳 주문 ${changed[0].id} 요리를 시작했어요`;
+		if (ends.length && document.hidden) document.title = done[ends[0].status] + ' · ' + base;
+		// 30초 안에 또 새로고침하지 않는다: 혹시 화면과 서버 상태가 계속 어긋나도 새로고침이 끝없이 돌지 않게
+		let recent = false;
+		try { recent = Date.now() - Number(sessionStorage.getItem(LAST) || 0) < 30000; } catch (e) {}
+		if (!typing() && !recent) {
+			try { sessionStorage.setItem(FLASH, text); sessionStorage.setItem(LAST, String(Date.now())); } catch (e) {}
+			location.replace(clean);
+			return;
+		}
+		$('tpcn-live').innerHTML = '';
+		$('tpcn-live').append(text, Object.assign(document.createElement('button'), { type: 'button', className: 'tpcn-live-btn', textContent: '목록 새로 보기', onclick: () => location.reload() }));
+		$('tpcn-live').hidden = false;
+	}
+	(function loop() {
+		if (!waiting()) return; // 기다릴 주문이 없으면 확인하지 않는다
+		setTimeout(async () => { await check(); loop(); }, 20000);
+	})();
 })();
 </script>
 </div>
