@@ -1098,16 +1098,10 @@ body:has(.tp-copy-stage) { overflow-x: clip; }
 
 /* cardnews order 855 start */
 body:has(.tp-fmt-receipt) { overflow-x: clip; }
-.tp-fmt-receipt.tp-rc-card { position: relative; isolation: isolate; overflow: hidden; box-sizing: border-box; width: 100vw; max-width: 100vw !important; margin: 48px calc(50% - 50vw) 0 !important; padding: 32px 16px; border-radius: 0; }
+.tp-fmt-receipt.tp-rc-card { position: relative; overflow: hidden; box-sizing: border-box; width: 100vw; max-width: 100vw !important; margin: 48px calc(50% - 50vw) 0 !important; padding: 0; border-radius: 0; }
 .tp-fmt-receipt + .tp-fmt-receipt.tp-rc-card { margin-top: 0 !important; }
-.tp-fmt-receipt .tp-rc-bg { position: absolute; inset: -48px; z-index: -1; display: flex; flex-direction: column; filter: blur(32px) saturate(1.2) brightness(.92); }
-.tp-fmt-receipt .tp-rc-bg img { flex: 1; min-height: 0; width: 100%; object-fit: cover; }
-.tp-fmt-receipt .tp-rc-inner { position: relative; max-width: 480px; margin: 0 auto; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,.28); }
-.tp-fmt-receipt .tp-rc-video { margin: 16px 0 0; color: #fff; font-size: 14px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.tp-fmt-receipt .tp-rc-lede p.tp-rc-video { margin: .9em 0 0; font-size: max(12px, 2.4cqw); font-weight: 600; }
 .tp-fmt-receipt .tp-rc-video a { color: #fff; }
-@media (min-width: 782px) {
-  .tp-fmt-receipt.tp-rc-card { padding: 56px 0; }
-}
 .tp-fmt-receipt + p { margin-top: 64px !important; }
 .tp-fmt-receipt .tp-rc-ph { position: relative; container-type: inline-size; }
 .tp-fmt-receipt .tp-rc-ph img { display: block; width: 100%; height: auto; margin: 0; border-radius: 0; }

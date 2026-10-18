@@ -74,7 +74,7 @@ For cards whose text is part of the photo itself (an ad's own images, a screensh
 - Text over a photo has to be readable on a phone: at least 14px for the main line and 10.5px for small lines, growing with the card above that (`cqw` units). Because it ends up bigger than on the card, it can run into a dark or bright part of the photo: white text gets a soft dark shadow, dark text a soft white glow, and a block that still crosses into a bad area moves a few percent.
 - A text-only card over a background (a title card): keep the title's line breaks, drop the body's, which leave one word alone on a line on phones.
 - If the card-1 photo has text in it, the cover photo (`tp-cover-photo`) is the erased version of the same scene, because the post header shows the title over it.
-- **Tinted bands** (사진으로 물들이기, site owner 10/19): each card sits on a full-width band of its own photo, blurred and enlarged, and the bands touch, so there is no white between cards. A video link goes inside its card's band, in white.
+- **Photos fill the screen** (사진으로 꽉 채우기, site owner 10/19): each card is as wide as the screen, with no side margins, rounded corners or gaps, and the cards touch, so from the first card to the last there is no white. Not a blurred copy of the photo behind a smaller card: that was tried first and rejected. A video link goes inside its card, under the card's text, in white.
 - Markup: `cardnews.py ref 1007`. CSS: the live block `cardnews order 855` (class `tp-fmt-receipt`, with one position class per text block). A new post with this look copies those rules under its own `tp-fmt-…` class, so position classes of two posts never mix.
 
 ### Interview Q&A (post 498) — `"layout": "qa"`
@@ -118,7 +118,7 @@ Posts the site owner approved as the model for their format. When writing a post
 | standard cardnews | 242 |
 | video card | 351 (someone else's video), 636 (our own clip) |
 | copy collection | 729 |
-| text in the photo, tinted bands | 1007 (draft until it is published) |
+| text in the photo, full-screen photos | 1007 (draft until it is published) |
 | interview Q&A | 498 |
 | interview panel | none live (follow the rules above and 498) |
 | paid ad | 439 (one profile card at the top; new ad posts also get one at the end) |
