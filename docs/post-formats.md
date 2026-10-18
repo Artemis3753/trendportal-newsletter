@@ -86,7 +86,9 @@ Built as standard, plus:
 - Category 광고 (18540).
 
 ### Weekly roundup (posts 636, 479, 351)
-Not ordered in the helper tab; built in Claude Code from the Thursday Figma zip, together with the newsletter (`docs/newsletter.md`). The markup comes from `build_weekly` in `tools/cardnews/cardnews.py`.
+Built from the Thursday Figma zip, together with the newsletter (`docs/newsletter.md`). The markup comes from `build_weekly` in `tools/cardnews/cardnews.py`.
+- Reading the zip: `order.json` with `"kind": "weekly"` and `issue`, the caption in `caption.txt`, then `cardnews.py fetch`. Card 1 is the cover and the last card is the end card. Each card between is one item, read like a standard card: title = largest text (two lines joined with a space), body = longest text, `©` line = source, any other small text = an extra body paragraph. Caption lines starting with ✅ are the editor picks; the other paragraphs are the letter. Tested on 851 = post 636 (titles, sources, letter and picks match).
+- After fetch, look at every card preview (`figma/cards/`) and fix what the script cannot know: spacing at Figma line breaks inside a word (`핸드크림 이` → `핸드크림이`; fetch flags the ones before a particle), obvious spelling (`수 밖에` → `수밖에`), and text boxes that sat on the photo (fetch warns; they come out as empty boxes, so crop from the card with `visual` if the text is needed). Older cards (before autumn 2026) end the title with a brand logo image: read the brand from the card and add it to the title.
 - Title `이번 주 일어난 마케팅 이슈 총정리 (26.10 3주차)`, category 뉴스 (5180795), tag 주간 총정리 `weekly` (5180798), published Friday.
 - Everything sits in one `tp-wk` group, in this order: issue line `WEEKLY · 26.10 3주차 · 금요일 발행` → editor letter (the Instagram caption's opening, then a line like `2026년 10월 3주차, 지금 실제로 터진 마케팅 이슈만 모았습니다.`, signed 트렌드포털) → 이번 주 에디터 픽 (three items) → the table-of-contents placeholder → one `tp-wk-item` per card → the fixed ending.
 - Each card: H2 title → photo (or a video still with a link, or our own clip) → `© source` → 무슨 일이었나 (the card text as written) → 💡 주목 포인트 box.

@@ -647,7 +647,33 @@ def video_still(url, out):
     else:
         sys.exit(f"모르는 영상 주소예요: {url}")
     out.write_bytes(img)
+    if "youtu" in host and drop_black_bars(out):
+        # 636 때 손으로 하던 일(10/16 "검은 띠 잘라냄")을 자동으로. 잘랐으면 경고 대신 알림만
+        note = "유튜브 썸네일의 검은 띠를 잘라냈어요 — 눈으로 확인"
     return label, note
+
+
+def drop_black_bars(path):
+    """정지 화면 둘레의 검은 띠를 잘라낸다(유튜브 maxresdefault는 4:3·세로 영상이면 띠가 붙는다).
+    ffmpeg cropdetect로 검은 테두리를 재고, 실제로 줄어들 때만 덮어쓴다. 잘랐으면 True"""
+    if not shutil.which("ffmpeg"):
+        return False
+    # cropdetect는 앞 몇 장면을 건너뛰고 재서 사진 한 장으론 아무것도 안 나온다 → 0.2초 동안 반복시켜 잰다
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-loop", "1", "-t", "0.2", "-i", str(path), "-vf", "cropdetect=limit=24:round=2:reset=0", "-f", "null", "-"],
+                       capture_output=True, text=True)
+    m = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", r.stderr)
+    size = jpeg_size(path)
+    if not m or not size:
+        return False
+    w, h, x, y = map(int, m[-1])
+    # 몇 픽셀 차이는 압축 얼룩이라 무시 — 한 변이라도 4% 넘게 줄 때만 자른다
+    if w >= size[0] * 0.96 and h >= size[1] * 0.96:
+        return False
+    tmp = path.with_name(path.stem + "-crop" + path.suffix)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-vf", f"crop={w}:{h}:{x}:{y}", "-q:v", "2", str(tmp)],
+                   check=True, capture_output=True)
+    tmp.replace(path)
+    return True
 
 
 # ── 영상 카드 (탭 1.6.0, 10/17 사용자 A) ─────────────────
@@ -985,6 +1011,17 @@ def composite_photo(d, fr, layers, dst):
     return dst.name
 
 
+def texts_over_photo(fr, layers):
+    # 사진 칸(사진 레이어들을 덮는 사각형) 안에 통째로 들어가는 글자 레이어 = 사진 위에 얹은 글자
+    left = min(float(e.get("x")) for e in layers)
+    top = min(float(e.get("y")) for e in layers)
+    right = max(float(e.get("x")) + float(e.get("width")) for e in layers)
+    bottom = max(float(e.get("y")) + float(e.get("height")) for e in layers)
+    return [t.get("name")[:20] for t in fr.iter("text")
+            if float(t.get("x")) >= left and float(t.get("y")) >= top
+            and float(t.get("x")) + float(t.get("width")) <= right and float(t.get("y")) + float(t.get("height")) <= bottom]
+
+
 def card_visual(d, fr, title_top, dst):
     """사진 레이어가 없는 카드: 플러그인의 카드 미리보기(글자 포함, 가로 500)에서 제목 위 영역을 잘라 쓴다.
     10/18 주문 845: 3번(76%·75%·52% 동그라미)·9번(01~05 목록)이 글자와 도형으로 그린 인포그래픽이라 사진이 없었고,
@@ -1079,10 +1116,34 @@ def squash(s):
     return re.sub(r"[\W_]+", "", s)
 
 
+def read_weekly_caption(d):
+    """주간 총정리 캡션 → 에디터 레터 문단·에디터 픽. ✅로 시작하는 줄 = 에디터 픽(10/8 사이트 주간 글 새단장 때 친구 원문 그대로 옮긴 모양).
+    나머지 문단이 레터. 해시태그 줄은 뺀다"""
+    p = d / "caption.txt"
+    if not p.exists():
+        return [], [], ["caption.txt가 없어요 (인스타 캡션을 붙여 넣어 주세요) — 레터·에디터 픽이 비어요"]
+    letter, picks = [], []
+    for block in re.split(r"\n\s*\n", p.read_text(encoding="utf-8").strip()):
+        lines = [l.strip() for l in block.splitlines() if l.strip() and not all(w.startswith("#") for w in l.split())]
+        keep = []
+        for l in lines:
+            if l.startswith("✅"):
+                picks.append(l.lstrip("✅").strip())
+            else:
+                keep.append(l)
+        if keep:
+            letter.append("\n".join(keep))
+    warn = [] if picks else ["캡션에 ✅ 줄이 없어서 에디터 픽이 비었어요"]
+    return letter, picks, warn
+
+
 def fetch(d):
     order = load(d, "order.json")
-    if order["kind"] != "archive":
-        sys.exit("fetch는 아직 아카이빙(archive)만 돼요")
+    # 10/18: 주간 총정리(weekly)도 읽는다 — 뉴스레터와 사이트 주간 글을 같은 zip에서 만들기로 해서(docs/newsletter.md).
+    # 카드 한 장 읽는 규칙은 카드뉴스와 같고, 결과 모양만 build_weekly가 받는 letter·picks·cards
+    weekly = order["kind"] == "weekly"
+    if order["kind"] not in ("archive", "weekly"):
+        sys.exit("fetch는 아카이빙(archive)과 주간 총정리(weekly)만 돼요")
     (d / "images").mkdir(exist_ok=True)
     # 플러그인 결과가 있으면 그걸, 없으면 예전처럼 MCP 메타데이터를 읽는다
     if (d / "figma" / "scan.json").exists():
@@ -1103,6 +1164,23 @@ def fetch(d):
             continue
         card, nlines, extra, title_top = got
         card["no"] = n
+        if weekly:
+            # 주간 카드 제목은 두 줄이 기본이라 사이트·메일에선 한 줄로 잇는다(636 정답과 같게)
+            card["title"] = re.sub(r"\s*\n\s*", " ", card["title"]).strip()
+            nlines = 1
+            # 출처가 아닌 작은 글씨 = 본문 덧붙임(851의 2번 "추가로 10.12 - 10.19 동안 …") → 본문 다음 문단 하나.
+            # 851은 이 덧붙임이 글자 레이어 두 개로 나뉘어 있어서 한 문단으로 잇는다(636 정답과 같게)
+            if extra:
+                card["what"].append(" ".join(extra))
+            extra = []
+            card["what"] = [re.sub(r" {2,}", " ", p) for p in card["what"]]
+            # 피그마에서 칸 폭 때문에 바꾼 줄은 띄어쓰기로 이어지는데, 낱말 중간이면 붙여 써야 한다(851: "핸드크림 이", "14대 의").
+            # 기계로는 다 못 가려서 줄바꿈 뒤가 조사로 시작하는 곳만 짚고, 나머지는 판단 단계(명백한 띄어쓰기 고치기)에 맡긴다
+            body = max((t for t in fr.iter("text") if not SRC_MARK.match(t.get("name", ""))), key=lambda t: len(t.get("name", "")), default=None)
+            raw = body.get("lines", "") if body is not None else ""
+            joins = re.findall(r"(\S{1,6})\n(이|가|을|를|은|는|의|에|로|와|과|도|만)(?=[\s,.!?…]|$)", raw)
+            if joins:
+                warn.append(f"{n}번 본문 줄바꿈 뒤가 조사라 띄어 쓴 곳: {', '.join(a + ' ' + b for a, b in joins)} — 붙여 써야 하면 고치기")
         if not card.get("title"):
             warn.append(f"{n}번 제목을 못 찾았어요 (큰 글씨 한 줄이 없음)")
         if not card.get("src") and not card.get("brand") and not card.get("who"):
@@ -1125,6 +1203,12 @@ def fetch(d):
             layers = [e for e in fr if e.get("hash") and e.get("hash") not in bg]
             if not fn and layers:
                 fn = composite_photo(d, fr, layers, d / "images" / f"{n:02d}.jpg")
+                # 사진 위에 얹은 글자 상자(851의 2번 "추가로 …")는 글자 뺀 그림에서 글자만 사라져 빈 상자로 남는다(10/18).
+                # 사람은 글자째 살렸다 — 어느 쪽이 맞는지는 카드를 봐야 해서 짚기만 한다
+                inside = texts_over_photo(fr, layers) if fn else []
+                if inside:
+                    warn.append(f"{n}번 사진 칸 안 글자 {inside}가 사진에서 빠져 빈 상자로 보일 수 있어요 — 카드 미리보기와 비교, "
+                                f"글자째 필요하면 `visual {n} <위%> <아래%>`로 카드 그림에서 자르기")
             if not fn and scan_image(d, el):
                 # 예전 zip(플러그인 2판): 사진 원본. 사진 위에 다른 사진이 겹친 카드는 원본 한 장만 들어간다
                 fn = to_web(scan_image(d, el), d / "images" / f"{n:02d}.jpg")
@@ -1157,6 +1241,19 @@ def fetch(d):
     else:
         warn.append("figma/cover-export.jpg 가 없어요 (플러그인 zip, 또는 표지 프레임 download_assets의 export)")
 
+    if weekly:
+        letter, picks, w = read_weekly_caption(d)
+        warn += w
+        save(d, "cards.json", {"letter": letter, "picks": picks, "cards": cards})
+        save(d, "order.json", order)
+        # notes.json: Claude가 채울 칸 — 사진 alt와 사이트용 짧은 💡(insight). 뉴스레터용 긴 💡는 newsletter 쪽에서
+        notes = load(d, "notes.json", {})
+        if len(notes.get("cards", [])) != len(cards):
+            notes = {"cards": [{"poster_alt": "", "insight": ""} if c.get("clip") else {"alt": "", "insight": ""} for c in cards]}
+            save(d, "notes.json", notes)
+        print(f"카드 {len(cards)}장 · 레터 {len(letter)}문단 · 에디터 픽 {len(picks)}개")
+        print("\n".join("· " + w for w in warn) if warn else "확인할 것 없음")
+        return
     intro, outro, w = read_caption(d)
     warn += w
     # 캡션 첫 줄이 표지 제목과 같으면 뺀다 — 사이트에선 글 제목이 바로 위에 있어서 두 번 나온다
