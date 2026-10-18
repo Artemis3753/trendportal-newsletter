@@ -29,18 +29,21 @@ Claude writes the whole issue: letter, editor picks, every card, notices, closin
 
 The site keeps the short 💡 and the newsletter carries the long one. This split is a trial from the first issue: if the team finds the long version is more than needed, both go back to being the same.
 
-## Layout
+## Layout and tools
 
-Design: the mock newsletter `1006-4` (approved 10/18). `tools/newsletter/newsletter.py` renders it with inline styles (mail apps can drop `<style>`), so write `issue.json` and let the tool do the markup:
+Design: the mock newsletter `1006-4` (approved 10/18). The site's weekly post and the newsletter are made from **one order folder** (`local/cardnews/<order>/`, `"kind": "weekly"`): `cardnews.py fetch` reads the zip into `cards.json` (titles, photos, sources, card text, letter and picks from the caption), which both use. Only the newsletter's own writing goes into `newsletter.json`.
 
 ```
-python3 tools/newsletter/newsletter.py upload <issue>   # photos in images/ → site media (media.json)
-python3 tools/newsletter/newsletter.py build <issue>    # out/stibee.html (open it in a browser to preview)
+python3 tools/cardnews/cardnews.py fetch <order>         # zip + caption → cards.json (see post-formats.md, Weekly roundup)
+python3 tools/newsletter/newsletter.py init <order>      # newsletter.json skeleton
+python3 tools/newsletter/newsletter.py upload <order>    # photos not yet on the site → media (same media.json as the site post)
+python3 tools/newsletter/newsletter.py build <order>     # out/stibee.html (open in a browser to preview)
+python3 tools/newsletter/newsletter.py shot <order>      # the mail at 390px and 600px → shots/newsletter-*.png; look at every part
 ```
 
-`issue.json` fields: `issue` (`26.10 4주차`), `dateline`, `title` (lines), `letter` (paragraphs), `picks`, optional `notice` (`title`, `text`, `button`, `url`), `cards` (each: `title`, `image` = file in `images/` or a URL, optional `video` {`url`, `label`}, `credit`, `what` = the card text, `point` = the researched 💡 paragraphs, `sources` [{`label`, `url`}]), optional `closing`.
+`newsletter.json`: `letter` (paragraphs to the reader in `~요`; starts as the caption's letter and is rewritten), `picks`, optional `notice` {`title`, `text`, `button`, `url`}, `cards` (one per card, matched by `no`: `point` = the researched 💡 paragraphs, `sources` [{`label`, `url`}]), optional `closing`. `build` flags cards whose 💡 is empty or has no sources.
 
-Fixed parts the tool adds: the header, the table of contents, the closing with the report button and the gift line, and the footer with Stibee's `$%permalink%$` and `$%unsubscribe%$` (the unsubscribe link must stay: it is an ad-consent mailing).
+The builder writes inline styles (mail apps can drop `<style>`), sends site photos through Jetpack's image server at mail size, shows a vertical video still small and centred with a `▶ … 영상 보기` link, and points our own clips to the site's weekly post (build again after the site draft exists). Fixed parts: the header, the table of contents, the closing with the report button and the gift line, and the footer with Stibee's `$%permalink%$` and `$%unsubscribe%$` (the unsubscribe link must stay: it is an ad-consent mailing).
 
 ## Stibee facts
 
