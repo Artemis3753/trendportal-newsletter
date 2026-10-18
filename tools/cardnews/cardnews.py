@@ -1011,6 +1011,28 @@ def composite_photo(d, fr, layers, dst):
     return dst.name
 
 
+def split_logos(fr, layers):
+    """사진 레이어 → (사진, 로고). 카드 넓이의 5% 이상 = 큰 사진. 작은 그림은 중심이 큰 사진들의 칸 안에 있으면
+    사진 위 꾸밈(744의 말풍선·작은 사진)이라 남기고, 칸 밖(글자 칸)에 있으면 로고·아이콘으로 본다"""
+    area = float(fr.get("width")) * float(fr.get("height"))
+    size = lambda e: float(e.get("width")) * float(e.get("height"))
+    big = [e for e in layers if size(e) >= area * 0.05]
+    if not big:
+        return layers, []
+    left = min(float(e.get("x")) for e in big)
+    top = min(float(e.get("y")) for e in big)
+    right = max(float(e.get("x")) + float(e.get("width")) for e in big)
+    bottom = max(float(e.get("y")) + float(e.get("height")) for e in big)
+    keep, logos = list(big), []
+    for e in layers:
+        if e in big:
+            continue
+        cx = float(e.get("x")) + float(e.get("width")) / 2
+        cy = float(e.get("y")) + float(e.get("height")) / 2
+        (keep if left <= cx <= right and top <= cy <= bottom else logos).append(e)
+    return keep, logos
+
+
 def texts_over_photo(fr, layers):
     # 사진 칸(사진 레이어들을 덮는 사각형) 안에 통째로 들어가는 글자 레이어 = 사진 위에 얹은 글자
     left = min(float(e.get("x")) for e in layers)
@@ -1219,6 +1241,11 @@ def fetch(d):
             # 플러그인 3판: 글자 뺀 카드 그림에서 사진 칸을 잘라 쓴다 — 수동 작업 때처럼 카드에서 보던 구도 그대로,
             # 말풍선·작은 사진·좌우 두 장까지(10/17 사용자 B). 사진 원본은 zip에 표지 것만 있다
             layers = [e for e in fr if e.get("hash") and e.get("hash") not in bg]
+            # 큰 사진들 바깥의 작은 그림 = 로고·아이콘. 319(2026년 2월 주간) 카드는 제목 끝 브랜드가 로고 그림이라
+            # 이걸 사진으로 치면 자르는 칸이 제목 줄까지 내려가 흰 띠+로고가 붙었다(10/18). 자르기에서 빼고, 제목에 브랜드를 넣으라고 짚는다
+            layers, logos = split_logos(fr, layers)
+            if logos:
+                warn.append(f"{n}번 제목 옆에 로고 그림이 있어요 — 카드를 보고 브랜드 이름을 제목에 넣기 (지금 제목: {card['title']})")
             if not fn and layers:
                 fn = composite_photo(d, fr, layers, d / "images" / f"{n:02d}.jpg")
                 # 사진 위에 얹은 글자 상자(851의 2번 "추가로 …")는 글자 뺀 그림에서 글자만 사라져 빈 상자로 남는다(10/18).
