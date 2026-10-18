@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP KBoard Skin
  * Description: 트렌드포털 제보 게시판용 KBoard 스킨. default 스킨 복사본. 최신글 썸네일을 추가하고 추천(좋아요) 기능을 뺐다. 글쓰기 화면은 검색엔진에서 뺀다.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Trendportal
  */
 

@@ -387,29 +387,37 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .tp-reports-cta { margin: 0 0 0.5rem; }
 .tp-reports-cta a { display: inline-block; padding: 0.45rem 1rem; background: #111; color: #fff !important; font-size: 0.875rem; font-weight: 700; text-decoration: none; }
 .tp-reports-cta a:hover { background: #333; }
-.tp-reports #kboard-default-latest,
-.tp-reports #kboard-default-latest table { margin: 0; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
-.tp-reports #kboard-default-latest table { width: 100%; border-collapse: collapse; overflow: visible; }
-.tp-reports #kboard-default-latest thead,
-.tp-reports #kboard-default-latest td p,
-.tp-reports #kboard-default-latest .kboard-latest-title a br { display: none; }
-.tp-reports #kboard-default-latest tbody tr { background: none !important; }
-.tp-reports #kboard-default-latest td { padding: 1rem 0 !important; border: 0 !important; border-bottom: 1px solid #e5e5e5 !important; background: none !important; vertical-align: middle; }
-.tp-reports #kboard-default-latest .kboard-latest-title a { display: flex; align-items: center; gap: 0.9rem; color: #111 !important; text-decoration: none; }
-.tp-reports #kboard-default-latest .kboard-latest-title a:hover { text-decoration: underline; }
-.tp-reports #kboard-default-latest .kboard-default-cut-strings { min-width: 0; color: #111; font-size: 1rem; font-weight: 700; }
-.tp-reports #kboard-default-latest .kboard-latest-date { width: 80px; color: #757575; font-size: 0.8125rem; text-align: right; white-space: nowrap; }
+.tp-reports #kboard-default-latest { margin: 0; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+.tp-reports #kboard-default-latest a { color: #111 !important; text-decoration: none; }
+.tp-reports .kboard-latest-empty-list-message { padding: 1rem 0; }
+/* TP KBoard Skin 1.3.0 (10/18): one notice row (mockup 1018-20 G1) above one report row (mockup 1018-21 H1).
+   The megaphone slot is as wide as the thumbnail, so the notice pill and the NEW pill line up */
+.tp-latest-notice { display: flex; align-items: center; margin-top: 12px; padding: 6px 12px 6px 0; border-radius: 4px; background: #f1f5ff; }
+.tp-latest-slot { flex: none; display: grid; place-items: center; width: 56px; height: 40px; margin-right: 0.75rem; }
+.tp-latest-slot img { display: block; width: 28px; height: 28px; }
+.tp-latest-notice-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 15px; font-weight: 600; }
+.tp-latest-pill { flex: none; display: inline-block; margin-right: 6px; padding: 2px 6px; border-radius: 3px; color: #fff; font-size: 11px; font-weight: 800; line-height: 1.3; letter-spacing: 0.02em; vertical-align: 2px; }
+.tp-latest-pill.is-notice { background: #2f6bff; }
+.tp-latest-pill.is-new { background: #e8432e; }
+.tp-latest-report { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 0; border-bottom: 1px solid #e5e5e5; }
+.tp-latest-report:hover .tp-latest-title { text-decoration: underline; }
 .tp-latest-thumb { flex: none; width: 56px; height: 56px; overflow: hidden; border-radius: 4px; background: #f4f4f4; }
-.tp-latest-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tp-latest-thumb img,
+.tp-reports #kboard-default-latest .tp-latest-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tp-latest-thumb.is-empty { background: #f4f4f4 url(https://trendportal.kr/wp-content/uploads/2026/09/tp_profile.png) center / 24px no-repeat; }
+.tp-latest-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tp-latest-title,
+.tp-latest-meta { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tp-latest-title { font-size: 1rem; font-weight: 700; }
+.tp-latest-meta { color: #757575; font-size: 0.8125rem; font-weight: 500; }
 .tp-reports-more { margin: 1.25rem 0 0; text-align: right; }
 .tp-reports-more a { color: #111; font-weight: 700; text-decoration: none; border-bottom: 2px solid #111; padding-bottom: 2px; }
-@media (max-width: 781px) {
-  .tp-reports #kboard-default-latest tr { display: flex !important; flex-direction: row !important; align-items: center; gap: 0.75rem; border-bottom: 1px solid #e5e5e5; }
-  .tp-reports #kboard-default-latest td { display: block !important; border: 0 !important; padding: 0.9rem 0 !important; }
-  .tp-reports #kboard-default-latest td.kboard-latest-title { flex: 1; min-width: 0; }
-  .tp-reports #kboard-default-latest td.kboard-latest-date { width: auto; }
-}
+/* Reports first (10/18, Sunghyun: reports are the top priority): show the block above the news.
+   The template order stays as is; the wide group becomes a column and the reports block is moved to the front */
+main .alignwide:has(> .tp-reports) { display: flex; flex-direction: column; }
+main .alignwide:has(> .tp-reports) > * { width: 100%; }
+main .alignwide > .tp-reports { order: -1; margin-top: 0 !important; margin-bottom: var(--wp--preset--spacing--60); }
+main .alignwide > .tp-reports + * { margin-block-start: 0; }
 
 /* ---------- Post page: cover (M1 light grain) ---------- */
 .tp-cover {
