@@ -1095,3 +1095,67 @@ body:has(.tp-copy-stage) { overflow-x: clip; }
 
 /* ---------- About page ---------- */
 .tp-contact mark { font-size: 13px; }
+
+/* cardnews order 855 start */
+body:has(.tp-fmt-receipt) { overflow-x: clip; }
+.tp-fmt-receipt.tp-rc-card { position: relative; isolation: isolate; overflow: hidden; box-sizing: border-box; width: 100vw; max-width: 100vw !important; margin: 48px calc(50% - 50vw) 0 !important; padding: 32px 16px; border-radius: 0; }
+.tp-fmt-receipt + .tp-fmt-receipt.tp-rc-card { margin-top: 0 !important; }
+.tp-fmt-receipt .tp-rc-bg { position: absolute; inset: -48px; z-index: -1; display: flex; flex-direction: column; filter: blur(32px) saturate(1.2) brightness(.92); }
+.tp-fmt-receipt .tp-rc-bg img { flex: 1; min-height: 0; width: 100%; object-fit: cover; }
+.tp-fmt-receipt .tp-rc-inner { position: relative; max-width: 480px; margin: 0 auto; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,.28); }
+.tp-fmt-receipt .tp-rc-video { margin: 16px 0 0; color: #fff; font-size: 14px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.tp-fmt-receipt .tp-rc-video a { color: #fff; }
+@media (min-width: 782px) {
+  .tp-fmt-receipt.tp-rc-card { padding: 56px 0; }
+}
+.tp-fmt-receipt + p { margin-top: 64px !important; }
+.tp-fmt-receipt .tp-rc-ph { position: relative; container-type: inline-size; }
+.tp-fmt-receipt .tp-rc-ph img { display: block; width: 100%; height: auto; margin: 0; border-radius: 0; }
+.tp-fmt-receipt .tp-rc { position: absolute; transform: translate(-50%, -50%); width: max-content; max-width: 92%; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.55), 0 0 12px rgba(0,0,0,.3); font-family: Pretendard, sans-serif; text-align: center; line-height: 1.4; word-break: keep-all; }
+.tp-fmt-receipt .tp-rc-k { font-size: max(10px, 2cqw); text-align: left; margin-bottom: .25em; }
+.tp-fmt-receipt .tp-rc-q { font-size: max(14px, 3.3cqw); font-weight: 500; line-height: 1.5; letter-spacing: -0.02em; text-wrap: balance; }
+.tp-fmt-receipt .tp-rc-d { width: max-content; min-width: 64%; max-width: 100%; margin: .7em auto 0; font-size: max(10.5px, 2.1cqw); text-align: left; }
+.tp-fmt-receipt .tp-rc-date { border-top: 1px dashed currentColor; border-bottom: 1px dashed currentColor; padding: .4em 0; margin-bottom: .4em; }
+.tp-fmt-receipt .tp-rc-row { display: flex; justify-content: space-between; gap: 2.5em; }
+.tp-fmt-receipt .tp-rc.is-left { text-align: left; }
+.tp-fmt-receipt .tp-rc.is-left .tp-rc-d { width: auto; min-width: 0; margin-left: 0; }
+.tp-fmt-receipt .tp-rc.is-dark { color: #222; text-shadow: 0 0 3px rgba(255,255,255,.95), 0 0 10px rgba(255,255,255,.7); }
+.tp-fmt-receipt .r-3 { width: 70%; }
+.tp-fmt-receipt .r-3 .tp-rc-q { font-size: max(17px, 4.4cqw); font-weight: 600; }
+.tp-fmt-receipt .r-3 .tp-rc-k, .tp-fmt-receipt .r-3 .tp-rc-d { font-size: max(12px, 2.8cqw); }
+.tp-fmt-receipt .tp-rc-intro { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 10% 6% 3%; color: #fff; }
+.tp-fmt-receipt .tp-rc-intro .tp-rc-h { margin: 0 !important; max-width: none; color: #fff; font-size: max(20px, 5cqw); font-weight: 700; line-height: 1.35; }
+.tp-fmt-receipt .tp-rc-lede p { margin: 0 0 .9em; color: #fff; font-size: max(12.5px, 3.2cqw); font-weight: 500; line-height: 1.65; }
+.tp-fmt-receipt .tp-rc-lede p.tp-rc-src { margin: 0; font-size: max(10px, 2cqw); font-weight: 300; opacity: .85; }
+.tp-fmt-receipt .r-3 { left: 50.0%; top: 23.5%; }
+.tp-fmt-receipt .r-4a { left: 47.5%; top: 40.0%; }
+.tp-fmt-receipt .r-4b { left: 48.5%; top: 55.0%; }
+.tp-fmt-receipt .r-5a { left: 50.0%; top: 50.0%; }
+.tp-fmt-receipt .r-5b { left: 55.0%; top: 54.0%; }
+.tp-fmt-receipt .r-6a { left: 49.0%; top: 51.0%; }
+.tp-fmt-receipt .r-6b { left: 48.5%; top: 58.0%; }
+.tp-fmt-receipt .r-7a { left: 50.0%; top: 60.0%; }
+.tp-fmt-receipt .r-7b { left: 47.0%; top: 59.0%; }
+.tp-fmt-receipt .r-8a { left: 46.0%; top: 56.0%; }
+.tp-fmt-receipt .r-8b { left: 48.0%; top: 56.0%; }
+.tp-fmt-receipt .r-9a { left: 50.0%; top: 55.0%; }
+.tp-fmt-receipt .r-9b { left: 52.5%; top: 60.0%; }
+.tp-fmt-receipt .r-10a { left: 51.0%; top: 57.0%; }
+.tp-fmt-receipt .r-10b { left: 51.0%; top: 59.0%; }
+.tp-fmt-receipt .r-11a { left: 54.5%; top: 57.0%; }
+.tp-fmt-receipt .r-11b { left: 48.0%; top: 59.0%; }
+.tp-fmt-receipt .r-12a { left: 49.5%; top: 57.0%; }
+.tp-fmt-receipt .r-12b { left: 50.0%; top: 60.0%; }
+.tp-fmt-receipt .r-13a { left: 48.0%; top: 61.0%; }
+.tp-fmt-receipt .r-13b { left: 52.5%; top: 59.0%; }
+.tp-fmt-receipt .r-14a { left: 51.5%; top: 58.0%; }
+.tp-fmt-receipt .r-14b { left: 51.5%; top: 60.0%; }
+.tp-fmt-receipt .r-15a { left: 53.0%; top: 58.0%; }
+.tp-fmt-receipt .r-15b { left: 49.0%; top: 57.0%; }
+.tp-fmt-receipt .r-16a { left: 51.0%; top: 57.0%; }
+.tp-fmt-receipt .r-16b { left: 50.5%; top: 60.0%; }
+.tp-fmt-receipt .r-17a { left: 49.5%; top: 56.0%; }
+.tp-fmt-receipt .r-17b { left: 51.0%; top: 59.0%; }
+.tp-fmt-receipt .r-18a { left: 50.5%; top: 56.0%; }
+.tp-fmt-receipt .r-18b { left: 50.5%; top: 58.0%; }
+/* cardnews order 855 end */
