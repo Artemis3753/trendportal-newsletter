@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.19.1
+ * Version: 1.20.0
  * Author: Trendportal
  */
 
@@ -655,7 +655,11 @@ add_action(
 		update_post_meta( $id, '_tp_cn_videos', $rows['videos'] );
 		update_post_meta( $id, '_tp_cn_files', $stored );
 		update_post_meta( $id, '_tp_cn_memo', trim( sanitize_textarea_field( wp_unslash( $_POST['memo'] ?? '' ) ) ) );
-		update_post_meta( $id, '_tp_cn_kind', $interview ? 'interview' : ( $ad ? 'ad' : 'cardnews' ) );
+		// 뉴스레터 폼(1.20.0, 10/18 사용자): 주간 총정리 zip → 사이트 주간 글 초안 + 뉴스레터. 이번 주 소개할 제보 주소를 줄마다 받는다
+		$newsletter = 'newsletter' === ( $_POST['kind'] ?? '' );
+		update_post_meta( $id, '_tp_cn_kind', $interview ? 'interview' : ( $ad ? 'ad' : ( $newsletter ? 'newsletter' : 'cardnews' ) ) );
+		$reports = $newsletter ? preg_split( '/\R/', (string) wp_unslash( $_POST['reports'] ?? '' ) ) : array();
+		update_post_meta( $id, '_tp_cn_reports', array_values( array_filter( array_map( 'esc_url_raw', array_map( 'trim', $reports ) ) ) ) );
 		update_post_meta( $id, '_tp_cn_layout', $layout );
 		update_post_meta( $id, '_tp_cn_people', array_values( $people ) );
 
@@ -717,6 +721,9 @@ function tp_cn_order( $post, $with_state = false ) {
 		'kind'    => get_post_meta( $id, '_tp_cn_kind', true ) ?: 'cardnews',
 		'layout'  => get_post_meta( $id, '_tp_cn_layout', true ),
 		'people'  => tp_cn_people_list( $id ),
+		// 뉴스레터 폼(1.20.0): 이번 주 소개할 제보 주소들, 셰프가 만든 뉴스레터가 있는지(본문은 무거워서 목록·REST엔 안 싣는다)
+		'reports' => get_post_meta( $id, '_tp_cn_reports', true ) ?: array(),
+		'has_newsletter' => (bool) get_post_meta( $id, '_tp_cn_newsletter', true ),
 		'zip'     => rest_url( "tp-cardnews/v1/orders/{$id}/zip" ),
 		'post_id' => $draft ?: null,
 		// 초안이 발행됐는지(탭에 발행 버튼 대신 '글 보기'를 보이려고). 지워진 초안이면 빈 값
@@ -837,6 +844,10 @@ add_action(
 					// 처음 요리 때 손본 것만 여기에. 수정 때 손본 것은 위에서 그 회차 기록에 들어갔다
 					if ( is_array( $req->get_param( 'changes' ) ) && empty( $revised ) ) {
 						update_post_meta( $id, '_tp_cn_changes', array_values( array_map( 'sanitize_text_field', $req['changes'] ) ) );
+					}
+					// 뉴스레터 HTML(스티비에 붙여 넣을 것). 관리자 인증으로만 들어오고, 탭에선 스크립트를 막은 iframe 안에서만 보여 줘서 손대지 않고 그대로 둔다
+					if ( is_string( $req->get_param( 'newsletter' ) ) && strlen( $req['newsletter'] ) < 2 * MB_IN_BYTES ) {
+						update_post_meta( $id, '_tp_cn_newsletter', wp_slash( $req['newsletter'] ) );
 					}
 					if ( null !== $req->get_param( 'error' ) ) {
 						update_post_meta( $id, '_tp_cn_error', sanitize_text_field( $req['error'] ) );
@@ -1148,6 +1159,11 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-tag.is-iv { background: #fde9e2; border-color: #f4b8a5; color: #a8401f; }
 /* 광고 딱지 이름표는 is-ad를 쓰면 안 된다: 광고 차단기(EasyList ##.is-ad)가 숨겨 버린다(10/18 896 주문에서 딱지가 안 보임) */
 .tpcn-tag.is-sponsor { background: #e6effd; border-color: #a9c4f2; color: #1f4fa8; }
+.tpcn-tag.is-nl { background: #fff3e0; border-color: #f2c894; color: #9a5a00; }
+.tpcn-nlbox { margin: 10px 0; }
+.tpcn-nl-copy { padding: 8px 14px; border: 2px solid #3b2a20; border-radius: 10px; background: #fff; font-weight: 800; cursor: pointer; }
+.tpcn-nl-note { margin-left: 8px; font-size: 12px; color: #7a6a5a; }
+.tpcn-nl-frame { display: block; width: 100%; max-width: 640px; height: 900px; margin-top: 8px; border: 1px solid #ddd; border-radius: 10px; background: #ececec; }
 .tpcn-go { justify-self: start; padding: 11px 22px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font-family: var(--font-display); font-size: 17px; cursor: pointer; box-shadow: 0 4px 0 #b8401d; }
 .tpcn-go:hover { background: #ec6a43; }
 .tpcn-go:active { transform: translateY(2px); box-shadow: 0 2px 0 #b8401d; }
@@ -1293,7 +1309,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 <p class="tpcn-msg ok" id="tpcn-live" role="status" hidden></p>
 
 <section class="tpcn-panel">
-	<h2>새 주문서 <small>카드뉴스·인터뷰·광고 하나 = 주문 하나</small></h2>
+	<h2>새 주문서 <small>카드뉴스·인터뷰·광고·뉴스레터 하나 = 주문 하나</small></h2>
 	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data" data-max="<?php echo (int) $u['max']; ?>">
 		<input type="hidden" name="action" value="tp_cn_order">
 		<?php echo $u['nonce']; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_nonce_field 결과 ?>
@@ -1302,6 +1318,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 			<label><input type="radio" name="kind" value="cardnews" checked><span>📰 카드뉴스</span></label>
 			<label><input type="radio" name="kind" value="interview"><span>🎤 인터뷰</span></label>
 			<label><input type="radio" name="kind" value="ad"><span>📢 광고</span></label>
+			<label><input type="radio" name="kind" value="newsletter"><span>📮 뉴스레터</span></label>
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-zip">피그마 zip <em class="tpcn-must">필수</em></label>
@@ -1329,6 +1346,12 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		<div class="tpcn-field">
 			<label for="tpcn-caption">인스타 캡션 <em class="tpcn-must">필수</em></label>
 			<textarea id="tpcn-caption" name="caption" rows="7" required placeholder="인스타 게시물 본문을 그대로 붙여 넣어 주세요 (해시태그 줄은 알아서 빼요)"></textarea>
+		</div>
+		<?php // 뉴스레터 폼(1.20.0): 주간 총정리 카드뉴스 zip·캡션 그대로 + 이번 주 소개할 제보. 셰프가 사이트 주간 글 초안과 뉴스레터를 같이 만든다 ?>
+		<div class="tpcn-field" id="tpcn-nl" hidden>
+			<label for="tpcn-reports">이번 주 소개할 제보 <em>선택</em></label>
+			<textarea id="tpcn-reports" name="reports" rows="2" placeholder="제보 글 주소를 한 줄에 하나씩 (예: https://trendportal.kr/report/?uid=5&amp;mod=document)"></textarea>
+			<p class="tpcn-hint"><b>주간 총정리 zip과 캡션</b>을 넣으면 셰프가 <b>사이트 주간 글 초안</b>과 <b>뉴스레터</b>를 같이 만들어요. 뉴스레터의 주목 포인트는 카드 밖까지 찾아보고 더 길게 써요. 완성되면 여기서 뉴스레터를 미리 보고 <b>스티비 HTML을 복사</b>해 스티비에 붙여 넣으면 돼요. 소개할 제보는 10/30 호부터예요</p>
 		</div>
 		<?php // 인터뷰·광고가 같이 쓰는 칸. 광고면 형식 칸을 숨기고 글자만 바꾼다(아래 showKind) ?>
 		<div class="tpcn-iv" id="tpcn-iv" hidden>
@@ -1436,7 +1459,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $pub ? ' is-pub' : ''; ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
 			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
 			<div>
-				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php elseif ( 'ad' === $o['kind'] ) : ?><span class="tpcn-tag is-sponsor">📢 광고</span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
+				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php elseif ( 'ad' === $o['kind'] ) : ?><span class="tpcn-tag is-sponsor">📢 광고</span><?php elseif ( 'newsletter' === $o['kind'] ) : ?><span class="tpcn-tag is-nl">📮 뉴스레터</span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
 				<p class="tpcn-when"><?php echo esc_html( $fmt( $o['created'] ) ); ?> 주문</p>
 			</div>
 			<span class="tpcn-chip<?php echo $pub ? ' is-pub' : ''; ?>"><?php echo esc_html( $pub ? '발행됨' : TP_CN_STATUS[ $s ] ); ?></span>
@@ -1493,6 +1516,21 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 						<button type="submit">🚀 발행</button>
 					</form>
 					<?php endif; ?>
+				</div>
+				<?php endif; ?>
+				<?php
+				if ( 'newsletter' === $o['kind'] && $o['has_newsletter'] ) :
+					$nl = (string) get_post_meta( $o['id'], '_tp_cn_newsletter', true );
+					?>
+				<?php // 뉴스레터: 스티비 HTML 편집기에 붙여 넣을 HTML을 복사 + 메일 모양 미리보기(스크립트 막은 iframe) ?>
+				<div class="tpcn-nlbox">
+					<button type="button" class="tpcn-nl-copy" data-src="tpcn-nlsrc-<?php echo (int) $o['id']; ?>">📋 스티비 HTML 복사</button>
+					<span class="tpcn-nl-note">사이트 주간 글은 금요일 08:30, 인스타·뉴스레터와 같이 발행해 주세요</span>
+					<textarea id="tpcn-nlsrc-<?php echo (int) $o['id']; ?>" hidden readonly><?php echo esc_textarea( $nl ); ?></textarea>
+					<details class="tpcn-how">
+						<summary>📮 뉴스레터 미리보기</summary>
+						<iframe class="tpcn-nl-frame" sandbox title="뉴스레터 미리보기" srcdoc="<?php echo esc_attr( $nl ); ?>"></iframe>
+					</details>
 				</div>
 				<?php endif; ?>
 				<?php
@@ -1648,6 +1686,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	const kind = () => $('tpcn-form').querySelector('input[name=kind]:checked').value;
 	const showKind = () => {
 		const iv = kind() === 'interview', ad = kind() === 'ad';
+		$('tpcn-nl').hidden = kind() !== 'newsletter';
 		$('tpcn-iv').hidden = !(iv || ad);
 		$('tpcn-layout-field').hidden = !iv;
 		$('tpcn-form').querySelector('input[name=layout]').required = iv;
@@ -1664,6 +1703,12 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		if (iv || ad) vid.play().catch(() => {}); else vid.pause();
 	};
 	$('tpcn-form').querySelectorAll('input[name=kind]').forEach(r => r.addEventListener('change', showKind));
+	// 뉴스레터 HTML 복사: 클립보드가 막힌 브라우저면 글자를 골라 놓고 직접 복사하게
+	document.querySelectorAll('.tpcn-nl-copy').forEach(b => b.addEventListener('click', async () => {
+		const src = $(b.dataset.src).value;
+		try { await navigator.clipboard.writeText(src); b.textContent = '✅ 복사했어요 — 스티비 HTML 편집기에 붙여 넣으세요'; }
+		catch (e) { const t = $(b.dataset.src); t.hidden = false; t.select(); b.textContent = '글자를 골라 뒀어요 — Ctrl/⌘ + C로 복사해 주세요'; }
+	}));
 	showKind();
 	// 큰 zip은 올리는 데 시간이 걸려서, 두 번 누르지 않게 버튼을 잠근다.
 	// 서버 한도를 넘으면 다 올린 뒤에야 실패해서, 보내기 전에 합계를 재서 막는다
@@ -1686,7 +1731,8 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	const known = Object.fromEntries(items.map(li => [li.dataset.id, li.dataset.status]));
 	const waiting = () => Object.values(known).some(s => s === 'new' || s === 'revise' || s === 'answered' || s === 'working');
 	const typing = () => zip.files.length || ['tpcn-caption', 'tpcn-memo'].some(id => $(id).value.trim())
-		|| [...rows.querySelectorAll('input'), ...people.querySelectorAll('input')].some(i => (i.files ? i.files.length : i.value.trim()));
+		|| [...rows.querySelectorAll('input'), ...people.querySelectorAll('input')].some(i => (i.files ? i.files.length : i.value.trim()))
+		|| $('tpcn-reports').value.trim();
 	const FLASH = 'tpcn-flash', LAST = 'tpcn-reloaded';
 	const done = { done: '✅ 완성', failed: '⚠️ 주방 멈춤', question: '🙋 셰프가 물어봐요' };
 	const clean = location.pathname + '?page=<?php echo esc_js( TP_CN_SLUG ); ?>';

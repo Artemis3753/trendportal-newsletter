@@ -41,7 +41,7 @@ python3 tools/newsletter/newsletter.py build <order>     # out/stibee.html (open
 python3 tools/newsletter/newsletter.py shot <order>      # the mail at 390px and 600px → shots/newsletter-*.png; look at every part
 ```
 
-`newsletter.json`: `letter` (paragraphs to the reader in `~요`; starts as the caption's letter and is rewritten), `picks`, optional `notice` {`title`, `text`, `button`, `url`}, `cards` (one per card, matched by `no`: `point` = the researched 💡 paragraphs, `sources` [{`label`, `url`}]), optional `closing`. `build` flags cards whose 💡 is empty or has no sources.
+`newsletter.json`: `letter` (paragraphs to the reader in `~요`; starts as the caption's letter and is rewritten), `picks`, optional `notice` {`title`, `text`, `button`, `url`}, optional `reports` (the week's chosen reader reports, from 10/30: each `url`, `title`, `user` = the name shown on the board, `text` = one or two sentences on what was reported), `cards` (one per card, matched by `no`: `point` = the researched 💡 paragraphs, `sources` [{`label`, `url`}]), optional `closing`. `build` flags cards whose 💡 is empty or has no sources.
 
 The builder writes inline styles (mail apps can drop `<style>`), sends site photos through Jetpack's image server at mail size, shows a vertical video still small and centred with a `▶ … 영상 보기` link, and points our own clips to the site's weekly post (build again after the site draft exists). Fixed parts: the header, the table of contents, the closing with the report button and the gift line, and the footer with Stibee's `$%permalink%$` and `$%unsubscribe%$` (the unsubscribe link must stay: it is an ad-consent mailing).
 

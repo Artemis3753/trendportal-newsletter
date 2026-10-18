@@ -87,6 +87,8 @@ def init(d):
         "letter": cards["letter"],
         "picks": cards["picks"],
         "notice": None,
+        # 탭에서 고른 이번 주 소개할 제보(제보 글 주소) — 셰프가 게시판에서 제목·제보자·내용을 읽어 채운다
+        "reports": [{"url": u, "title": "", "user": "", "text": ""} for u in cardnews.load(d, "order.json").get("reports", [])],
         "cards": [{"no": c["no"], "title": c["title"], "point": [], "sources": []} for c in cards["cards"]],
         "closing": None,
     }
@@ -172,6 +174,16 @@ def mail_html(order, cards, nl, table, post_url):
         parts.append(f'<div style="margin:16px 32px 0;background:#f1f5ff;border-radius:10px;padding:18px 20px;">'
                      f'<span style="display:inline-block;padding:2px 6px;border-radius:3px;background:#2f6bff;color:#fff;font-size:11px;font-weight:800;margin-bottom:10px;">공지</span>'
                      f'<p style="margin:0 0 8px;font-size:16px;font-weight:800;line-height:1.5;">{e(n["title"])}</p>{body}{btn}</div>')
+    # 이번 주 선정 제보(10/30 호부터, 제보 이벤트): 누가 무엇을 제보했는지 + 제보 글 링크. 제보자 이름은 게시판에 공개된 그대로
+    if nl.get("reports"):
+        items = []
+        for r in nl["reports"]:
+            text = f'<p style="margin:4px 0 0;font-size:14px;line-height:1.7;">{e(r["text"])}</p>' if r.get("text") else ""
+            link = f' <a href="{html.escape(r["url"])}" style="color:#111;font-weight:700;">제보 보기 →</a>' if r.get("url") else ""
+            items.append(f'<div style="padding:12px 0;border-top:1px solid #e5e5e5;"><p style="margin:0;font-size:15px;font-weight:800;line-height:1.5;">{e(r["title"])}</p>'
+                         f'<p style="margin:2px 0 0;font-size:12px;color:#888;">제보 {e(r.get("user", ""))}{link}</p>{text}</div>')
+        parts.append(f'<div style="margin:16px 32px 0;{S["box"]}"><span style="{S["box_t"]}">이번 주 선정 제보 ☕</span>{"".join(items)}'
+                     f'<p style="margin:10px 0 0;font-size:12px;color:#888;">선정된 분께는 적어 주신 이메일로 스타벅스 아메리카노 기프티콘을 보내 드려요.</p></div>')
     parts.append(rule)
     # 목차: 메일 프로그램 다수가 #앵커 이동을 지원하지 않아 링크 없이 목록만(모의본과 같음)
     rows = []

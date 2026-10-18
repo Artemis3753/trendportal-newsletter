@@ -88,7 +88,7 @@ Built as standard, plus:
 - Category 광고 (18540).
 
 ### Weekly roundup (posts 636, 479, 351)
-Built from the Thursday Figma zip, together with the newsletter (`docs/newsletter.md`). The markup comes from `build_weekly` in `tools/cardnews/cardnews.py`.
+Built from the Thursday Figma zip, together with the newsletter (`docs/newsletter.md`): ordered in the helper tab with the 📮 뉴스레터 form, or made in Claude Code. The markup comes from `build_weekly` in `tools/cardnews/cardnews.py`.
 - Reading the zip: `order.json` with `"kind": "weekly"` and `issue`, the caption in `caption.txt`, then `cardnews.py fetch`. Card 1 is the cover and the last card is the end card. Each card between is one item, read like a standard card: title = largest text (two lines joined with a space), body = longest text, `©` line = source, any other small text = an extra body paragraph. From the caption: the first line (the post title), the "특히 이번 주 에디터가 주목한 이슈는…" line and everything from "매주 금요일…" on (the site's fixed ending replaces it) are left out; lines starting with ✅ are the editor picks (reversed quotes `’…‘` fixed); a line right after the picks starts a new letter paragraph. Tested on 851 and its real caption = post 636: titles, sources, letter and picks match exactly.
 - After fetch, look at every card preview (`figma/cards/`) and fix what the script cannot know: spacing at Figma line breaks inside a word (`핸드크림 이` → `핸드크림이`; fetch flags the ones before a particle), obvious spelling (`수 밖에` → `수밖에`), and text boxes that sat on the photo (fetch warns; they come out as empty boxes, so crop from the card with `visual` if the text is needed). Older cards (before autumn 2026) end the title with a brand logo image: read the brand from the card and add it to the title.
 - Title `이번 주 일어난 마케팅 이슈 총정리 (26.10 3주차)`, category 뉴스 (5180795), tag 주간 총정리 `weekly` (5180798), published Friday.
@@ -116,10 +116,11 @@ When a format decision changes in a conversation, update this file in the same s
 
 ## Order forms
 
-The helper tab (트란시스 카드뉴스 도우미) takes three kinds of orders. Weekly roundups are not ordered there.
+The helper tab (트란시스 카드뉴스 도우미) takes four kinds of orders.
 - **카드뉴스**: Figma zip, Instagram caption, video cards, memo. Built as standard.
 - **인터뷰**: the same, plus the interview format (질문 여러 개 = `qa` / 패널 = `panel`, chosen by the person who orders) and the interviewees (name, Instagram link, profile photo, all optional) for the profile cards.
 - **광고**: the same as 카드뉴스, plus the advertiser (name, Instagram link required, profile photo) for the profile cards at the top and the end.
+- **뉴스레터** (from 10/18): the weekly roundup zip and caption, video cards, and the week's chosen report links. The helper makes the site's weekly post draft and the newsletter (`docs/newsletter.md`); the tab shows the newsletter and a button that copies its HTML for Stibee.
 
 ## Order memo and revision requests
 

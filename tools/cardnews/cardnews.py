@@ -1537,7 +1537,8 @@ def css(d, src=None, remove=False):
 # 탭은 주문을 받아 두기만 하고, 요리는 여기서 한다. 클라우드 routine도 같은 명령을 쓴다(10/17 사용자 결정 A)
 
 # 셰프가 다음 수정 때 이어받을 작업 기록. 클라우드는 매번 빈 컴퓨터라 탭(주문 메타)에 맡겨 둔다(10/17 수정 요청 기능)
-STATE_FILES = ("order.json", "cards.json", "notes.json", "media.json", "result.json", "published.json", "design.css", "body.html")
+STATE_FILES = ("order.json", "cards.json", "notes.json", "media.json", "result.json", "published.json", "design.css", "body.html",
+               "newsletter.json")  # 뉴스레터 주문(탭 1.20.0)의 뉴스레터 글
 
 
 def pull_people(d, o):
@@ -1621,6 +1622,11 @@ def pull():
                 order["ad"] = True
                 order["people"] = pull_people(d, o)
                 order["categories"] = [18540]
+            # 뉴스레터 폼(탭 1.20.0, 10/18): 주간 총정리 zip 하나로 사이트 주간 글 초안 + 뉴스레터(docs/newsletter.md).
+            # 카테고리·태그는 주간 글 고정값, 주차(issue)는 셰프가 표지에서 읽어 적는다
+            elif o.get("kind") == "newsletter":
+                order.update(kind="weekly", newsletter=True, issue=order.get("issue", ""), categories=[5180795], tags=[5180798],
+                             reports=o.get("reports") or [])
             save(d, "order.json", order)
             if o.get("post_id") and not (d / "result.json").exists():
                 # "셰프 다시 부르기"로 다시 온 주문: 클라우드는 매번 빈 컴퓨터라 지난 초안 번호를 탭에서 받아 와야
@@ -1657,6 +1663,11 @@ def report(d, fail=None, ask=None):
         result = load(d, "result.json")
         body = {"status": "done", "post_id": result["post_id"], "title": title_of(order),
                 "changes": load(d, "changes.json", [])}
+        if order.get("newsletter"):
+            mail = d / "out" / "stibee.html"
+            if not mail.exists():
+                sys.exit("뉴스레터 주문인데 out/stibee.html이 없어요 — newsletter.py build 먼저")
+            body["newsletter"] = mail.read_text(encoding="utf-8")
         # 작업 기록도 같이 맡긴다 — 다음 "고쳐 주세요" 때 셰프가 이어받는다(pull 참고).
         # 끝까지 된 때만: 멈춘 수정의 반쯤 고친 기록을 맡기면 다시 부를 때 그 위에 또 고치게 된다
         body["state"] = {fn: (d / fn).read_text(encoding="utf-8") for fn in STATE_FILES if (d / fn).exists()}
