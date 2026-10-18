@@ -85,8 +85,14 @@ Built as standard, plus:
 - Right under it, and again after the last paragraph: the advertiser's profile card (`tp-ad-profile`, as in the interview), with `rel="noreferrer noopener sponsored"` because it is a paid link. Name, Instagram account and profile photo come from the 광고 form (Instagram link required), never guessed. The photo is cropped like the interview one.
 - Category 광고 (18540).
 
-### Weekly roundup
-Built by hand, not by the helper: newsletter layout (`tp-wk`), subscriber lock from card 02, the "매주 금요일…" paragraph at the very end.
+### Weekly roundup (posts 636, 479, 351)
+Not ordered in the helper tab; built in Claude Code from the Thursday Figma zip, together with the newsletter (`docs/newsletter.md`). The markup comes from `build_weekly` in `tools/cardnews/cardnews.py`.
+- Title `이번 주 일어난 마케팅 이슈 총정리 (26.10 3주차)`, category 뉴스 (5180795), tag 주간 총정리 `weekly` (5180798), published Friday.
+- Everything sits in one `tp-wk` group, in this order: issue line `WEEKLY · 26.10 3주차 · 금요일 발행` → editor letter (the Instagram caption's opening, then a line like `2026년 10월 3주차, 지금 실제로 터진 마케팅 이슈만 모았습니다.`, signed 트렌드포털) → 이번 주 에디터 픽 (three items) → the table-of-contents placeholder → one `tp-wk-item` per card → the fixed ending.
+- Each card: H2 title → photo (or a video still with a link, or our own clip) → `© source` → 무슨 일이었나 (the card text as written) → 💡 주목 포인트 box.
+- 💡 on the site: plain `~다` sentences, three or four, saying why it worked or why it matters (see 636 and 479). Short on purpose: the researched long version goes to the newsletter only.
+- The TP Weekly Lock plugin fills in card numbers, the table of contents and the subscriber lock from card 02 when the page is shown. Do not write those by hand.
+- The ending says 댓글로 (the newsletter says 답장으로) and ends with the "매주 금요일…" paragraph.
 
 ## Reference posts
 
@@ -100,6 +106,7 @@ Posts the site owner approved as the model for their format. When writing a post
 | interview Q&A | 498 |
 | interview panel | none live (follow the rules above and 498) |
 | paid ad | 439 (one profile card at the top; new ad posts also get one at the end) |
+| weekly roundup | 636, 479 |
 
 When a format decision changes in a conversation, update this file in the same session, and add the approved post here. A decision that lives only in someone's notes or a chat does not reach the helper.
 
