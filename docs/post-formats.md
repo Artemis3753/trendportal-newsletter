@@ -66,6 +66,17 @@ For each card: photo → card title (H2, boxed like the card title) → text →
 ### Copy collection (post 729) — `"layout": "copy"`
 All cards on one dark band across the screen, copy in Gowun Batang, `— brand —` under it. **Only post 729 uses it for now**; do not choose it for other posts even if their cards have `-brand-` lines.
 
+### Text in the photo (post 1007, Baemin receipts) — own design, `body.html`
+For cards whose text is part of the photo itself (an ad's own images, a screenshot), so Figma has no text layers for it (`scan.json` → `texts` is empty on cards that clearly show text). Approved look, site owner 10/19: "as close to the original cards as possible".
+- Do not post the photos with the text left in, and do not only list the text under them. Remove the text from the photo, then put the same text back as real HTML text in the same place, styled like the card (colour, dashed lines, alignment). The text stays searchable and sharp, and the post looks like the cards.
+- Read the text from the photo yourself, zoomed in on small lines (menu rows, dates). Copy it exactly, odd parts included (a missing quantity, a future date, "매운떡볶이" under "안 맵게 해주세요"). Keep the readings in one file in the order folder.
+- Remove the text with `cardnews.py erase` (box in % of the photo; `--dark` for dark text on a light background; `--crop` when two photos are stacked in one card). A faint smear stays where the letters were; the new text covers most of it. Look at every result.
+- Text over a photo has to be readable on a phone: at least 14px for the main line and 10.5px for small lines, growing with the card above that (`cqw` units). Because it ends up bigger than on the card, it can run into a dark or bright part of the photo: white text gets a soft dark shadow, dark text a soft white glow, and a block that still crosses into a bad area moves a few percent.
+- A text-only card over a background (a title card): keep the title's line breaks, drop the body's, which leave one word alone on a line on phones.
+- If the card-1 photo has text in it, the cover photo (`tp-cover-photo`) is the erased version of the same scene, because the post header shows the title over it.
+- **Tinted bands** (사진으로 물들이기, site owner 10/19): each card sits on a full-width band of its own photo, blurred and enlarged, and the bands touch, so there is no white between cards. A video link goes inside its card's band, in white.
+- Markup: `cardnews.py ref 1007`. CSS: the live block `cardnews order 855` (class `tp-fmt-receipt`, with one position class per text block). A new post with this look copies those rules under its own `tp-fmt-…` class, so position classes of two posts never mix.
+
 ### Interview Q&A (post 498) — `"layout": "qa"`
 One interviewee, several questions.
 - A profile card right under the first line (`[ 트포 인터뷰 : … ]`) and again after the last paragraph: `<a class="tp-ad-profile">` with the avatar (`tp-ad-avatar`, empty alt: the name is right next to it), name (`<b>`), `@account` (`<small>`) and "프로필 보기". The Instagram account and profile photo come from a person (the interview form), never guessed. The photo may be a raw screenshot: crop a square just inside the profile picture's circle, without Instagram's story ring or white edge (`cardnews.py profile`), because the site draws its own ring.
@@ -107,6 +118,7 @@ Posts the site owner approved as the model for their format. When writing a post
 | standard cardnews | 242 |
 | video card | 351 (someone else's video), 636 (our own clip) |
 | copy collection | 729 |
+| text in the photo, tinted bands | 1007 (draft until it is published) |
 | interview Q&A | 498 |
 | interview panel | none live (follow the rules above and 498) |
 | paid ad | 439 (one profile card at the top; new ad posts also get one at the end) |

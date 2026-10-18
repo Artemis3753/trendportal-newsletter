@@ -16,6 +16,8 @@
     python3 tools/cardnews/cardnews.py cook    <주문> [--pc]                 (build → draft → verify → shot 한 번에, 판단이 끝난 뒤)
     python3 tools/cardnews/cardnews.py shot    <주문> [--pc]                 (초안이 폰에서(--pc면 PC도) 어떻게 보이는지 찍기 → shots/)
     python3 tools/cardnews/cardnews.py visual  <주문> <카드> <위%> <아래%>   (사진 없는 카드의 그림 칸을 카드 미리보기에서 다시 자르기)
+    python3 tools/cardnews/cardnews.py erase   <주문> <사진> <새 이름> <왼%> <오른%> <위%> <아래%> [--dark] [--crop <위%> <아래%>]
+                                                                            (사진에 박힌 글자 지우기 → images/<새 이름>)
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
@@ -1121,6 +1123,40 @@ def visual(d, n, top, bottom):
     print(f"{n}번 → {dst.name}")
 
 
+def erase(d, src, out, box, dark=False, crop=None):
+    """사진에 박힌 글자 지우기(10/19, 글 1007 배민 영수증): 글자 칸(box = 왼·오른·위·아래 %, 사진 기준) 안에서
+    가는 획만 골라(흰 글자 = tophat, 검은 글자 = blackhat) 주변 색으로 메운다(inpaint). 지운 자리에 진짜 텍스트를 다시 얹는 글용.
+    번진 자국은 글자가 있던 자리에 남는데, 같은 자리에 글자를 다시 얹으면 거의 가려진다.
+    crop = (위%, 아래%)면 지운 뒤 그 높이만 잘라 images/<out>에 둔다(카드 한 장에 사진 두 장이 위아래로 붙은 경우)"""
+    try:
+        import cv2, numpy as np
+    except ImportError:
+        # 표준 라이브러리만 쓰는 원칙의 예외: 이 명령에만 필요해서 처음 쓸 때 받는다(browser()의 playwright와 같은 방식)
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "opencv-python-headless"], check=True)
+        import cv2, numpy as np
+    p = d / src
+    img = cv2.imread(str(p))
+    if img is None:
+        sys.exit(f"{src} 를 못 읽었어요")
+    H, W = img.shape[:2]
+    x0, x1, y0, y1 = box
+    # 칸을 조금 넓혀 잡는다 — 눈으로 잡은 %는 글자 끝을 살짝 놓치기 쉽다
+    bx0, bx1 = max(0, int((x0 - 2) * W / 100)), min(W, int((x1 + 2) * W / 100))
+    by0, by1 = max(0, int((y0 - 1.5) * H / 100)), min(H, int((y1 + 1.5) * H / 100))
+    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    m = cv2.morphologyEx(g, cv2.MORPH_BLACKHAT if dark else cv2.MORPH_TOPHAT, cv2.getStructuringElement(cv2.MORPH_RECT, (25, 25)))
+    mask = np.zeros_like(g)
+    # 검은 글자는 그레인 점과 섞여 옅게 남아서 문턱을 낮추고 더 넓게 번지게 한다
+    mask[by0:by1, bx0:bx1] = (m[by0:by1, bx0:bx1] > (18 if dark else 35)).astype(np.uint8) * 255
+    mask = cv2.dilate(mask, np.ones((5, 5), np.uint8), iterations=3 if dark else 2)
+    res = cv2.inpaint(img, mask, 7, cv2.INPAINT_TELEA)
+    if crop:
+        res = res[int(H * crop[0] / 100):int(H * crop[1] / 100)]
+    (d / "images").mkdir(exist_ok=True)
+    cv2.imwrite(str(d / "images" / out), res, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    print(f"{src} → images/{out} ({res.shape[1]}×{res.shape[0]}) — 지운 자리를 눈으로 확인하세요")
+
+
 def raws(d, prefix):
     return sorted((d / "figma").glob(f"{prefix}-raw-*"))
 
@@ -1555,7 +1591,8 @@ def css_problems(css, cls):
                 bad.append(f"이 규칙은 못 받아요: {head[:40]}")
         else:
             for sel in head.split(","):
-                if not re.match(rf"\.{re.escape(cls)}(?![\w-])", sel.strip()):
+                # body:has(.이름표)도 받는다 — 화면 폭 띠(100vw)가 PC 스크롤바만큼 삐져나오는 걸 그 글에서만 자르려고(764 .tp-copy-stage와 같은 방법)
+                if not re.match(rf"(body:has\(\.{re.escape(cls)}\))?\s*\.{re.escape(cls)}(?![\w-])|body:has\(\.{re.escape(cls)}\)$", sel.strip()):
                     bad.append(f".{cls}로 시작하지 않는 선택자: {sel.strip()[:60]}")
         for u in re.findall(r"url\(\s*['\"]?([^'\")]*)", body):
             if not u.startswith("https://trendportal.kr/"):
@@ -1761,6 +1798,9 @@ def main(argv):
         return cook(order_dir(argv[1]), "--pc" in argv)
     if argv[:1] == ["visual"] and len(argv) == 5:
         return visual(order_dir(argv[1]), int(argv[2]), float(argv[3]), float(argv[4]))
+    if argv[:1] == ["erase"] and len(argv) >= 8:
+        crop = tuple(float(v) for v in argv[argv.index("--crop") + 1:argv.index("--crop") + 3]) if "--crop" in argv else None
+        return erase(order_dir(argv[1]), argv[2], argv[3], tuple(float(v) for v in argv[4:8]), "--dark" in argv, crop)
     if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css", "still", "profile"):
         sys.exit(__doc__)
     d = order_dir(argv[1])
