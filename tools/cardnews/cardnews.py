@@ -1116,24 +1116,42 @@ def squash(s):
     return re.sub(r"[\W_]+", "", s)
 
 
+WEEKLY_TITLE_LINE = re.compile(r"^이번\s*주\s*일어난\s*마케팅\s*이슈\s*총정리")
+WEEKLY_PICKS_INTRO = re.compile(r"에디터가\s*주목한")
+WEEKLY_FIXED_END = re.compile(r"^매주\s*금요일")
+
+
 def read_weekly_caption(d):
-    """주간 총정리 캡션 → 에디터 레터 문단·에디터 픽. ✅로 시작하는 줄 = 에디터 픽(10/8 사이트 주간 글 새단장 때 친구 원문 그대로 옮긴 모양).
-    나머지 문단이 레터. 해시태그 줄은 뺀다"""
+    """주간 총정리 캡션 → 에디터 레터 문단·에디터 픽. 실제 캡션(26.10 3주차, 10/18 사용자)과 그걸로 만든 글 636에 맞춘 규칙:
+    · 첫 줄 "이번 주 일어난 마케팅 이슈 총정리 (…)" = 글 제목과 겹쳐서 뺀다
+    · "특히 이번 주 에디터가 주목한 이슈는…" = 에디터 픽 상자가 대신해서 뺀다
+    · ✅ 줄 = 에디터 픽. ✅ 줄 뒤에 빈 줄 없이 이어진 글은 레터의 다음 문단
+    · "매주 금요일…"부터 끝(📌 저장, 댓글로…) = 사이트 고정 끝맺음(WEEKLY_END)이 대신해서 뺀다
+    · 해시태그 줄은 뺀다"""
     p = d / "caption.txt"
     if not p.exists():
         return [], [], ["caption.txt가 없어요 (인스타 캡션을 붙여 넣어 주세요) — 레터·에디터 픽이 비어요"]
-    letter, picks = [], []
+    letter, picks, warn = [], [], []
     for block in re.split(r"\n\s*\n", p.read_text(encoding="utf-8").strip()):
         lines = [l.strip() for l in block.splitlines() if l.strip() and not all(w.startswith("#") for w in l.split())]
-        keep = []
+        if lines and WEEKLY_FIXED_END.match(lines[0]):
+            break
+        para = []
         for l in lines:
+            if WEEKLY_TITLE_LINE.match(l) or WEEKLY_PICKS_INTRO.search(l):
+                continue
             if l.startswith("✅"):
-                picks.append(l.lstrip("✅").strip())
-            else:
-                keep.append(l)
-        if keep:
-            letter.append("\n".join(keep))
-    warn = [] if picks else ["캡션에 ✅ 줄이 없어서 에디터 픽이 비었어요"]
+                # 앞뒤가 뒤바뀐 따옴표(’중급닌자시험‘)는 바로잡는다 — 636에서 사람이 고친 모양
+                picks.append(re.sub(r"’([^’‘]+)‘", r"‘\1’", l.lstrip("✅").strip()))
+                if para:
+                    letter.append("\n".join(para))
+                    para = []
+                continue
+            para.append(l)
+        if para:
+            letter.append("\n".join(para))
+    if not picks:
+        warn.append("캡션에 ✅ 줄이 없어서 에디터 픽이 비었어요")
     return letter, picks, warn
 
 
