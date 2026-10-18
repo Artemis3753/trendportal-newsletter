@@ -273,11 +273,11 @@ SPACER = ('<!-- wp:spacer {"height":"40px"} -->'
 
 
 def panel_cards(media, cards, notes, people=()):
-    """인터뷰 패널형(734 — 질문 하나에 여러 명이 답한 카드). 정답 예시 = 글 843(사용자 승인 10/17, Claude Code에서 498 방식으로 만든 것).
+    """인터뷰 패널형(734 — 질문 하나에 여러 명이 답한 카드). 정답 예시였던 글 843(10/17 승인, 498 방식)은 10/18 발행 없이 삭제됐다 — 모양은 docs/post-formats.md 규칙대로.
     같은 질문 카드끼리 묶어 QUESTION 소제목 한 번 → 답한 사람(cards[].who)마다 흰 프로필 카드(498의 tp-ad-profile) → 답.
     사람 사이엔 40px 여백(spacer 블록, CSS 없이). 답한 사람이 없는 카드(734의 2번 안내 카드)는 글만 그 질문 소제목 앞에 둔다.
     프로필 사진·인스타 주소 = 인터뷰 폼에 넣은 대상 중 계정이 같은 사람 것, 없으면 카드에서 잘라 낸 얼굴과 카드의 계정.
-    (처음 만든 '카드 모양 어두운 판(.tp-pn-card)'은 웹폼 실전 뒤 사용자가 843 모양을 골라서 쓰지 않는다)"""
+    (처음 만든 '카드 모양 어두운 판(.tp-pn-card)'은 웹폼 실전 뒤 사용자가 498식 모양을 골라서 쓰지 않는다)"""
     by_handle = {insta_handle(p.get("insta")).lower(): p for p in people if p.get("insta")}
     groups = []
     for card, note in zip(cards, notes):

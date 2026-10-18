@@ -71,13 +71,13 @@ One interviewee, several questions.
 - Order inside a question: heading → photo → answer (the opposite of standard cards).
 - The cover photo has no text on it. If only a cover with text is available, ask for one without.
 
-### Interview panel (post 843) — `"layout": "panel"`
-One question answered by many people. **Reference: post 843** (approved, made in Claude Code). It follows the Q&A post 498, not the card look.
+### Interview panel — `"layout": "panel"`
+One question answered by many people. It follows the Q&A post 498, not the card look. There is no live reference post: the approved example (843) was deleted unpublished on 10/18, so follow these rules and 498's markup.
 - The intro card's text (a card without an `@account` line), then the question once as the interview heading (`tp-iv-q`, label `QUESTION`; `QUESTION 01`, `02`… when there are several questions).
 - For each person: a white profile card (`tp-ad-profile`, as in 498) → their answer paragraphs. A 40px spacer block goes between people, so no extra CSS is needed.
 - Profile photo and link: from the interviewee given in the interview form with the same Instagram account; otherwise the face cut from the card and the card's `@account`.
 - The script reads `@account / name` from the card (`cards.json` → `who`).
-- Not the dark card-shaped panels (`.tp-pn-card`) tried first: the site owner chose the 843 look instead.
+- Not the dark card-shaped panels (`.tp-pn-card`) tried first: the site owner chose the 498-style look described here instead.
 
 ### Paid ad (post 439) — 광고 form
 Built as standard, plus:
@@ -98,7 +98,7 @@ Posts the site owner approved as the model for their format. When writing a post
 | video card | 351 (someone else's video), 636 (our own clip) |
 | copy collection | 729 |
 | interview Q&A | 498 |
-| interview panel | 843 |
+| interview panel | none live (follow the rules above and 498) |
 | paid ad | 439 (one profile card at the top; new ad posts also get one at the end) |
 
 When a format decision changes in a conversation, update this file in the same session, and add the approved post here. A decision that lives only in someone's notes or a chat does not reach the helper.
