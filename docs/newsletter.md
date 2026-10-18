@@ -42,6 +42,13 @@ python3 tools/newsletter/newsletter.py build <issue>    # out/stibee.html (open 
 
 Fixed parts the tool adds: the header, the table of contents, the closing with the report button and the gift line, and the footer with Stibee's `$%permalink%$` and `$%unsubscribe%$` (the unsubscribe link must stay: it is an ad-consent mailing).
 
+## Stibee facts
+
+- Paste `out/stibee.html` into Stibee's HTML editor. A mail made in the HTML editor cannot be saved as a Stibee template, which is fine: the builder is the template.
+- `$%permalink%$`, `$%unsubscribe%$` and the like are filled in by Stibee when it sends; a browser preview shows them as text.
+- The welcome mail is sent automatically only on the Standard plan or above (the team plans to pay this week). Its design is the calendar mock `1006-2c`, with a line about the report gift added on 10/18.
+- Stibee has no automatic "latest site posts" block, so links to the site are written into each issue.
+
 ## Report event
 
 Readers who send a report that is featured in the newsletter get a Starbucks Americano gift card (notice on the report board, uid 6). Reports are taken Saturday to Thursday, starting with those sent on 10/24; the first featured reports go in the 10/30 issue. Reporters leave an email address that only the operators can see. The welcome mail and every issue's closing mention the gift.

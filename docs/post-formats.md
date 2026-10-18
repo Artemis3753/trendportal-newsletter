@@ -32,6 +32,7 @@ Reference posts are on trendportal.kr as `/archives/<id>/`.
 - Paragraphs follow the card: a blank line on the card is a new paragraph. Do not split or join on your own.
 - Bold text on the card stays bold (`<strong>`). We never add new emphasis. (The Figma plugin does not read bold yet; until it does, a person checks it.)
 - Keep the card's quotes (straight or curly) and the title's line breaks.
+- Never put a paragraph right after a card photo. The site CSS treats "photo, then paragraph" as a video card's `▶ … 영상 보기` link and pulls it up close to the photo (10/2); a normal card goes photo → H2.
 
 **Source**: one small paragraph under each card's text, `© 출처명` (`tp-source`, small font). Never guess which source belongs to which card.
 
@@ -49,6 +50,7 @@ Make the post look as close to the original cards as our resources allow, and st
 - If an existing format fits, use it. If the cards need something new, new CSS goes only under a new class (`tp-fmt-…`), so it cannot touch other posts.
 - Fonts: use the ones the site already has (all SIL OFL 1.1): Pretendard, Gowun Batang, Manrope, Orbitron. A new font only when it is truly needed **and** its licence explicitly allows web use. If unsure, do not use it.
 - Body text stays centred. Card photos: 16px side margins and 14px corners on phones, 480px wide on PC.
+- Class names must not look like ads to ad blockers: no `ad`, `ads`, `is-ad`, `ad-…` style names (EasyList hid the helper tab's `is-ad` badge on 10/18; it became `is-sponsor`). The existing `tp-ad-profile` is not on the lists and stays.
 
 ## Formats
 
