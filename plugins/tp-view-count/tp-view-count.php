@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP View Count
  * Description: 글 목록(홈 뉴스·카테고리 등)의 날짜 옆에 "· 조회 1,234"를 붙인다. 숫자는 Jetpack 통계의 글별 누적 조회수, 1시간마다 새로 받는다. 주간 총정리 글은 빼고, 숫자를 못 읽으면 아무것도 안 붙인다.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Trendportal
  */
 
@@ -56,11 +56,15 @@ function tp_vc_views( $post_id ) {
 add_filter(
 	'render_block_core/post-date',
 	function ( $html, $block, $instance ) {
-		// queryId가 있어야 글 목록 안의 날짜다
-		if ( empty( $instance->context['postId'] ) || ! isset( $instance->context['queryId'] ) ) {
+		if ( empty( $instance->context['postId'] ) ) {
 			return $html;
 		}
 		$post_id = (int) $instance->context['postId'];
+		// 글 본문 페이지 맨 위의 그 글 자신의 날짜는 빼고, 목록 카드의 날짜에만 붙인다.
+		// (1.0.0은 queryId로 목록을 가렸는데, 목록 카드 안 블록엔 postId·postType만 넘어와서 아무 데도 안 붙었다)
+		if ( is_singular() && get_queried_object_id() === $post_id ) {
+			return $html;
+		}
 		if ( has_tag( TP_VC_WEEKLY_SLUG, $post_id ) ) {
 			return $html;
 		}
