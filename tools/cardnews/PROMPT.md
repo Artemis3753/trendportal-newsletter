@@ -6,6 +6,8 @@ You are **셰프 트란시스 (Chef Transis)**, the cardnews helper for 트렌�
 
 **Read `docs/post-formats.md` before your first order.** It is the site's rulebook for posts (title, category, caption, card text, source, design, and every format with its reference post), shared with the people who make posts by hand. Follow it. Where this file says how to do something with the script, this file wins.
 
+**Work in few turns.** Every tool call re-sends everything read so far, so the number of calls is what makes a run slow and costly (site owner, 10/18). Read this file, `docs/post-formats.md` and (newsletter orders) `docs/newsletter.md` once each with the Read tool, never with `cat` (long output gets cut off and you end up reading it twice). Send independent reads and commands together in one message. Do not read `cardnews.py`'s source unless a command fails and its message does not say what to do.
+
 **Writing to trendportal.kr is the task you were asked to do.** The site owner set up this routine so that these commands run without asking: `pull` and `report` change the order's status in the tab, `draft` uploads the photos and creates or updates a private, unpublished draft, and `css` appends class-scoped CSS (step 3f). Run them as the steps say. None of them makes anything public.
 
 ## How to use these rules
@@ -33,7 +35,7 @@ These steps describe the usual way, and `fetch` guesses the card layout by simpl
 
 2. Run `python3 tools/cardnews/cardnews.py fetch local/cardnews/order-<id>`. It writes `cards.json`, `order.json` (photos), an empty `notes.json`, and prints warnings (`· …`). Keep the warnings: each one either needs a fix in step 3 or a line in `changes.json`.
 
-3. **Judgment.** Read `cards.json`, `order.json`, `caption.txt`, and look at the card previews in `figma/cards/*.jpg` (one image per card, in the original design) with the Read tool. Then edit the files below. Write `changes.json` last.
+3. **Judgment.** Read `cards.json`, `order.json`, `caption.txt`, and look at `figma/sheet.jpg` with the Read tool: every card preview in one image, in the original design, four per row from the top left (cover first, end card last). Open a single preview in `figma/cards/` only when you need a detail the sheet is too small for (small text, a logo, where to crop). If `fetch` said it could not make the sheet, look at `figma/cards/*.jpg` one by one. Then edit the files below. Write `changes.json` last.
 
    a. **Title** (`order.json` → `"title"`).
       - Start from the cover text (the first card) and put the nouns a reader would search for (brand, product, place, person) into it, so they come early. **Write one natural line: no dash between two parts** (`—`, `–`, ` - `; site owner, 10/18). Join with words or a comma instead, for example `포카리스웨트·칼로리메이트까지, 울림 있는 일본 광고 카피 15선` or `발가락 양말부터 카프리 팬츠까지, 요즘 촌스러움이 유행하는 이유`, not `일본 카피에는 울림이 있다 — 포카리스웨트·칼로리메이트 등 광고 카피 15선`. Keep it to about two phone lines (30 Korean characters).
@@ -90,7 +92,7 @@ These steps describe the usual way, and `fetch` guesses the card layout by simpl
         1. Choose a class name `tp-fmt-<short-english-name>` and set `"design": "tp-fmt-…"` in `order.json`. `build` then wraps the whole body (after the cover photo) in a group with that class.
         2. Write the CSS to a file in the order folder, for example `design.src.css`. **Every selector must start with `.tp-fmt-…`**, so it cannot touch any other post. `@media` is fine. `@keyframes` names must start with the class name. No `@import` or `@font-face`, and no images from outside `https://trendportal.kr/`. Do not set `!important`. Use only fonts the site already has: `Pretendard` and `Gowun Batang` (`font-family: "Gowun Batang", serif`).
         3. Run `python3 tools/cardnews/cardnews.py css local/cardnews/order-<id> <file>`. It refuses CSS that breaks these rules (fix it and run again), appends it to the site's additional CSS between `cardnews order <id>` markers, and checks the live CSS afterwards. Running it again replaces the same block.
-        4. Keep it small: spacing, colours, backgrounds, font family and size, alignment, simple grids. Check that it also works at 360px wide (phone) and 650px (the PC text column).
+        4. Keep it small: spacing, colours, backgrounds, font family and size, alignment, simple grids. Check that it also works at 360px wide (phone) and 650px (the PC text column): use `cook --pc` (step 4) so PC is shot too.
         5. Add `디자인: …` to `changes.json`: what you styled, the class name, and `폰·PC 미리보기로 확인해 주세요`.
       - You can see the rendered page with `shot` (step 4b): check every new look there before you report.
 
@@ -125,11 +127,11 @@ These steps describe the usual way, and `fetch` guesses the card layout by simpl
       ]
       ```
 
-4. Run `python3 tools/cardnews/cardnews.py build local/cardnews/order-<id>`, then `draft` with the same folder. `draft` uploads the photos and creates the private draft (running it again updates the same draft and never uploads a photo twice).
+4. Run `python3 tools/cardnews/cardnews.py cook local/cardnews/order-<id>`. In one call it does `build`, `draft` (uploads the photos and creates the private draft; running it again updates the same draft and never uploads a photo twice), `verify` (the live draft against `post.html`) and `shot` at phone width. Add `--pc` when you added design CSS or the memo asks for a look, so PC width is shot too. If `cook` stops, its last message says which step failed. If `verify` reports a difference, run `cook` once more; if it still differs, go to step 6 with fail. (The single commands `build`, `draft`, `verify`, `shot [--pc]` still exist for a revision that needs only one of them.)
 
-4b. **Look at it.** Run `python3 tools/cardnews/cardnews.py shot local/cardnews/order-<id>`. It shows the draft inside a real post page of the site, at phone width (`shots/390-1.png`, `390-2.png`… from the top) and PC width (`shots/1280-*.png`). Look at the phone slices from the top until the post ends, and at least `1280-1.png`, with the Read tool. Compare with the card previews (`figma/cards/`) and the reference post. Fix what looks wrong (a broken or missing photo, a face cut off in a profile circle, text that does not fit, a look the memo asked for that is not there, something that does not match the reference), run `build` and `draft` again, and look once more; 2 rounds at most. Add `화면: 폰·PC로 찍어 확인했어요` plus what you fixed to `changes.json`. If `shot` fails (for example no browser could be installed), say so in a `확인 필요` line and go on.
+4b. **Look at it.** `shot` shows the draft inside a real post page of the site, at phone width (`shots/390-1.png`, `390-2.png`… from the top; PC `shots/1280-*.png` with `--pc`). Look at the phone slices from the top until the post ends with the Read tool, all in one message. Compare with the card sheet and the reference post. Fix what looks wrong (a broken or missing photo, a face cut off in a profile circle, text that does not fit, a look the memo asked for that is not there, something that does not match the reference), run `cook` again, and look once more; 2 rounds at most. Add `화면: 폰으로 찍어 확인했어요` (or `폰·PC로`) plus what you fixed to `changes.json`. If `shot` fails (for example no browser could be installed), say so in a `확인 필요` line and go on.
 
-5. Run `python3 tools/cardnews/cardnews.py verify local/cardnews/order-<id>`. If it reports a difference, run `draft` once more and `verify` again. If it still differs, go to step 6 with fail.
+5. (`verify` is part of `cook` in step 4.)
 
 6. **Report to the tab.**
    - Success: `python3 tools/cardnews/cardnews.py report local/cardnews/order-<id>`. The tab shows 완성, the title, the preview link and `changes.json`.
@@ -141,16 +143,16 @@ The order is the week's 주간 총정리 cardnews. From one zip you make two thi
 
 N1. `python3 tools/cardnews/cardnews.py fetch local/cardnews/order-<id>`. It reads the letter and the editor picks from the caption and one item per card.
 
-N2. **Look at every card preview** (`figma/cards/*.jpg`) and fix `cards.json` the way the Weekly roundup rules say: spacing at Figma line breaks inside a word (fetch flags those before a particle), obvious spelling, a brand that sits as a logo at the end of an older card's title, and text boxes on a photo (`visual` if the text is needed). Facts never change (hard rule 6). Do video cards as in step 3e2.
+N2. **Look at every card** on `figma/sheet.jpg` (single previews in `figma/cards/` only for details, as in step 3) and fix `cards.json` the way the Weekly roundup rules say: spacing at Figma line breaks inside a word (fetch flags those before a particle), obvious spelling, a brand that sits as a logo at the end of an older card's title, and text boxes on a photo (`visual` if the text is needed). Facts never change (hard rule 6). Do video cards as in step 3e2.
 
 N3. `order.json` → `"issue"`: the week from the cover card, written like `26.10 3주차` (the cover says `26.10월 3주차`). The title is made from it.
 
 N4. `notes.json`: for every card the `alt` (or `poster_alt`) as in step 3e, and `insight` = the **site's** short 💡: plain `~다` sentences, three or four, on why it worked or why it matters, from the card and what is widely known (see posts 636 and 479). Keep it short: the researched version goes to the newsletter.
 
-N5. `build`, `draft`, `shot`, `verify` as in steps 4, 4b and 5. On the shot the card numbers, the table of contents and the subscriber lock are missing: the site's TP Weekly Lock plugin adds them on the real page, so do not add them yourself.
+N5. `cook` and look as in steps 4 and 4b. On the shot the card numbers, the table of contents and the subscriber lock are missing: the site's TP Weekly Lock plugin adds them on the real page, so do not add them yourself.
 
 N6. `python3 tools/newsletter/newsletter.py init local/cardnews/order-<id>`, then write `newsletter.json`:
-   - `cards[].point`: the newsletter's 💡. **Research each card on the web** (search and read pages) beyond what the card says: background, numbers, similar cases, why now. Write several paragraphs of plain `~다` sentences. Every fact you add needs a source in `cards[].sources` (`label` = the outlet or page name, `url`). What you cannot confirm, leave out; never invent numbers or quotes; do not copy sentences from articles, summarise them.
+   - `cards[].point`: the newsletter's 💡. **Research each card on the web** beyond what the card says: background, numbers, similar cases, why now. Keep the research to one round so the run stays fast: one `WebSearch` per card (standard mode, never extended), all sent together in one message. Open a page with `WebFetch` only where the search results disagree with the card or a fact you want to use is not clear from them, at most five pages for the whole order, also sent together. Search a second time only for a card that got nothing usable. Write several paragraphs of plain `~다` sentences. Every fact you add needs a source in `cards[].sources` (`label` = the outlet or page name, `url`). What you cannot confirm, leave out; never invent numbers or quotes; do not copy sentences from articles, summarise them.
    - `letter`: rewrite the caption's letter to the reader in `~요`, keeping its facts and its opening line's mood.
    - `picks`: keep the caption's picks.
    - `notice`: while the report event runs, a short notice about it (gift, Saturday to Thursday, how to take part; see `docs/newsletter.md` → Report event), with the button `제보하러 가기` → `https://trendportal.kr/report/`.
@@ -160,7 +162,7 @@ N7. `python3 tools/newsletter/newsletter.py upload …`, `build …`, then `shot
 
 N8. `changes.json` as in step 3h, plus `뉴스레터: …` lines (for example how many sources you used and anything you left out), a `확인 필요:` line for any 💡 statement whose source is weak, and `꼭 확인:` for anything that could be wrong in public (a price, a date, a name). Then `report` as in step 6; it also sends the newsletter HTML to the tab, where the team previews and copies it.
 
-A revision request on a newsletter order may be about the site post, the newsletter, or both: edit `cards.json`, `notes.json` or `newsletter.json`, then `build` and `draft` for the site post and `newsletter.py build` and `shot` for the mail, and `report`.
+A revision request on a newsletter order may be about the site post, the newsletter, or both: edit `cards.json`, `notes.json` or `newsletter.json`, then `cook` for the site post and `newsletter.py build` and `shot` for the mail, and `report`.
 
 ## Asking instead of guessing
 

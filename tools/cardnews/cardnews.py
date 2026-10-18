@@ -13,7 +13,8 @@
     python3 tools/cardnews/cardnews.py still   <주문> <카드 번호> <초>        (영상 카드 정지 화면·포스터를 그 초 장면으로)
     python3 tools/cardnews/cardnews.py profile <주문> <대상 번호> [x y 한 변]  (인터뷰 대상 프로필 사진을 캡처에서 정사각형으로)
     python3 tools/cardnews/cardnews.py ref     <글 번호>                     (정답 예시 글의 블록 원문 보기, 읽기만)
-    python3 tools/cardnews/cardnews.py shot    <주문>                        (초안이 폰·PC에서 어떻게 보이는지 찍기 → shots/)
+    python3 tools/cardnews/cardnews.py cook    <주문> [--pc]                 (build → draft → verify → shot 한 번에, 판단이 끝난 뒤)
+    python3 tools/cardnews/cardnews.py shot    <주문> [--pc]                 (초안이 폰에서(--pc면 PC도) 어떻게 보이는지 찍기 → shots/)
     python3 tools/cardnews/cardnews.py visual  <주문> <카드> <위%> <아래%>   (사진 없는 카드의 그림 칸을 카드 미리보기에서 다시 자르기)
 
 주문 폴더:
@@ -867,8 +868,36 @@ def browser():
     return found()
 
 
-def shot(d, widths=(390, 1280)):
+def sheet(d, frames, cols=4, w=360, h=450, gap=8):
+    """카드 미리보기를 한 장에 모은다(10/18 토큰 절약): 셰프가 카드 10장을 따로 열면 열 때마다 대화가 길어져서,
+    처음엔 이 한 장으로 전체를 훑고 글자를 자세히 봐야 하는 카드만 figma/cards/에서 따로 연다.
+    클라우드엔 PIL이 없어서 ffmpeg xstack으로 붙인다. 못 만들면 None(셰프는 예전처럼 한 장씩 본다)"""
+    srcs = [p for p in (d / "figma" / "cards" / f"{fr.get('name')}.jpg" for fr in frames) if p.exists()]
+    if not srcs or not shutil.which("ffmpeg"):
+        return None
+    cw, ch = w + gap, h + gap
+    pre = "".join(f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                  f"pad={cw}:{ch}:(ow-iw)/2:(oh-ih)/2:white[v{i}];" for i in range(len(srcs)))
+    layout = "|".join(f"{(i % cols) * cw}_{(i // cols) * ch}" for i in range(len(srcs)))
+    dst = d / "figma" / "sheet.jpg"
+    args = ["ffmpeg", "-y", "-loglevel", "error"]
+    for p in srcs:
+        args += ["-i", str(p)]
+    if len(srcs) == 1:
+        args += ["-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease"]
+    else:
+        args += ["-filter_complex", pre + "".join(f"[v{i}]" for i in range(len(srcs)))
+                 + f"xstack=inputs={len(srcs)}:layout={layout}:fill=white"]
+    try:
+        subprocess.run(args + ["-frames:v", "1", "-q:v", "3", str(dst)], check=True, capture_output=True, timeout=120)
+    except (subprocess.SubprocessError, OSError):
+        return None
+    return dst
+
+
+def shot(d, widths=(390,)):
     """셰프의 눈(10/17 사용자): 초안이 사이트에서 어떻게 보이는지 폰·PC로 찍어 shots/에 1600px 높이씩 나눠 둔다.
+    10/18부터 기본은 폰만 — PC는 디자인 CSS를 붙였을 때만 --pc로(PC는 본문 폭이 고정이라 틀은 잘 안 깨진다).
     비공개 초안 미리보기는 로그인이 필요해서, 공개 글 페이지(SHELL_URL)를 빌려 본문 자리만 이 초안으로 바꿔 찍는다 —
     Claude Code에서 시안을 찍던 방식과 같다. 머리·글꼴·추가 CSS는 라이브 그대로라 실제와 같게 보인다"""
     order = load(d, "order.json")
@@ -1297,6 +1326,7 @@ def fetch(d):
             notes = {"cards": [{"poster_alt": "", "insight": ""} if c.get("clip") else {"alt": "", "insight": ""} for c in cards]}
             save(d, "notes.json", notes)
         print(f"카드 {len(cards)}장 · 레터 {len(letter)}문단 · 에디터 픽 {len(picks)}개")
+        print_sheet(d, frames)
         print("\n".join("· " + w for w in warn) if warn else "확인할 것 없음")
         return
     intro, outro, w = read_caption(d)
@@ -1316,7 +1346,23 @@ def fetch(d):
                  "cards": [{"poster_alt": ""} if c.get("clip") else {"alt": ""} for c in cards]}
         save(d, "notes.json", notes)
     print(f"카드 {len(cards)}장 · 캡션 앞 {len(intro)}문단 · 끝 {len(outro)}문단")
+    print_sheet(d, frames)
     print("\n".join("· " + w for w in warn) if warn else "확인할 것 없음")
+
+
+def print_sheet(d, frames):
+    s = sheet(d, frames)
+    print(f"카드 미리보기 한 장: {s.relative_to(d).as_posix()} (왼쪽 위부터 한 줄에 4장, 표지 → 내용 카드 → 끝 카드)"
+          if s else "카드 미리보기 한 장을 못 만들었어요 — figma/cards/를 한 장씩 보기")
+
+
+def cook(d, pc=False):
+    """판단이 끝난 주문을 한 번에 굽는다(10/18 토큰 절약): build → draft → verify → shot.
+    예전엔 셰프가 네 명령을 따로 불러서 부를 때마다 대화가 한 바퀴씩 늘었다. 중간에 멈추면 그 단계 메시지로 끝난다"""
+    build(d)
+    publish(d)
+    verify(d)
+    shot(d, (390, 1280) if pc else (390,))
 
 
 # ── draft: 사진 올리기 → 다시 build → 비공개 초안 ─────────
@@ -1707,8 +1753,10 @@ def main(argv):
         return pull()
     if argv[:1] == ["ref"] and len(argv) == 2:
         return ref(int(argv[1]))
-    if argv[:1] == ["shot"] and len(argv) == 2:
-        return shot(order_dir(argv[1]))
+    if argv[:1] == ["shot"] and len(argv) in (2, 3):
+        return shot(order_dir(argv[1]), (390, 1280) if "--pc" in argv else (390,))
+    if argv[:1] == ["cook"] and len(argv) in (2, 3):
+        return cook(order_dir(argv[1]), "--pc" in argv)
     if argv[:1] == ["visual"] and len(argv) == 5:
         return visual(order_dir(argv[1]), int(argv[2]), float(argv[3]), float(argv[4]))
     if len(argv) < 2 or argv[0] not in ("fetch", "build", "draft", "publish", "verify", "report", "css", "still", "profile"):
