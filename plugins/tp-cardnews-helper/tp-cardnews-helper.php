@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.19.0
+ * Version: 1.19.1
  * Author: Trendportal
  */
 
@@ -1316,9 +1316,11 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				<div class="tpcn-plug">
 					<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 플러그인 받기 (zip)</a>
 					<ol>
-						<li>받은 zip을 더블클릭해서 압축을 풀어요 → <code>transis-cardnews-reader</code> 폴더가 생겨요. 지우지 말고 둬요</li>
+						<?php // 10/18: 윈도우에서 manifest.json만 다른 곳으로 옮겨 골랐다가 에러가 났다(code.js·ui.html이 옆에 없어서) → 맥·윈도우 압축 풀기와 '세 파일 같이'를 적어 둔다 ?>
+						<li>받은 zip의 압축을 풀어요 — 맥은 <b>더블클릭</b>, 윈도우는 <b>오른쪽 클릭 → 압축 풀기</b>(더블클릭은 안을 들여다보기만 해요). <code>transis-cardnews-reader</code> 폴더가 생겨요</li>
+						<li>폴더 안 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일은 <b>같은 폴더에 그대로</b> 둬요. 하나만 옮기거나 폴더를 지우면 플러그인이 안 열려요</li>
 						<li><b>피그마 데스크톱 앱</b>에서 아무 디자인 파일이나 열어요 (예시: 2026 트렌드포털). 웹 브라우저 피그마에선 안 돼요</li>
-						<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택</li>
+						<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택 (윈도우는 메뉴가 왼쪽 위 피그마 로고 안에 있어요)</li>
 						<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 읽기</b>로 zip을 받아 여기에 올려요</li>
 					</ol>
 				</div>
