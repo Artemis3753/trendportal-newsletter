@@ -925,8 +925,10 @@ def shot(d, widths=(390,)):
     chrome = browser()
     need_ffmpeg()
     made = []
+    # 주간 총정리는 카드 8장 + 💡라 길다 — 10/18 주문 958에서 폰 7200px로는 마지막 카드가 잘려 셰프가 못 봤다
+    weekly = order.get("kind") == "weekly"
     for w in widths:
-        h = 7200 if w < 600 else 4800
+        h = (11200 if weekly else 7200) if w < 600 else (6400 if weekly else 4800)
         win = max(w, 600)  # 헤드리스 크롬 창은 500px보다 좁게 안 그려서, 정확한 폭의 iframe을 넣고 가운데만 잘라 낸다
         frame = sd / f"frame-{w}.html"
         frame.write_text(f'<body style="margin:0;display:flex;justify-content:center"><iframe src="{html_page.resolve().as_uri()}" '
