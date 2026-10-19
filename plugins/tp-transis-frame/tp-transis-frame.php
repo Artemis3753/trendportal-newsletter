@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Transis Frame
  * Description: 트란시스 일정표(Apps Script)를 trendportal.kr의 숨은 주소에서 테두리 없이 띄운다. 주소와 일정표 URL은 코드가 아니라 설정값(tp_transis_frame)에 둔다.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Trendportal
  */
 
@@ -84,7 +84,14 @@ add_action(
 </style>
 </head>
 <body>
-<iframe src="<?php echo esc_url( $url ); ?>" title="트란시스 일정표" allow="clipboard-write"></iframe>
+<?php
+/*
+ * credentialless: 이 창 안의 요청엔 쿠키를 싣지 않는다(Chrome·Edge).
+ * 1.0.0에서 PC Chrome은 끼운 창에도 구글 쿠키를 보내서 /u/N/ 오류가 그대로 났다.
+ * Safari는 이 속성을 모르지만 원래 끼운 창에 구글 쿠키를 안 보낸다.
+ */
+?>
+<iframe src="<?php echo esc_url( $url ); ?>" title="트란시스 일정표" allow="clipboard-write" credentialless></iframe>
 </body>
 </html>
 		<?php
