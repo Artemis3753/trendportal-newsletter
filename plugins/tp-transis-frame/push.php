@@ -83,7 +83,7 @@ function tp_tf_push_route( $rest, $slug ) {
 	}
 	if ( 'latest' === $rest ) {
 		$last = get_option( TP_TF_LAST );
-		wp_send_json( is_array( $last ) ? $last : array( 'title' => '트란시스', 'body' => '바뀐 일정이 있어요' ) );
+		wp_send_json( is_array( $last ) ? $last : array( 'title' => '바뀐 일정이 있어요', 'body' => '' ) );
 	}
 	if ( 'subscribe' === $rest && 'POST' === $_SERVER['REQUEST_METHOD'] ) {
 		$sub      = json_decode( file_get_contents( 'php://input' ), true );
@@ -110,10 +110,14 @@ function tp_tf_push_route( $rest, $slug ) {
 		$data = json_decode( file_get_contents( 'php://input' ), true );
 		$n    = max( 1, (int) ( $data['count'] ?? 1 ) );
 		$test = ! empty( $data['test'] );
-		// 시험 알림만 제목·본문을 바꿔 볼 수 있다(아이폰 표시 모양 시험용, 10/19)
-		$title = ( $test && isset( $data['title'] ) ) ? (string) $data['title'] : '트란시스';
-		$body  = ( $test && isset( $data['body'] ) ) ? (string) $data['body']
+		/*
+		 * 아이폰은 웹 앱 알림 제목 아래에 'from 트란시스'를 늘 붙인다(10/19 시험으로 확인, 제목을 비워도 그대로).
+		 * 그래서 내용을 제목 자리에 두고 본문을 비우면 '내용 / from 트란시스' 두 줄이 된다(사용자: 담백하게 2줄).
+		 * 시험 알림만 제목·본문을 바꿔 볼 수 있다.
+		 */
+		$title = ( $test && isset( $data['title'] ) ) ? (string) $data['title']
 			: ( $test ? '알림 시험이에요. 잘 받으셨으면 성공!' : "바뀐 일정 {$n}건이 있어요" );
+		$body  = ( $test && isset( $data['body'] ) ) ? (string) $data['body'] : '';
 		update_option(
 			TP_TF_LAST,
 			array(
@@ -199,8 +203,8 @@ self.addEventListener('push', e => {
   // 문구를 못 받아도 알림은 꼭 띄운다(iOS는 알림 없이 끝나는 푸시가 쌓이면 구독을 끊는다)
   e.waitUntil(
     fetch(BASE + 'latest', { cache: 'no-store' }).then(r => r.json()).catch(() => ({}))
-      .then(m => self.registration.showNotification(typeof m.title === 'string' ? m.title : '트란시스', {
-        body: typeof m.body === 'string' ? m.body : '바뀐 일정이 있어요', icon: '{$icon}', tag: 'transis-change', data: { url: BASE }
+      .then(m => self.registration.showNotification(typeof m.title === 'string' ? m.title : '바뀐 일정이 있어요', {
+        body: typeof m.body === 'string' ? m.body : '', icon: '{$icon}', tag: 'transis-change', data: { url: BASE }
       }))
   );
 });
