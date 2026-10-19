@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Transis Frame
  * Description: 트란시스 일정표(Apps Script)를 trendportal.kr의 숨은 주소에서 테두리 없이 띄운다. 주소와 일정표 URL은 코드가 아니라 설정값(tp_transis_frame)에 둔다.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Trendportal
  */
 
@@ -23,6 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 
 const TP_TF_OPTION = 'tp_transis_frame';
+
+require_once __DIR__ . '/push.php';
 
 // 앱 아이콘(마스코트 얼굴). 미디어 1033·1034, 비밀 아님
 const TP_TF_ICON_180 = 'https://trendportal.kr/wp-content/uploads/2026/10/transis-app-icon-180.png';
@@ -92,6 +94,10 @@ add_action(
 			echo wp_json_encode( tp_tf_manifest( $slug ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 			exit;
 		}
+		if ( 0 === strpos( $path, $slug . '/' ) ) {
+			tp_tf_push_route( substr( $path, strlen( $slug ) + 1 ), $slug );
+			return;
+		}
 		if ( $path !== $slug ) {
 			return;
 		}
@@ -134,6 +140,7 @@ add_action(
  */
 ?>
 <iframe src="<?php echo esc_url( $url ); ?>" title="트란시스 일정표" allow="clipboard-write" credentialless></iframe>
+<?php tp_tf_push_button( $slug ); ?>
 </body>
 </html>
 		<?php
