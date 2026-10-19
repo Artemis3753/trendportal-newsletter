@@ -275,11 +275,14 @@ function tp_tf_push_button( $slug ) {
 	if (Notification.permission === 'granted') {
 		// 이미 허락한 폰: 등록이 풀렸을 수 있으니 열 때마다 조용히 다시 등록
 		subscribe().catch(() => {});
-		// 앱을 열었으면 알림은 확인한 셈이라 남은 트란시스 알림을 정리한다(10/19 사용자)
-		navigator.serviceWorker.ready
+		// 앱을 열었으면 알림은 확인한 셈이라 남은 트란시스 알림을 정리한다(10/19 사용자).
+		// 처음 열 때뿐 아니라 홈에 나갔다가 (다른 알림을 눌러) 돌아올 때도
+		const clearAll = () => navigator.serviceWorker.ready
 			.then(reg => reg.getNotifications())
 			.then(list => list.forEach(n => n.close()))
 			.catch(() => {});
+		clearAll();
+		document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') clearAll(); });
 	} else if (Notification.permission === 'default') {
 		btn.hidden = false;
 		btn.onclick = async () => {
