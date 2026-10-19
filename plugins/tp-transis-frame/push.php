@@ -83,7 +83,7 @@ function tp_tf_push_route( $rest, $slug ) {
 	}
 	if ( 'latest' === $rest ) {
 		$last = get_option( TP_TF_LAST );
-		wp_send_json( is_array( $last ) ? $last : array( 'title' => '바뀐 일정이 있어요', 'body' => '' ) );
+		wp_send_json( is_array( $last ) ? $last : array( 'title' => '트란시스', 'body' => '바뀐 일정이 있어요', 'kind' => 'change' ) );
 	}
 	if ( 'subscribe' === $rest && 'POST' === $_SERVER['REQUEST_METHOD'] ) {
 		$sub      = json_decode( file_get_contents( 'php://input' ), true );
@@ -111,24 +111,31 @@ function tp_tf_push_route( $rest, $slug ) {
 		$n    = max( 1, (int) ( $data['count'] ?? 1 ) );
 		$test = ! empty( $data['test'] );
 		/*
-		 * 아이폰은 웹 앱 알림 제목 아래에 'from 트란시스'를 늘 붙인다(10/19 시험으로 확인, 제목을 비워도 그대로).
-		 * 그래서 내용을 제목 자리에 두고 본문을 비우면 '내용 / from 트란시스' 두 줄이 된다(사용자: 담백하게 2줄).
+		 * 아이폰은 웹 앱 알림 제목 아래에 'from 트란시스'를 늘 붙인다(제목을 비워도 그대로).
+		 * 내용을 제목 자리에 두는 두 줄 방식(1.2.5)은 제목이 한 줄에서 잘려서, 사용자가 다시
+		 * '트란시스 / from 트란시스 / 내용' 세 줄로 돌림(10/19). 본문은 길면 다음 줄로 넘어간다.
+		 *
+		 * kind: 폰에서 같은 종류의 이전 알림을 지우는 데 쓴다(변경·밤 확인이 하나씩만 남게).
 		 * 시험 알림만 제목·본문을 바꿔 볼 수 있다.
 		 */
 		if ( $test ) {
-			$title = isset( $data['title'] ) ? (string) $data['title'] : '알림 시험이에요. 잘 받으셨으면 성공!';
+			$kind = 'test';
+			$body = isset( $data['body'] ) ? (string) $data['body'] : '알림 시험이에요. 잘 받으셨으면 성공!';
 		} elseif ( isset( $data['message'] ) && '' !== trim( (string) $data['message'] ) ) {
 			// 트란시스가 문구를 정해 보내는 알림(밤 확인: '오늘 남은 일 2건 · …', 10/19)
-			$title = mb_substr( trim( (string) $data['message'] ), 0, 150 );
+			$kind = 'evening';
+			$body = mb_substr( trim( (string) $data['message'] ), 0, 150 );
 		} else {
-			$title = "바뀐 일정 {$n}건이 있어요";
+			$kind = 'change';
+			$body = "바뀐 일정 {$n}건이 있어요";
 		}
-		$body  = ( $test && isset( $data['body'] ) ) ? (string) $data['body'] : '';
+		$title = ( $test && isset( $data['title'] ) ) ? (string) $data['title'] : '트란시스';
 		update_option(
 			TP_TF_LAST,
 			array(
 				'title' => $title,
 				'body'  => $body,
+				'kind'  => $kind,
 				'at'    => time(),
 			),
 			false
@@ -209,9 +216,18 @@ self.addEventListener('push', e => {
   // 문구를 못 받아도 알림은 꼭 띄운다(iOS는 알림 없이 끝나는 푸시가 쌓이면 구독을 끊는다)
   e.waitUntil(
     fetch(BASE + 'latest', { cache: 'no-store' }).then(r => r.json()).catch(() => ({}))
-      .then(m => self.registration.showNotification(typeof m.title === 'string' ? m.title : '바뀐 일정이 있어요', {
-        body: typeof m.body === 'string' ? m.body : '', icon: '{$icon}', tag: 'transis-change', data: { url: BASE }
-      }))
+      .then(async m => {
+        const kind = m.kind || 'change';
+        // 같은 종류의 이전 알림은 지운다(변경·밤 확인이 종류마다 최신 하나만 남게, 10/19 사용자).
+        // tag만으로는 아이폰이 옛 알림을 바꿔 주지 않았다
+        try {
+          (await self.registration.getNotifications()).filter(n => (n.data || {}).kind === kind).forEach(n => n.close());
+        } catch (err) {}
+        return self.registration.showNotification(typeof m.title === 'string' ? m.title : '트란시스', {
+          body: typeof m.body === 'string' ? m.body : '바뀐 일정이 있어요',
+          icon: '{$icon}', tag: 'transis-' + kind, data: { url: BASE, kind: kind }
+        });
+      })
   );
 });
 self.addEventListener('notificationclick', e => {
@@ -259,6 +275,11 @@ function tp_tf_push_button( $slug ) {
 	if (Notification.permission === 'granted') {
 		// 이미 허락한 폰: 등록이 풀렸을 수 있으니 열 때마다 조용히 다시 등록
 		subscribe().catch(() => {});
+		// 앱을 열었으면 알림은 확인한 셈이라 남은 트란시스 알림을 정리한다(10/19 사용자)
+		navigator.serviceWorker.ready
+			.then(reg => reg.getNotifications())
+			.then(list => list.forEach(n => n.close()))
+			.catch(() => {});
 	} else if (Notification.permission === 'default') {
 		btn.hidden = false;
 		btn.onclick = async () => {
