@@ -564,13 +564,11 @@ def cmd_run(path):
     before = api_get()
     now_dt = dt.datetime.now(SEOUL).replace(microsecond=0)
     now = now_dt.isoformat()
-    # 바뀐 일정 폰 알림은 20시 동기화에서만 (10/19 사용자: 아침·12시·16시·21:50은 안 울림).
-    # 예약 실행이 몇 분씩 밀려도 걸리게 19~20시대 전체로 본다
-    notify_changes = 19 <= now_dt.hour < 21
+    # 바뀐 일정 폰 알림은 보내지 않는다 (10/19 저녁 사용자: 갱신은 조용히, 폰 알림은 밤 확인 하나만).
+    # Code.gs는 notifyChanges가 참일 때만 알리므로, 다시 켜려면 여기서 그 키를 보내면 된다
     # 시트에 아직 예시 일정만 있으면 첫 실제 실행이므로 비우고 시작한다
     post = api_post({'updatedAt': now, 'reset': bool(before.get('sample')), 'scan': ext.get('scan', 'DAILY'),
-                     'items': ext.get('items', []), 'readThreads': ext.get('read_threads', []),
-                     'notifyChanges': notify_changes})
+                     'items': ext.get('items', []), 'readThreads': ext.get('read_threads', [])})
     if not post.get('ok'):
         print('POST errors:', post.get('errors') or post.get('error'))
     after = api_get()

@@ -6,7 +6,7 @@ The routine prompt tells you the **MODE**:
 
 - `DRAFT`: create a Gmail draft (for review). Do not send anything.
 - `SEND`: send the email.
-- `SYNC`: the daytime runs (about 12:05, 16:05 and 20:05). Read only the mail that arrived since the last run (step 0) and update the sheet. Never send any email in this mode. (The 20:05 run's sheet update makes the schedule app notify 성현's phone about changed items by itself; you do nothing for that.)
+- `SYNC`: the daytime runs (about 12:05, 16:05 and 20:05). Read only the mail that arrived since the last run (step 0) and update the sheet. Never send any email or phone notification in this mode.
 - `REFRESH`: the night run (about 21:50). Update the sheet, then send only the evening check as a phone notification (step 5): how much work dated today is still not marked done, or, when everything is done, a short thank-you. Never send any email in this mode.
 
 ## Hard rules
