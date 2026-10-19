@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.20.0
+ * Version: 1.21.0
  * Author: Trendportal
  */
 
@@ -288,6 +288,13 @@ function tp_cn_check_zip( $path, $filename ) {
  * 열쇠가 새도 할 수 있는 건 "셰프 깨우기"뿐이다: 셰프는 신호에 딸린 글을 무시하고 탭의 '접수' 주문만 처리한다(tools/cardnews/PROMPT.md).
  */
 const TP_CN_BELL = 'tp_cn_bell'; // 옵션 이름: array( 'url' => …, 'token' => … )
+
+/** 트란시스 일정표 앱 주소(숨은 주소). TP Transis Frame 설정이 없으면 빈 문자열 — 탭은 안내만 보여 준다 */
+function tp_cn_transis_app_url() {
+	$opt  = get_option( 'tp_transis_frame' );
+	$slug = is_array( $opt ) && ! empty( $opt['slug'] ) ? trim( $opt['slug'], '/' ) : '';
+	return '' === $slug ? '' : home_url( '/' . $slug . '/' );
+}
 
 function tp_cn_ring( $id ) {
 	$bell = get_option( TP_CN_BELL, array() );
@@ -1008,6 +1015,8 @@ function tp_cn_page() {
 			'rnonce' => wp_create_nonce( 'wp_rest' ),
 			'seen'   => isset( $GLOBALS['tp_cn_prev_seen'] ) ? (int) $GLOBALS['tp_cn_prev_seen'] : time(),
 			'bell'   => get_option( TP_CN_BELL, array() ),
+			// 트란시스 일정표 앱 주소: 저장소가 공개라 코드에 적지 않고 TP Transis Frame 설정값(숨은 주소)에서 읽는다. 관리자만 보는 탭이다
+			'tapp'   => tp_cn_transis_app_url(),
 			'now'    => time(),
 			// 한 번 보낼 수 있는 크기(서버 upload_max_filesize·post_max_size 중 작은 값). 탭이 미리 막고 안내한다
 			'max'    => wp_max_upload_size(),
@@ -1227,6 +1236,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-bell summary { cursor: pointer; font-family: var(--font-display); font-size: 18px; }
 .tpcn-bell summary small { margin-left: 6px; font-family: var(--font-body); font-size: 12px; color: var(--muted); }
 .tpcn-bell form { display: grid; gap: 12px; margin-top: 12px; }
+.tpcn-app-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+.tpcn-app-steps { margin: 12px 0 0; padding-left: 18px; }
+.tpcn-app-steps li { margin: 4px 0; }
 .tpcn-bell input[type=url], .tpcn-bell input[type=password] { width: 100%; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; }
 /* 주문 지우기: 눈에 덜 띄게 오른쪽 아래 작은 글씨 */
 .tpcn-del { margin-top: 8px; text-align: right; }
@@ -1626,6 +1638,25 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	</form>
 </details>
 
+<?php // 10/19 사용자: 트란시스 일정표 앱 설치를 여기서 바로 보게. 처음 한 번만 필요해서 접어 둔다 ?>
+<details class="tpcn-panel tpcn-bell tpcn-app">
+	<summary>📱 트란시스 일정표 앱 설치 <small>아이폰 · 처음 한 번만</small></summary>
+	<?php if ( $u['tapp'] ) : ?>
+	<p class="tpcn-app-link"><a class="tpcn-dl" href="<?php echo esc_url( $u['tapp'] ); ?>" target="_blank" rel="noopener">일정표 열기</a>
+		<button type="button" class="tpcn-nl-copy" id="tpcn-app-copy" data-url="<?php echo esc_attr( $u['tapp'] ); ?>">📋 링크 복사</button></p>
+	<p class="tpcn-hint">복사한 링크를 카톡 나와의 채팅 등으로 폰에 보내거나, 폰에서 이 탭을 바로 열어도 돼요.</p>
+	<?php else : ?>
+	<p class="tpcn-hint">일정표 주소가 아직 설정되지 않았어요 (TP Transis Frame 설정).</p>
+	<?php endif; ?>
+	<ol class="tpcn-app-steps">
+		<li>예전 트란시스 앱(프로파일)이 있으면 먼저 지워요 — <b>설정 → 일반 → VPN 및 기기 관리 → 트란시스 → 제거</b></li>
+		<li>아이폰 <b>Safari</b>로 위 링크를 열어요 (크롬·카톡 안 브라우저는 안 돼요)</li>
+		<li>아래 <b>공유 버튼 → 홈 화면에 추가</b></li>
+		<li><b>홈 화면에 생긴 트란시스 아이콘</b>으로 열고 🔔 알림을 켜요. Safari 탭에서는 알림을 켤 수 없어요</li>
+	</ol>
+	<p class="tpcn-hint">"현재 파일을 열 수 없습니다"가 뜨면 Safari에 구글 계정이 여러 개 로그인된 거예요. Safari에서 구글 로그아웃 후 다시 열어 주세요.</p>
+</details>
+
 <script>
 (() => {
 	const $ = id => document.getElementById(id);
@@ -1709,6 +1740,12 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		try { await navigator.clipboard.writeText(src); b.textContent = '✅ 복사했어요 — 스티비 HTML 편집기에 붙여 넣으세요'; }
 		catch (e) { const t = $(b.dataset.src); t.hidden = false; t.select(); b.textContent = '글자를 골라 뒀어요 — Ctrl/⌘ + C로 복사해 주세요'; }
 	}));
+	// 트란시스 앱 링크 복사: 클립보드가 막히면 주소를 띄워 직접 복사하게
+	const appCopy = $('tpcn-app-copy');
+	if (appCopy) appCopy.addEventListener('click', async () => {
+		try { await navigator.clipboard.writeText(appCopy.dataset.url); appCopy.textContent = '✅ 복사했어요'; }
+		catch (e) { prompt('이 주소를 복사해 주세요', appCopy.dataset.url); }
+	});
 	showKind();
 	// 큰 zip은 올리는 데 시간이 걸려서, 두 번 누르지 않게 버튼을 잠근다.
 	// 서버 한도를 넘으면 다 올린 뒤에야 실패해서, 보내기 전에 합계를 재서 막는다
