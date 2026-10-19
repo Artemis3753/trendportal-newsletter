@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Weekly Lock
  * Description: 주간 총정리 글(뉴스레터와 같은 포맷)에 카드 번호·목차·구독자 잠금을 자동으로 붙이고, 전용 글 템플릿(tp-weekly)으로 보여 주며, 편집기에 "주간 총정리 틀"을 등록한다.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Trendportal
  */
 
@@ -206,8 +206,9 @@ function tp_wk_tones( $id ) {
 function tp_wk_gate( $rest ) {
 	return '<div class="tp-wk-gate">'
 		. '<p class="tp-wk-gate-label">SUBSCRIBERS ONLY</p>'
-		. '<p class="tp-wk-gate-title">여기서부터는 구독자 전용이에요</p>'
-		. '<p class="tp-wk-gate-desc">뉴스레터를 구독하면 나머지 ' . intval( $rest ) . '가지와<br>💡 주목 포인트를 끝까지 볼 수 있어요. 무료예요.</p>'
+		// 10/19 사용자 B안: 사이트 💡는 짧은 버전, 메일엔 리서치한 긴 버전이 간다 — 구독할 이유를 그 차이로 앞세운다
+		. '<p class="tp-wk-gate-title">뉴스레터엔 더 깊은 이야기가 있어요</p>'
+		. '<p class="tp-wk-gate-desc">사이트엔 요약만, 메일엔 리서치한 긴 💡 주목 포인트와<br>출처까지 담아 보내요. 구독하면 나머지 ' . intval( $rest ) . '가지도 바로 열려요. 무료예요.</p>'
 		. '<p class="tp-wk-gate-btn"><a href="#newsletter">무료로 구독하고 이어 보기</a></p>'
 		. '<details class="tp-wk-gate-have"><summary>이미 구독 중이에요</summary>'
 		. '<form class="tp-wk-gate-form" novalidate><input type="email" required placeholder="구독한 이메일 주소" aria-label="구독한 이메일 주소"><button type="submit">열기</button></form>'
