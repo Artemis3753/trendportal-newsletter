@@ -186,6 +186,8 @@ function doPost(e) {
     setMeta_('fullQueue', JSON.stringify(queue));
     // 남은 스레드가 하나라도 있으면 아직 전체 훑기를 마친 게 아니다
     if (body.scan === 'FULL' && errors.length === 0 && queue.length === 0) setMeta_('fullScanAt', now_());
+    // 시트에 다 쓴 뒤에 알린다(알림을 눌러 열었을 때 바뀐 내용이 이미 보이게)
+    if (changes.length) notifyPush_({ count: changes.length });
     return json_({ ok: errors.length === 0, errors: errors, fullQueue: queue, items: readItems_() });
   } finally {
     lock.releaseLock();
@@ -393,6 +395,32 @@ function addChanges_(list) {
   const log = getChanges_().filter(c => new Date(c.at).getTime() > keep)
     .concat(list.map(c => Object.assign({ at: at }, c)));
   setMeta_('changeLog', JSON.stringify(log.slice(-50)));
+}
+
+/**
+ * 10/19 웹 푸시: 바뀐 일정이 있으면 사이트(TP Transis Frame)에 건수를 알려서 폰에 알림을 띄운다.
+ * 주소·열쇠는 저장소가 공개라 코드가 아니라 스크립트 속성 PUSH_URL·PUSH_KEY에 둔다(없으면 조용히 건너뜀).
+ * 알림이 실패해도 시트 갱신은 이미 끝났으니 에러를 밖으로 던지지 않는다.
+ */
+function notifyPush_(payload) {
+  const props = PropertiesService.getScriptProperties();
+  const url = props.getProperty('PUSH_URL');
+  const key = props.getProperty('PUSH_KEY');
+  if (!url || !key) return null;
+  try {
+    const res = UrlFetchApp.fetch(url, {
+      method: 'post', contentType: 'application/json', payload: JSON.stringify(payload),
+      headers: { 'X-Transis-Key': key }, muteHttpExceptions: true
+    });
+    return res.getResponseCode() + ' ' + res.getContentText().slice(0, 300);
+  } catch (err) {
+    return 'error ' + err;
+  }
+}
+
+/** 편집기에서 한 번 실행: 바깥 주소 호출 권한을 허락받고, 등록된 폰에 시험 알림을 보낸다 */
+function testPush() {
+  Logger.log(notifyPush_({ test: true }) || 'PUSH_URL·PUSH_KEY 스크립트 속성이 비어 있어요');
 }
 
 function getChanges_() {
