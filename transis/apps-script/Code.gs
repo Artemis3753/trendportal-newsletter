@@ -118,6 +118,11 @@ function doPost(e) {
     return json_({ ok: false, error: 'bad json' });
   }
   if (!checkToken_(body.token)) return json_({ ok: false, error: 'bad token' });
+  // 트란시스가 문구를 정해 보내는 폰 알림(밤 확인, 10/19). 시트는 건드리지 않는다
+  if (body.action === 'push') {
+    const r = notifyPush_({ message: String(body.message || '').slice(0, 150) });
+    return json_({ ok: !!r && r.indexOf('200 ') === 0, push: r });
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -186,8 +191,9 @@ function doPost(e) {
     setMeta_('fullQueue', JSON.stringify(queue));
     // 남은 스레드가 하나라도 있으면 아직 전체 훑기를 마친 게 아니다
     if (body.scan === 'FULL' && errors.length === 0 && queue.length === 0) setMeta_('fullScanAt', now_());
-    // 시트에 다 쓴 뒤에 알린다(알림을 눌러 열었을 때 바뀐 내용이 이미 보이게)
-    if (changes.length) notifyPush_({ count: changes.length });
+    // 시트에 다 쓴 뒤에 알린다(알림을 눌러 열었을 때 바뀐 내용이 이미 보이게).
+    // 언제 알릴지는 transis.py가 정해서 notifyChanges로 보낸다(10/19 사용자: 20시 동기화에서만)
+    if (changes.length && body.notifyChanges) notifyPush_({ count: changes.length });
     return json_({ ok: errors.length === 0, errors: errors, fullQueue: queue, items: readItems_() });
   } finally {
     lock.releaseLock();
