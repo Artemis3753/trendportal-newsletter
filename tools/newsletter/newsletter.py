@@ -204,7 +204,7 @@ def mail_html(order, cards, nl, table, post_url):
     cl = "".join(f'<p style="margin:0 0 14px;font-size:15px;line-height:1.8;">{e(p)}</p>' for p in (nl.get("closing") or DEFAULT_CLOSING))
     parts.append(f'<div style="padding:0 32px;"><p style="margin:0 0 10px;font-size:16px;font-weight:800;">여러분의 이번 주 픽은?</p>{cl}'
                  f'<p style="margin:0 0 14px;"><a href="https://trendportal.kr/report/" style="{S["btn"]}">제보하러 가기</a></p>'
-                 f'<p style="margin:28px 0 0;font-size:15px;line-height:1.8;">매주 금요일, 국내외에서 실제로 터진 마케팅만 골라 보내 드릴게요.<br>그럼 다음 주 금요일에 만나요!<br><b>트렌드포털</b> 드림</p></div>')
+                 f'<p style="margin:28px 0 0;font-size:15px;line-height:1.8;">매주 금요일, 국내외에서 실제로 터진 마케팅만 골라 보내 드릴게요.<br>그럼 다음 주 금요일에 만나요!<br><b>트렌드포털 주인장</b> 드림</p></div>')
     # 푸터: 광고성 메일이라 수신거부 링크가 꼭 있어야 한다. $%…%$ 는 스티비가 발송할 때 채우는 자리
     parts.append(f'<div style="{S["foot"]}">트렌드포털 · contact@trendportal.kr<br>'
                  f'<a href="$%permalink%$" style="color:#999;">웹에서 보기</a> · <a href="https://www.instagram.com/trend__portal/" style="color:#999;">인스타그램</a> · '
