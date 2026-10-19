@@ -27,7 +27,7 @@ Claude writes the whole issue: letter, editor picks, every card, notices, closin
 - **No copying.** Summarize and link; never paste article sentences or use article photos.
 - Tone: the same plain `~다` sentences as the site's 💡. The letter, picks, notices and closing speak to the reader in `~요`.
 
-The site keeps the short 💡 and the newsletter carries the long one. This split is a trial from the first issue: if the team finds the long version is more than needed, both go back to being the same.
+The site keeps the short 💡 and the newsletter always carries the long, researched one. This split is fixed (decided 10/19): never send the site's short version to Stibee.
 
 ## Layout and tools
 
