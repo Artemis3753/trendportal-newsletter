@@ -115,8 +115,14 @@ function tp_tf_push_route( $rest, $slug ) {
 		 * 그래서 내용을 제목 자리에 두고 본문을 비우면 '내용 / from 트란시스' 두 줄이 된다(사용자: 담백하게 2줄).
 		 * 시험 알림만 제목·본문을 바꿔 볼 수 있다.
 		 */
-		$title = ( $test && isset( $data['title'] ) ) ? (string) $data['title']
-			: ( $test ? '알림 시험이에요. 잘 받으셨으면 성공!' : "바뀐 일정 {$n}건이 있어요" );
+		if ( $test ) {
+			$title = isset( $data['title'] ) ? (string) $data['title'] : '알림 시험이에요. 잘 받으셨으면 성공!';
+		} elseif ( isset( $data['message'] ) && '' !== trim( (string) $data['message'] ) ) {
+			// 트란시스가 문구를 정해 보내는 알림(밤 확인: '오늘 남은 일 2건 · …', 10/19)
+			$title = mb_substr( trim( (string) $data['message'] ), 0, 150 );
+		} else {
+			$title = "바뀐 일정 {$n}건이 있어요";
+		}
 		$body  = ( $test && isset( $data['body'] ) ) ? (string) $data['body'] : '';
 		update_option(
 			TP_TF_LAST,
