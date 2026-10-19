@@ -110,10 +110,12 @@ function tp_tf_push_route( $rest, $slug ) {
 		$data = json_decode( file_get_contents( 'php://input' ), true );
 		$n    = max( 1, (int) ( $data['count'] ?? 1 ) );
 		$test = ! empty( $data['test'] );
+		// 시험 알림만 제목을 바꿔 볼 수 있다(아이폰 표시 모양 시험용, 10/19)
+		$title = ( $test && isset( $data['title'] ) ) ? (string) $data['title'] : '트란시스';
 		update_option(
 			TP_TF_LAST,
 			array(
-				'title' => '트란시스',
+				'title' => $title,
 				'body'  => $test ? '알림 시험이에요. 잘 받으셨으면 성공!' : "바뀐 일정 {$n}건이 있어요",
 				'at'    => time(),
 			),
@@ -195,7 +197,7 @@ self.addEventListener('push', e => {
   // 문구를 못 받아도 알림은 꼭 띄운다(iOS는 알림 없이 끝나는 푸시가 쌓이면 구독을 끊는다)
   e.waitUntil(
     fetch(BASE + 'latest', { cache: 'no-store' }).then(r => r.json()).catch(() => ({}))
-      .then(m => self.registration.showNotification(m.title || '트란시스', {
+      .then(m => self.registration.showNotification(typeof m.title === 'string' ? m.title : '트란시스', {
         body: m.body || '바뀐 일정이 있어요', icon: '{$icon}', tag: 'transis-change', data: { url: BASE }
       }))
   );
