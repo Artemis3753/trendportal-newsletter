@@ -8,6 +8,7 @@
     python3 transis/transis.py queue ids.txt         # FULL 시작: 읽을 스레드 id 목록(한 줄에 하나)을 시트에 저장
     python3 transis/transis.py run extracted.json    # 시트에 보내기 → 다시 읽기 → 고르기 → /tmp/transis/에 메일 파일
     python3 transis/transis.py send morning|evening [--preview]   # 그 메일 파일을 발신함 웹앱으로 보내기 (--preview는 지환 님에게만)
+    python3 transis/transis.py push evening          # 밤 확인을 폰 알림으로 (남은 오늘 일 건수 + 첫 항목, 없으면 따봉)
 
 환경 변수 TRANSIS_URL(웹앱 주소), TRANSIS_TOKEN(비밀 열쇠)이 필요하고, send는 MAILER_URL·MAILER_TOKEN(발신함)도 쓴다. 모두 출력하지 않는다.
 표준 라이브러리만 쓴다(클라우드 환경에 따로 설치할 게 없게).
@@ -378,11 +379,16 @@ def shell(kicker, heading, url, rows, footer):
 </table></td></tr></table></body></html>'''
 
 
-def render_evening(items, t, url):
-    """저녁 정리 뒤 확인 메일: 오늘 날짜인데 아직 동그라미가 안 눌린 일만 (10/14 사용자 A안).
-    지난 정산까지 넣으면 매일 저녁 나가게 돼서 오늘 날짜만. 남은 일이 없으면 따봉 메일(render_evening_done)"""
-    left = sorted([x for x in items if not x.get('removed') and not x['done'] and x.get('date') == t.isoformat()],
+def evening_left(items, t):
+    """오늘 날짜인데 아직 동그라미가 안 눌린 일 (10/14 사용자 A안). 지난 정산까지 넣으면 매일 남아서 오늘 날짜만"""
+    return sorted([x for x in items if not x.get('removed') and not x['done'] and x.get('date') == t.isoformat()],
                   key=sort_key)
+
+
+def render_evening(items, t, url):
+    """저녁 정리 뒤 확인 메일: 남은 오늘 일 목록, 없으면 따봉 메일(render_evening_done).
+    10/19부터 밤 확인은 폰 알림(push evening)으로 보내고 이 메일은 안 보낸다. 파일은 계속 만들어 둔다"""
+    left = evening_left(items, t)
     if not left:
         return render_evening_done(t, url) + (left,)
     subject = f'트란시스가 전하는 저녁 확인 · {md(t)}'  # 아침처럼 날짜를 붙여 Gmail이 한 대화로 묶지 않게
@@ -556,10 +562,15 @@ def cmd_run(path):
     with open(path, encoding='utf-8') as f:
         ext = json.load(f)
     before = api_get()
-    now = dt.datetime.now(SEOUL).replace(microsecond=0).isoformat()
+    now_dt = dt.datetime.now(SEOUL).replace(microsecond=0)
+    now = now_dt.isoformat()
+    # 바뀐 일정 폰 알림은 20시 동기화에서만 (10/19 사용자: 아침·12시·16시·21:50은 안 울림).
+    # 예약 실행이 몇 분씩 밀려도 걸리게 19~20시대 전체로 본다
+    notify_changes = 19 <= now_dt.hour < 21
     # 시트에 아직 예시 일정만 있으면 첫 실제 실행이므로 비우고 시작한다
     post = api_post({'updatedAt': now, 'reset': bool(before.get('sample')), 'scan': ext.get('scan', 'DAILY'),
-                     'items': ext.get('items', []), 'readThreads': ext.get('read_threads', [])})
+                     'items': ext.get('items', []), 'readThreads': ext.get('read_threads', []),
+                     'notifyChanges': notify_changes})
     if not post.get('ok'):
         print('POST errors:', post.get('errors') or post.get('error'))
     after = api_get()
@@ -621,6 +632,30 @@ def cmd_send(kind, preview=False):
           f" to {', '.join(mail['to'])}{' (preview)' if preview else ''}")
 
 
+def plain_title(it):
+    """title_html의 글자만 판: 제목이 이미 브랜드로 시작하면 브랜드를 한 번만"""
+    b = it.get('brand') if it['type'] != 'memo' else ''
+    t = str(it.get('title') or '')
+    if not b:
+        return t
+    return f"{b} {t[len(b):].strip() if t.startswith(b) else t}"
+
+
+def cmd_push_evening():
+    """밤 확인을 메일 대신 폰 알림으로 (10/19 사용자). 시트를 다시 읽어서 그 순간의 완료 표시로 판단한다.
+    남은 일이 있으면 '건수 + 첫 항목', 없으면 따봉 문장(10/17 따봉 메일 제목과 같은 말)"""
+    t = today()
+    left = evening_left(api_get()['items'], t)
+    if left:
+        msg = f"오늘 남은 일 {len(left)}건 · {plain_title(left[0])}" + (f" 외 {len(left) - 1}건" if len(left) > 1 else '')
+    else:
+        msg = '야호!! 미완 항목이 없어요. 오늘 하루도 고생 많으셨습니다.'
+    res = api_post({'action': 'push', 'message': msg})
+    if not res.get('ok'):
+        sys.exit(f"push failed: {res.get('error') or res.get('push')}")
+    print(f"evening push: {msg} -> {res.get('push')}")
+
+
 def cmd_queue(path):
     with open(path, encoding='utf-8') as f:
         ids = list(dict.fromkeys(x.strip() for x in f if x.strip()))  # 순서 유지, 중복 제거
@@ -639,5 +674,7 @@ if __name__ == '__main__':
         cmd_run(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == 'send' and sys.argv[2] in MAIL_FILES:
         cmd_send(sys.argv[2], preview='--preview' in sys.argv[3:])
+    elif sys.argv[1:3] == ['push', 'evening']:
+        cmd_push_evening()
     else:
         sys.exit(__doc__)
