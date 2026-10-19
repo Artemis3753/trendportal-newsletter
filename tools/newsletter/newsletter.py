@@ -26,7 +26,7 @@ FONT = "-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic
 # 메일 프로그램(특히 Gmail)이 <style>을 지우는 경우가 있어서 꾸밈은 전부 태그에 직접 적는다(인라인).
 # 값은 모의 뉴스레터 docs/트렌드포털-시안비교/1006-4 의 class 값을 그대로 옮긴 것(디자인 확정 10/18)
 S = {
-    "page": f"margin:0;padding:24px 0;background:#ececec;font-family:{FONT};color:#111;word-break:keep-all;",
+    "page": f"margin:0;padding:24px 0;background:#fff;font-family:{FONT};color:#111;word-break:keep-all;",
     "mail": "width:100%;max-width:600px;margin:0 auto;background:#fff;",
     "rule": "border-top:1px solid #111;margin:36px 32px;",
     "issue": "margin:0 0 10px;font-size:12px;font-weight:800;letter-spacing:1px;color:#888;",
@@ -150,7 +150,16 @@ def card_html(i, c, nl, table, post_url):
     return f'<div style="padding:0 32px;">{"".join(out)}</div>'
 
 
-def mail_html(order, cards, nl, table, post_url):
+def sender():
+    """뉴스레터 푸터의 발신자 정보 줄들(이름·연락처·주소). 스티비 주소록 '이메일 푸터 정보'와 같은 값을 사이트 옵션에 두었다(10/20)"""
+    try:
+        return cardnews.wp("sender", base=cardnews.ORDER_API).get("lines") or []
+    except (Exception, SystemExit) as err:  # wp()는 실패하면 sys.exit — 그래도 메일은 만들고 빨간 자리 표시와 경고로 알린다
+        print(f"· 발신자 정보를 못 읽었어요: {err}")
+        return []
+
+
+def mail_html(order, cards, nl, table, post_url, sender=()):
     rule = f'<div style="{S["rule"]}"></div>'
     cs = cards["cards"]
     by_no = {x["no"]: x for x in nl["cards"]}
@@ -205,8 +214,10 @@ def mail_html(order, cards, nl, table, post_url):
     parts.append(f'<div style="padding:0 32px;"><p style="margin:0 0 10px;font-size:16px;font-weight:800;">여러분의 이번 주 픽은?</p>{cl}'
                  f'<p style="margin:0 0 14px;"><a href="https://trendportal.kr/report/" style="{S["btn"]}">제보하러 가기</a></p>'
                  f'<p style="margin:28px 0 0;font-size:15px;line-height:1.8;">매주 금요일, 국내외에서 실제로 터진 마케팅만 골라 보내 드릴게요.<br>그럼 다음 주 금요일에 만나요!<br><b>트렌드포털 주인장</b> 드림</p></div>')
-    # 푸터: 광고성 메일이라 수신거부 링크가 꼭 있어야 한다. $%…%$ 는 스티비가 발송할 때 채우는 자리
-    parts.append(f'<div style="{S["foot"]}">트렌드포털 · contact@trendportal.kr<br>'
+    # 푸터: 광고성 메일이라 발신자 정보와 수신거부 링크가 꼭 있어야 한다. $%…%$ 는 스티비가 발송할 때 채우는 자리
+    # 발신자 정보는 공개 저장소에 적을 수 없어서 사이트에 둔 것을 읽는다(sender 참고). 비어 있으면 빨간 글씨로 남겨 붙여 넣기 전에 보이게 한다
+    who = "<br>".join(e(x) for x in sender) or '<span style="color:#c00;">(발신자 정보 없음 — 사이트 tp_cn_sender를 채울 것)</span>'
+    parts.append(f'<div style="{S["foot"]}">{who}<br>'
                  f'<a href="$%permalink%$" style="color:#999;">웹에서 보기</a> · <a href="https://www.instagram.com/trend__portal/" style="color:#999;">인스타그램</a> · '
                  f'<a href="https://trendportal.kr" style="color:#999;">trendportal.kr</a><br>'
                  f'더 이상 받고 싶지 않으시면 <a href="$%unsubscribe%$" style="color:#999;">수신거부</a>를 눌러 주세요.</div>')
@@ -221,7 +232,8 @@ def build(d):
     result = cardnews.load(d, "result.json", {})
     # 우리 영상은 메일에서 재생이 안 돼서 사이트 주간 글로 보낸다(사이트 초안을 만든 뒤에만 주소가 있다)
     post_url = f"https://trendportal.kr/?p={result['post_id']}" if result.get("post_id") else None
-    mail = mail_html(order, cards, nl, table, post_url)
+    lines = sender()
+    mail = mail_html(order, cards, nl, table, post_url, lines)
     doc = (f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
            f'<title>트렌드포털 위클리 {e(order["issue"])}</title></head><body style="{S["page"]}">{mail}</body></html>')
     out = d / "out"
@@ -230,7 +242,7 @@ def build(d):
     empty = [x["no"] for x in nl["cards"] if not x.get("point")]
     nosrc = [x["no"] for x in nl["cards"] if x.get("point") and not x.get("sources")]
     print(f"{out / 'stibee.html'} ({len(doc.encode()) // 1024}KB, 카드 {len(cards['cards'])}장)")
-    for msg in ([f"주목 포인트가 빈 카드: {empty}"] if empty else []) + ([f"출처 없는 주목 포인트: {nosrc} — 리서치한 사실엔 출처를 단다"] if nosrc else []) \
+    for msg in ([] if lines else ["푸터 발신자 정보가 비었어요 — 광고성 메일엔 꼭 있어야 해요"]) + ([f"주목 포인트가 빈 카드: {empty}"] if empty else []) +([f"출처 없는 주목 포인트: {nosrc} — 리서치한 사실엔 출처를 단다"] if nosrc else []) \
             + ([] if post_url or not any(c.get("clip") for c in cards["cards"]) else ["우리 영상 카드의 '사이트에서 영상 보기' 링크는 사이트 초안을 만든 뒤 다시 build"]):
         print("· " + msg)
 

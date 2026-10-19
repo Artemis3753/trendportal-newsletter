@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.22.0
+ * Version: 1.23.0
  * Author: Trendportal
  */
 
@@ -803,6 +803,31 @@ add_action(
 					$status = $req->get_param( 'status' );
 					return tp_cn_orders( isset( TP_CN_STATUS[ $status ] ) ? $status : null, 50 );
 				},
+			)
+		);
+
+		// 뉴스레터 푸터의 발신자 정보(이름·연락처·주소). 광고성 메일이라 꼭 들어가야 하는데,
+		// 스티비는 HTML 편집기 메일엔 주소록 푸터를 안 붙이고(10/20 테스트 메일) 저장소는 공개라 코드에 적을 수 없어서 사이트에 둔다
+		register_rest_route(
+			'tp-cardnews/v1',
+			'/sender',
+			array(
+				array(
+					'methods'             => 'GET',
+					'permission_callback' => $admin,
+					'callback'            => function () {
+						return array( 'lines' => get_option( 'tp_cn_sender', array() ) );
+					},
+				),
+				array(
+					'methods'             => 'POST',
+					'permission_callback' => $admin,
+					'callback'            => function ( $req ) {
+						$lines = array_values( array_filter( array_map( 'sanitize_text_field', (array) $req->get_param( 'lines' ) ) ) );
+						update_option( 'tp_cn_sender', $lines, false ); // autoload 끔: 메일 조립할 때만 읽는다
+						return array( 'lines' => $lines );
+					},
+				),
 			)
 		);
 

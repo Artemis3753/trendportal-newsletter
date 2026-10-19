@@ -50,7 +50,8 @@ The builder writes inline styles (mail apps can drop `<style>`), sends site phot
 
 - Paste `out/stibee.html` into Stibee's HTML editor. A mail made in the HTML editor cannot be saved as a Stibee template, which is fine: the builder is the template.
 - `$%permalink%$`, `$%unsubscribe%$` and the like are filled in by Stibee when it sends; a browser preview shows them as text.
-- The welcome mail is sent automatically only on the Standard plan or above (the team plans to pay this week). Its design is the calendar mock `1006-2c`, with a line about the report gift added on 10/18.
+- Stibee does not add the address book's footer (sender name, address, phone, unsubscribe) to a mail made in the HTML editor (test mail, 10/20), so our HTML carries its own. An ad mail must show who sent it, and this repository is public, so the builder reads those lines from the site (`GET tp-cardnews/v1/sender`, set with a `POST` of `{"lines": [...]}`) instead of the code. Keep them the same as the address book's "이메일 푸터 정보". If they are missing, `build` warns and the footer shows a red placeholder.
+- The welcome mail (`1006-2c`, a local file) is a Stibee automatic email on the address book's "subscriber added" trigger, sent at once; it reaches only people who subscribe after it is started. Its footer lines are written in the file, since that folder is not in the repository.
 - Stibee has no automatic "latest site posts" block, so links to the site are written into each issue.
 
 ## Report event
