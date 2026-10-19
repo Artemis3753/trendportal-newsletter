@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP View Count
- * Description: 글 목록(홈 뉴스·카테고리 등)의 날짜 옆에 "· 조회 1,234"를 붙인다. 숫자는 Jetpack 통계의 글별 누적 조회수, 1시간마다 새로 받는다. 주간 총정리 글은 빼고, 숫자를 못 읽으면 아무것도 안 붙인다.
- * Version: 1.0.1
+ * Description: 글 목록(홈 뉴스·카테고리 등)의 날짜 옆에 "· 조회 1,234"를 붙인다. 숫자는 Jetpack 통계의 글별 누적 조회수, 5분마다 새로 받는다. 주간 총정리 글은 빼고, 숫자를 못 읽으면 아무것도 안 붙인다.
+ * Version: 1.0.2
  * Author: Trendportal
  */
 
@@ -22,8 +22,9 @@ const TP_VC_WEEKLY_SLUG = 'weekly'; // 주간 총정리 태그 (TP Related Posts
 
 /**
  * 글 하나의 누적 조회수. 못 읽으면 -1.
- * 통계는 사이트 밖(WordPress.com)에서 받아 오는 값이라 매번 부르면 목록이 느려진다 → 1시간 저장해 둔다.
- * 12개가 한꺼번에 만료돼 한 번에 몰리지 않게 만료 시각을 0~10분 흩는다.
+ * 통계는 사이트 밖(WordPress.com)에서 받아 오는 값이라 매번 부르면 목록이 느려진다 → 5분 저장해 둔다.
+ * (10/19 사용자 결정: 1시간은 너무 늦게 바뀌어서 5분으로. 실시간 직접 세기는 Jetpack 기준과 숫자가 달라져서 기각)
+ * 12개가 한꺼번에 만료돼 한 번에 몰리지 않게 만료 시각을 0~1분 흩는다.
  */
 function tp_vc_views( $post_id ) {
 	$key    = 'tp_vc_' . $post_id;
@@ -49,7 +50,7 @@ function tp_vc_views( $post_id ) {
 	}
 
 	$views = null === $views ? -1 : $views;
-	set_transient( $key, $views, HOUR_IN_SECONDS + wp_rand( 0, 10 * MINUTE_IN_SECONDS ) );
+	set_transient( $key, $views, 5 * MINUTE_IN_SECONDS + wp_rand( 0, MINUTE_IN_SECONDS ) );
 	return $views;
 }
 
