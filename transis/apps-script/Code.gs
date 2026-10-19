@@ -87,9 +87,14 @@ function doGet(e) {
   const t = HtmlService.createTemplateFromFile('Index');
   // </script> 같은 글자가 들어와도 스크립트가 끊기지 않게 '<'를 바꿔서 넣는다
   t.dataJson = JSON.stringify(publicData_()).replace(/</g, '\\u003c');
+  // 10/19: 앱 아이콘은 trendportal.kr 페이지 안에 이 화면을 끼워(iframe) 연다.
+  // 직접 열면 Safari가 구글 로그인 쿠키를 같이 보내서, 구글 계정이 여럿인 폰은 주소에 /u/N/이 붙고
+  // "현재 파일을 열 수 없습니다"가 뜬다. 다른 사이트 안에 끼우면 Safari가 그 쿠키를 안 보낸다.
+  // 기본값은 다른 사이트에 끼우는 걸 막으므로 허용으로 바꾼다
   return t.evaluate()
     .setTitle('트란시스 일정표')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 /**
