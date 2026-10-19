@@ -107,6 +107,7 @@ Built from the Thursday Figma zip, together with the newsletter (`docs/newslette
 - Everything sits in one `tp-wk` group, in this order: issue line `WEEKLY · 26.10 3주차 · 금요일 발행` → editor letter (the Instagram caption's opening, then a line like `2026년 10월 3주차, 지금 실제로 터진 마케팅 이슈만 모았습니다.`, signed 트렌드포털) → 이번 주 에디터 픽 (three items) → the table-of-contents placeholder → one `tp-wk-item` per card → the fixed ending.
 - Each card: H2 title → photo (or a video still with a link, or our own clip) → `© source` → 무슨 일이었나 (the card text as written) → 💡 주목 포인트 box.
 - 💡 on the site: plain `~다` sentences, three or four, saying why it worked or why it matters (see 636 and 479). Short on purpose: the researched long version goes to the newsletter only.
+- Key phrase (10/19): in each 💡, wrap the one most important phrase in `**…**`. It shows bold with a yellow marker; nothing else in the box is highlighted. A phrase, not a whole sentence, and at most one per card on the site. This is our own writing, so it is not the "never add new emphasis" case above, which is about card text.
 - The TP Weekly Lock plugin fills in card numbers, the table of contents and the subscriber lock from card 02 when the page is shown. Do not write those by hand.
 - The ending says 댓글로 (the newsletter says 답장으로) and ends with the "매주 금요일…" paragraph.
 

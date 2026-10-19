@@ -43,6 +43,8 @@ S = {
     "h4": "margin:0 0 6px;font-size:13px;font-weight:800;color:#888;letter-spacing:0.5px;",
     "p": "margin:0 0 18px;font-size:15px;line-height:1.8;",
     "insight_p": "margin:0 0 10px;font-size:14.5px;line-height:1.8;",
+    # **핵심 구절**에만 굵게+형광(사이트 💡와 같은 모양, 10/19 사용자). 그라디언트를 못 읽는 메일 앱에선 굵게만 남는다
+    "hl": "font-weight:800;background:linear-gradient(transparent 55%,#fff1a8 55%);-webkit-box-decoration-break:clone;box-decoration-break:clone;",
     "refs": "margin:10px 0 0;font-size:12px;line-height:1.7;color:#888;",
     "btn": "display:inline-block;background:#111;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:13px 24px;border-radius:999px;",
     "foot": "padding:28px 32px 32px;font-size:12px;line-height:1.8;color:#999;background:#f7f7f7;margin-top:40px;",
@@ -140,7 +142,7 @@ def card_html(i, c, nl, table, post_url):
     out.append(f'<p style="{S["h4"]}">무슨 일이었나</p>')
     out += [f'<p style="{S["p"]}">{e(p)}</p>' for p in c["what"]]
     inner = [f'<p style="{S["h4"]}color:#111;">💡 주목 포인트</p>']
-    inner += [f'<p style="{S["insight_p"]}">{e(p)}</p>' for p in nl.get("point", [])] or [f'<p style="{S["insight_p"]}color:#c00;">(주목 포인트 작성 전)</p>']
+    inner += [f'<p style="{S["insight_p"]}">{cardnews.marked(p, S["hl"])}</p>' for p in nl.get("point", [])] or [f'<p style="{S["insight_p"]}color:#c00;">(주목 포인트 작성 전)</p>']
     if nl.get("sources"):
         links = " · ".join(f'<a href="{html.escape(s["url"])}" style="color:#888;">{e(s["label"])}</a>' for s in nl["sources"])
         inner.append(f'<p style="{S["refs"]}">참고: {links}</p>')
@@ -160,7 +162,7 @@ def mail_html(order, cards, nl, table, post_url):
                  f'<td style="text-align:right;font-size:11px;color:#888;letter-spacing:1px;font-weight:800;">WEEKLY · {e(order["issue"])}</td></tr></table></div>')
     parts.append(f'<div style="padding:40px 32px 0;"><p style="{S["issue"]}">{e(dateline(order["issue"]))}</p>'
                  f'<h1 style="{S["h1"]}">이번 주 일어난<br>마케팅 이슈 총정리</h1></div>')
-    letter = "".join(f'<p style="{S["letter_p"]}">{e(p)}</p>' for p in nl["letter"])
+    letter = "".join(f'<p style="{S["letter_p"]}">{cardnews.marked(p, S["hl"])}</p>' for p in nl["letter"])
     parts.append(f'<div style="padding:28px 32px 0;">{letter}<p style="{S["sig"]}">트렌드포털</p></div>')
     if nl.get("picks"):
         lis = "".join(f'<li>{e(p)}</li>' for p in nl["picks"])

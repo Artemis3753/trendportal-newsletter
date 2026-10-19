@@ -650,10 +650,9 @@ main .alignwide > .tp-reports + * { margin-block-start: 0; }
 /* Letter signature: a hairline closes the letter, then the name in the same small caps style as the issue line
    (the closing line reuses .tp-wk-sig, so scope to the letter) */
 .wp-block-post-content .tp-wk-letter p.tp-wk-sig { margin-top: 24px; padding-top: 14px; border-top: 1px solid #e5e5e5; font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #888; }
-/* The letter paragraph right before the signature gets the same highlighter as the point boxes.
-   Inline so the marker follows each line; the signature's top margin keeps the gap */
-.wp-block-post-content .tp-wk-letter p:has(+ .tp-wk-sig) {
-  display: inline;
+/* Highlighter only on the phrases marked as key (bold + marker, 10/19), same as the point boxes and the newsletter */
+.wp-block-post-content .tp-wk-letter strong {
+  font-weight: 800;
   background: linear-gradient(transparent 55%, #fff1a8 55%);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
@@ -696,14 +695,14 @@ html:has(.tp-wk) { scroll-behavior: smooth; }
 .wp-block-post-content .tp-wk-item > p:not(.tp-wk-num):not(.tp-wk-src):not(.tp-wk-video) { margin-bottom: 18px; }
 .wp-block-post-content .tp-wk .tp-wk-insight { padding: 18px 20px; background: #f1f1f1; border-radius: 12px; }
 .wp-block-post-content .tp-wk .tp-wk-insight h3 { margin-top: 0; color: #111; }
-/* Highlighter under the point text, same as the newsletter. Inline so the marker follows each line instead of filling the box */
-.wp-block-post-content .tp-wk .tp-wk-insight p {
-  display: inline;
+/* Highlighter only on the key phrase (**…** in notes.json → strong), bold + marker, same as the newsletter (10/19).
+   The marker follows each line of the phrase */
+.wp-block-post-content .tp-wk .tp-wk-insight strong {
+  font-weight: 800;
   background: linear-gradient(transparent 55%, #fff1a8 55%);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-.wp-block-post-content .tp-wk .tp-wk-insight p + p::before { content: "\A\A"; white-space: pre; }
 /* Closing: comments + report button (no mail footer on the site) */
 .wp-block-post-content .tp-wk .tp-wk-end { margin-top: 36px; padding-top: 36px; border-top: 1px solid #111; }
 .wp-block-post-content .tp-wk-end h2 { font-size: 19px; margin-bottom: 14px !important; }

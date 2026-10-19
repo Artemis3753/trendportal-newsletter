@@ -26,6 +26,7 @@ Claude writes the whole issue: letter, editor picks, every card, notices, closin
 - **Facts need sources.** Write only what a source supports, and list the sources for each card (`sources`, shown as 참고 links under the box). If something cannot be confirmed, leave it out or flag it for review; do not guess.
 - **No copying.** Summarize and link; never paste article sentences or use article photos.
 - Tone: the same plain `~다` sentences as the site's 💡. The letter, picks, notices and closing speak to the reader in `~요`.
+- **Highlight only what matters (10/19).** Wrap a key phrase in `**…**` and it shows bold with a yellow marker, the same as on the site. One or two per card (at most one per paragraph), and at most one in the letter. A phrase, not a whole sentence. Unmarked text has no highlight.
 
 The site keeps the short 💡 and the newsletter always carries the long, researched one. This split is fixed (decided 10/19): never send the site's short version to Stibee.
 

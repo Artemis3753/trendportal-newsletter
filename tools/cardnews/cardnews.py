@@ -146,6 +146,16 @@ def esc(s):
     return "<br>".join(html.escape(line, quote=False) for line in s.split("\n"))
 
 
+MARK = re.compile(r"\*\*(.+?)\*\*")
+
+
+def marked(s, style=None):
+    """💡·레터 글자 → esc + **핵심 구절**만 <strong>(굵게+형광, 10/19 사용자: 강조는 중요한 곳에만).
+    사이트는 CSS가 strong에 형광을 칠하고, 메일은 CSS를 못 믿으니 style을 직접 넣는다"""
+    open_ = f'<strong style="{style}">' if style else "<strong>"
+    return MARK.sub(lambda m: f"{open_}{m.group(1)}</strong>", esc(s))
+
+
 def attr(s):
     # 속성은 큰따옴표로 감싸니 "만 더 바꾼다 (작은따옴표까지 바꾸면 편집기 저장본과 달라짐)
     return html.escape(s, quote=False).replace('"', "&quot;")
@@ -222,7 +232,7 @@ def card_block(media, card, note):
         out += para("© " + esc(card["src"]), "tp-wk-src")
     out += h4("무슨 일이었나")
     out += "".join(para(esc(p)) for p in card["what"])
-    out += group("tp-wk-insight", h4("💡 주목 포인트") + para(esc(note["insight"])))
+    out += group("tp-wk-insight", h4("💡 주목 포인트") + para(marked(note["insight"])))
     return group("tp-wk-item", out)
 
 
