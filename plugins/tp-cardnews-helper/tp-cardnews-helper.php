@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.21.0
+ * Version: 1.21.1
  * Author: Trendportal
  */
 
@@ -1649,7 +1649,6 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	<p class="tpcn-hint">일정표 주소가 아직 설정되지 않았어요 (TP Transis Frame 설정).</p>
 	<?php endif; ?>
 	<ol class="tpcn-app-steps">
-		<li>예전 트란시스 앱(프로파일)이 있으면 먼저 지워요 — <b>설정 → 일반 → VPN 및 기기 관리 → 트란시스 → 제거</b></li>
 		<li>아이폰 <b>Safari</b>로 위 링크를 열어요 (크롬·카톡 안 브라우저는 안 돼요)</li>
 		<li>아래 <b>공유 버튼 → 홈 화면에 추가</b></li>
 		<li><b>홈 화면에 생긴 트란시스 아이콘</b>으로 열고 🔔 알림을 켜요. Safari 탭에서는 알림을 켤 수 없어요</li>
