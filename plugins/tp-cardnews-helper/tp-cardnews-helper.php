@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.21.1
+ * Version: 1.22.0
  * Author: Trendportal
  */
 
@@ -1236,7 +1236,14 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-bell summary { cursor: pointer; font-family: var(--font-display); font-size: 18px; }
 .tpcn-bell summary small { margin-left: 6px; font-family: var(--font-body); font-size: 12px; color: var(--muted); }
 .tpcn-bell form { display: grid; gap: 12px; margin-top: 12px; }
-.tpcn-app-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+/* 설치 안내 둘: 제목 줄 오른쪽 알약, 펼치면 오른쪽 끝에 맞춘 말풍선 */
+.tpcn-guides { margin-left: auto; display: flex; gap: 8px; position: relative; }
+.tpcn-guides .tpcn-how { margin: 0; }
+.tpcn-guides .tpcn-how summary::after { content: "▾"; }
+.tpcn-guides .tpcn-how[open] summary::after { content: "▴"; }
+.tpcn-guides .tpcn-how > div { position: absolute; z-index: 6; right: 0; top: calc(100% + 8px); width: min(380px, calc(100vw - 40px)); margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); box-shadow: 0 8px 24px rgba(20, 22, 40, .18); font-size: 13px; }
+.tpcn-app-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+.tpcn-app .tpcn-hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 .tpcn-app-steps { margin: 12px 0 0; padding-left: 18px; }
 .tpcn-app-steps li { margin: 4px 0; }
 .tpcn-bell input[type=url], .tpcn-bell input[type=password] { width: 100%; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; }
@@ -1247,6 +1254,10 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-empty { display: grid; justify-items: center; gap: 6px; padding: 18px 0 8px; color: var(--muted); text-align: center; }
 .tpcn-empty img { width: 180px; height: auto; }
 @media (max-width: 782px) {
+  /* 좁은 화면: 알약은 제목 아래 줄로, 말풍선은 왼쪽 끝에 맞춘다 */
+  .tpcn-head { flex-wrap: wrap; }
+  .tpcn-guides { margin-left: 0; width: 100%; flex-wrap: wrap; }
+  .tpcn-guides .tpcn-how > div { right: auto; left: 0; }
   .tpcn-cap { flex-direction: column; align-items: flex-start; }
   .tpcn { margin-right: 10px; }
   .tpcn-item { grid-template-columns: 44px 1fr; }
@@ -1305,6 +1316,42 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		<h1>트란시스 카드뉴스 도우미</h1>
 		<p>피그마 zip을 주문서로 넣어 주면, 셰프 트란시스가 사이트 초안으로 요리해 둘게요</p>
 	</div>
+	<?php // 10/19 사용자: 처음 한 번만 쓰는 설치 안내 둘은 제목 줄 오른쪽 빈자리에. 누르면 아래로 말풍선처럼 떠서 주문서를 밀지 않는다 ?>
+	<div class="tpcn-guides">
+		<?php // 10/18 사용자: 다른 컴퓨터(성현 님)에서도 피그마 플러그인을 쉽게 받게 ?>
+		<details class="tpcn-how">
+			<summary>🧩 피그마 플러그인 설치</summary>
+			<div class="tpcn-plug">
+				<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 플러그인 받기 (zip)</a>
+				<ol>
+					<?php // 10/18: 윈도우에서 manifest.json만 다른 곳으로 옮겨 골랐다가 에러가 났다(code.js·ui.html이 옆에 없어서) → 맥·윈도우 압축 풀기와 '세 파일 같이'를 적어 둔다 ?>
+					<li>받은 zip의 압축을 풀어요 — 맥은 <b>더블클릭</b>, 윈도우는 <b>오른쪽 클릭 → 압축 풀기</b>(더블클릭은 안을 들여다보기만 해요). <code>transis-cardnews-reader</code> 폴더가 생겨요</li>
+					<li>폴더 안 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일은 <b>같은 폴더에 그대로</b> 둬요. 하나만 옮기거나 폴더를 지우면 플러그인이 안 열려요</li>
+					<li><b>피그마 데스크톱 앱</b>에서 아무 디자인 파일이나 열어요 (예시: 2026 트렌드포털). 웹 브라우저 피그마에선 안 돼요</li>
+					<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택 (윈도우는 메뉴가 왼쪽 위 피그마 로고 안에 있어요)</li>
+					<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 읽기</b>로 zip을 받아 여기에 올려요</li>
+				</ol>
+			</div>
+		</details>
+		<details class="tpcn-how">
+			<summary>📱 트란시스 일정표 앱 설치</summary>
+			<div class="tpcn-app">
+			<?php if ( $u['tapp'] ) : ?>
+			<p class="tpcn-app-link"><a class="tpcn-dl" href="<?php echo esc_url( $u['tapp'] ); ?>" target="_blank" rel="noopener">일정표 열기</a>
+				<button type="button" class="tpcn-nl-copy" id="tpcn-app-copy" data-url="<?php echo esc_attr( $u['tapp'] ); ?>">📋 링크 복사</button></p>
+			<p class="tpcn-hint">복사한 링크를 카톡 나와의 채팅 등으로 폰에 보내거나, 폰에서 이 탭을 바로 열어도 돼요.</p>
+			<?php else : ?>
+			<p class="tpcn-hint">일정표 주소가 아직 설정되지 않았어요 (TP Transis Frame 설정).</p>
+			<?php endif; ?>
+			<ol class="tpcn-app-steps">
+				<li>아이폰 <b>Safari</b>로 위 링크를 열어요 (크롬·카톡 안 브라우저는 안 돼요)</li>
+				<li>아래 <b>공유 버튼 → 홈 화면에 추가</b></li>
+				<li><b>홈 화면에 생긴 트란시스 아이콘</b>으로 열고 🔔 알림을 켜요. Safari 탭에서는 알림을 켤 수 없어요</li>
+			</ol>
+			<p class="tpcn-hint">"현재 파일을 열 수 없습니다"가 뜨면 Safari에 구글 계정이 여러 개 로그인된 거예요. Safari에서 구글 로그아웃 후 다시 열어 주세요.</p>
+			</div>
+		</details>
+	</div>
 	<div class="tpcn-bubble" id="tpcn-bubble" role="status" hidden>
 		<ol>
 			<li>피그마에서 카드 묶음을 선택하고 플러그인 <b>트란시스 카드뉴스 읽기</b> → zip 내려받기</li>
@@ -1339,21 +1386,6 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				<div><b id="tpcn-zipname">zip을 여기에 끌어다 놓거나 눌러서 고르기</b><span>'트란시스 카드뉴스 읽기'에서 받은 파일 그대로</span></div>
 				<input type="file" id="tpcn-zip" name="zip" accept=".zip,application/zip" required title=""><?php // title을 비워야 브라우저 기본 말풍선("No file chosen")이 안 뜬다 ?>
 			</div>
-			<?php // 10/18 사용자: 다른 컴퓨터(성현 님)에서도 피그마 플러그인을 쉽게 받게. 처음 한 번만 필요해서 접어 둔다 ?>
-			<details class="tpcn-how">
-				<summary>피그마 플러그인이 없다면</summary>
-				<div class="tpcn-plug">
-					<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 플러그인 받기 (zip)</a>
-					<ol>
-						<?php // 10/18: 윈도우에서 manifest.json만 다른 곳으로 옮겨 골랐다가 에러가 났다(code.js·ui.html이 옆에 없어서) → 맥·윈도우 압축 풀기와 '세 파일 같이'를 적어 둔다 ?>
-						<li>받은 zip의 압축을 풀어요 — 맥은 <b>더블클릭</b>, 윈도우는 <b>오른쪽 클릭 → 압축 풀기</b>(더블클릭은 안을 들여다보기만 해요). <code>transis-cardnews-reader</code> 폴더가 생겨요</li>
-						<li>폴더 안 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일은 <b>같은 폴더에 그대로</b> 둬요. 하나만 옮기거나 폴더를 지우면 플러그인이 안 열려요</li>
-						<li><b>피그마 데스크톱 앱</b>에서 아무 디자인 파일이나 열어요 (예시: 2026 트렌드포털). 웹 브라우저 피그마에선 안 돼요</li>
-						<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택 (윈도우는 메뉴가 왼쪽 위 피그마 로고 안에 있어요)</li>
-						<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 읽기</b>로 zip을 받아 여기에 올려요</li>
-					</ol>
-				</div>
-			</details>
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-caption">인스타 캡션 <em class="tpcn-must">필수</em></label>
@@ -1636,24 +1668,6 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		</div>
 		<button type="submit" class="tpcn-go">저장</button>
 	</form>
-</details>
-
-<?php // 10/19 사용자: 트란시스 일정표 앱 설치를 여기서 바로 보게. 처음 한 번만 필요해서 접어 둔다 ?>
-<details class="tpcn-panel tpcn-bell tpcn-app">
-	<summary>📱 트란시스 일정표 앱 설치 <small>아이폰 · 처음 한 번만</small></summary>
-	<?php if ( $u['tapp'] ) : ?>
-	<p class="tpcn-app-link"><a class="tpcn-dl" href="<?php echo esc_url( $u['tapp'] ); ?>" target="_blank" rel="noopener">일정표 열기</a>
-		<button type="button" class="tpcn-nl-copy" id="tpcn-app-copy" data-url="<?php echo esc_attr( $u['tapp'] ); ?>">📋 링크 복사</button></p>
-	<p class="tpcn-hint">복사한 링크를 카톡 나와의 채팅 등으로 폰에 보내거나, 폰에서 이 탭을 바로 열어도 돼요.</p>
-	<?php else : ?>
-	<p class="tpcn-hint">일정표 주소가 아직 설정되지 않았어요 (TP Transis Frame 설정).</p>
-	<?php endif; ?>
-	<ol class="tpcn-app-steps">
-		<li>아이폰 <b>Safari</b>로 위 링크를 열어요 (크롬·카톡 안 브라우저는 안 돼요)</li>
-		<li>아래 <b>공유 버튼 → 홈 화면에 추가</b></li>
-		<li><b>홈 화면에 생긴 트란시스 아이콘</b>으로 열고 🔔 알림을 켜요. Safari 탭에서는 알림을 켤 수 없어요</li>
-	</ol>
-	<p class="tpcn-hint">"현재 파일을 열 수 없습니다"가 뜨면 Safari에 구글 계정이 여러 개 로그인된 거예요. Safari에서 구글 로그아웃 후 다시 열어 주세요.</p>
 </details>
 
 <script>
