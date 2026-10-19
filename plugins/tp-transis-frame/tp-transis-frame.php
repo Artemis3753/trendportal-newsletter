@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Transis Frame
  * Description: 트란시스 일정표(Apps Script)를 trendportal.kr의 숨은 주소에서 테두리 없이 띄운다. 주소와 일정표 URL은 코드가 아니라 설정값(tp_transis_frame)에 둔다.
- * Version: 1.0.1
+ * Version: 1.1.0
  * Author: Trendportal
  */
 
@@ -23,6 +23,32 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 
 const TP_TF_OPTION = 'tp_transis_frame';
+
+// 앱 아이콘(마스코트 얼굴). 미디어 1033·1034, 비밀 아님
+const TP_TF_ICON_180 = 'https://trendportal.kr/wp-content/uploads/2026/10/transis-app-icon-180.png';
+const TP_TF_ICON_512 = 'https://trendportal.kr/wp-content/uploads/2026/10/transis-app-icon-512.png';
+
+/*
+ * 1.1.0 (10/19 사용자 결정): 폰에서 Safari "홈 화면에 추가"로 깔면 주소창 없이 앱처럼 뜨게 한다.
+ * 그러려면 "나는 앱이다"라는 설명서(manifest)가 있어야 하고, 나중에 웹 푸시 알림을 붙일 때도 이 설치 방식이 조건이다.
+ * (설정 파일 mobileconfig로 깐 아이콘이 웹 푸시를 받을 수 있는지는 확인된 자료가 없어서 이 방식으로 바꿈)
+ */
+function tp_tf_manifest( $slug ) {
+	return array(
+		'name'             => '트란시스 일정표',
+		'short_name'       => '트란시스',
+		'lang'             => 'ko',
+		'start_url'        => '/' . $slug . '/',
+		'scope'            => '/' . $slug . '/',
+		'display'          => 'standalone',
+		'background_color' => '#ffffff',
+		'theme_color'      => '#ffffff',
+		'icons'            => array(
+			array( 'src' => TP_TF_ICON_180, 'sizes' => '180x180', 'type' => 'image/png' ),
+			array( 'src' => TP_TF_ICON_512, 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any' ),
+		),
+	);
+}
 
 add_action(
 	'init',
@@ -58,6 +84,14 @@ add_action(
 			return;
 		}
 		$path = trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
+
+		if ( $path === $slug . '/manifest.webmanifest' ) {
+			status_header( 200 );
+			header( 'Content-Type: application/manifest+json; charset=utf-8' );
+			header( 'X-Robots-Tag: noindex, nofollow' );
+			echo wp_json_encode( tp_tf_manifest( $slug ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			exit;
+		}
 		if ( $path !== $slug ) {
 			return;
 		}
@@ -77,6 +111,14 @@ add_action(
 <!-- 구글 쪽에 이 숨은 주소가 '어디서 왔는지'로 남지 않게 -->
 <meta name="referrer" content="no-referrer">
 <title>트란시스 일정표</title>
+<link rel="manifest" href="/<?php echo esc_attr( $slug ); ?>/manifest.webmanifest">
+<link rel="apple-touch-icon" href="<?php echo esc_url( TP_TF_ICON_180 ); ?>">
+<!-- 홈 화면 아이콘 아래 이름, 주소창 없이 열기 -->
+<meta name="apple-mobile-web-app-title" content="트란시스">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 <style>
 	html, body { margin: 0; height: 100%; background: #fff; }
 	iframe { display: block; border: 0; width: 100%; height: 100%; }
