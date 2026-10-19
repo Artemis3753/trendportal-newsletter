@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Transis Frame
  * Description: 트란시스 일정표(Apps Script)를 trendportal.kr의 숨은 주소에서 테두리 없이 띄운다. 주소와 일정표 URL은 코드가 아니라 설정값(tp_transis_frame)에 둔다.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Trendportal
  */
 

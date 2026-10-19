@@ -6,7 +6,7 @@
  *
  * 흐름: 앱의 '알림 켜기' → 폰이 애플·구글 알림 서버 주소(endpoint)를 받아 subscribe로 등록
  *      → Code.gs doPost가 바뀐 게 있으면 notify를 부름 → 등록된 주소마다 '빈 알림'을 보냄
- *      → 폰의 service worker(sw.js)가 깨어나 latest에서 문구를 받아 알림을 띄운다
+ *      → 폰의 service worker(sw)가 깨어나 latest에서 문구를 받아 알림을 띄운다
  *
  * 알림에 내용을 직접 싣지 않고 '빈 알림 + 문구는 따로 받기'로 한 이유:
  * 내용을 실으려면 폰마다 암호화(RFC 8291)를 해야 하는데, 건수 한 줄이라 그 코드를 둘 이유가 없다.
@@ -66,7 +66,7 @@ function tp_tf_b64url( $bin ) {
 	return rtrim( strtr( base64_encode( $bin ), '+/', '-_' ), '=' );
 }
 
-/** 숨은 주소 아래 /sw.js · /subscribe · /latest · /notify. 처리했으면 exit, 아니면 그냥 돌아간다 */
+/** 숨은 주소 아래 /sw · /subscribe · /latest · /notify. 처리했으면 exit, 아니면 그냥 돌아간다 */
 function tp_tf_push_route( $rest, $slug ) {
 	$c = tp_tf_push_config();
 	if ( ! $c ) {
@@ -75,7 +75,8 @@ function tp_tf_push_route( $rest, $slug ) {
 	nocache_headers();
 	header( 'X-Robots-Tag: noindex, nofollow' );
 
-	if ( 'sw.js' === $rest ) {
+	// 주소에 .js를 붙이면 WordPress.com 서버가 정적 파일로만 찾고 PHP까지 안 와서 404가 난다(1.2.0에서 겪음)
+	if ( 'sw' === $rest ) {
 		header( 'Content-Type: application/javascript; charset=utf-8' );
 		echo tp_tf_sw_js( $slug ); // phpcs:ignore WordPress.Security.EscapeOutput
 		exit;
@@ -234,7 +235,7 @@ function tp_tf_push_button( $slug ) {
 
 	const toBytes = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0));
 	async function subscribe() {
-		const reg = await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE });
+		const reg = await navigator.serviceWorker.register(BASE + 'sw', { scope: BASE });
 		await navigator.serviceWorker.ready;
 		const sub = (await reg.pushManager.getSubscription())
 			|| await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toBytes(KEY) });
