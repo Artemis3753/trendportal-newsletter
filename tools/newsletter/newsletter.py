@@ -169,7 +169,9 @@ def mail_html(order, cards, nl, table, post_url):
     # 공지(이벤트 등) — 사이트 목표가 제보 게시판 활성화라 위쪽에 둔다. 모양은 홈 공지 줄의 파란 '공지' 알약과 같은 계열
     if nl.get("notice"):
         n = nl["notice"]
-        body = "".join(f'<p style="margin:0 0 10px;font-size:14.5px;line-height:1.8;">{e(p)}</p>' for p in n["text"])
+        # text는 문단 목록이지만 문자열 하나로 써도 받는다 — 문자열을 그대로 돌리면 글자마다 <p>가 돼서 세로로 쌓였다(10/19 319 시험)
+        paras = [n["text"]] if isinstance(n["text"], str) else n["text"]
+        body = "".join(f'<p style="margin:0 0 10px;font-size:14.5px;line-height:1.8;">{e(p)}</p>' for p in paras)
         btn = f'<p style="margin:14px 0 0;"><a href="{html.escape(n["url"])}" style="{S["btn"]}">{e(n["button"])}</a></p>' if n.get("url") else ""
         parts.append(f'<div style="margin:16px 32px 0;background:#f1f5ff;border-radius:10px;padding:18px 20px;">'
                      f'<span style="display:inline-block;padding:2px 6px;border-radius:3px;background:#2f6bff;color:#fff;font-size:11px;font-weight:800;margin-bottom:10px;">공지</span>'
