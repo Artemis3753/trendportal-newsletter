@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Transis Frame
  * Description: 트란시스 일정표(Apps Script)를 trendportal.kr의 숨은 주소에서 테두리 없이 띄운다. 주소와 일정표 URL은 코드가 아니라 설정값(tp_transis_frame)에 둔다.
- * Version: 1.2.1
+ * Version: 1.2.2
  * Author: Trendportal
  */
 
@@ -119,6 +119,8 @@ add_action(
 <title>트란시스 일정표</title>
 <link rel="manifest" href="/<?php echo esc_attr( $slug ); ?>/manifest.webmanifest">
 <link rel="apple-touch-icon" href="<?php echo esc_url( TP_TF_ICON_180 ); ?>">
+<!-- PC 브라우저 탭 아이콘도 마스코트로 (사용자 요청 10/19) -->
+<link rel="icon" type="image/png" sizes="180x180" href="<?php echo esc_url( TP_TF_ICON_180 ); ?>">
 <!-- 홈 화면 아이콘 아래 이름, 주소창 없이 열기 -->
 <meta name="apple-mobile-web-app-title" content="트란시스">
 <meta name="apple-mobile-web-app-capable" content="yes">
