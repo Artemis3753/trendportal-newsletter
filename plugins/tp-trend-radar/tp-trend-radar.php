@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.7.0
+ * Version: 1.8.0
  * Author: Trendportal
  */
 
@@ -80,9 +80,13 @@ const TP_RADAR_SOURCES = array(
 	'Know Your Meme'        => array( '미', 'trend', 'rss', 'https://knowyourmeme.com/newsfeed.rss' ),
 	'Mashable'              => array( '미', 'trend', 'rss', 'https://mashable.com/feeds/rss/all' ),
 	'오픈서베이'             => array( '한', 'trend', 'rss', 'https://blog.opensurvey.co.kr/feed/' ),
+	// 10/20 밤 추가 — 틱톡·인터넷 화제를 가장 빨리 쓰는 곳(사용자: "트렌디하고 밈을 가장 빠르게")
+	'Daily Dot'             => array( '미', 'trend', 'rss', 'https://www.dailydot.com/feed/' ),
 	// 국내 광고·팝업 — 10/20 사용자가 원한 "캡틴큐 이선민 광고" 같은 국내 화제 광고는 브랜드브리프 RSS 맨 위에 그 기사가 있었다
 	'브랜드브리프'           => array( '한', 'kr', 'rss', 'https://www.brandbrief.co.kr/rss/allArticle.xml' ),
 	'매드타임스'             => array( '한', 'kr', 'rss', 'https://www.madtimes.co.kr/rss/allArticle.xml' ),
+	// 10/20 밤 추가 — 콜라보·한정판 드롭. 한국어판이라 번역 토큰이 안 든다
+	'Hypebeast KR'          => array( '한', 'kr', 'rss', 'https://hypebeast.kr/feed' ),
 	// heyPOP: /feed/는 2021년에 멈춘 기본 글 종류라 못 쓰고, 실제 기사는 'n' 글 종류
 	'heyPOP'                => array( '한', 'kr', 'wpjson', 'https://heypop.kr/wp-json/wp/v2/n?per_page=20&_fields=date,link,title,excerpt' ),
 	// 10/20 저녁에 뺀 곳(사용자: "정치·시사·사건사고, 대놓고 스포츠 뉴스, 너무 테크 기사는 필요 없어") — 그때 피드 실측:
