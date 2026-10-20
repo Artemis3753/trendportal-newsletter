@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.10.1
+ * Version: 1.10.2
  * Author: Trendportal
  */
 
@@ -280,8 +280,13 @@ function tp_radar_feed( $force = false, $wide = false ) {
 		if ( '' === $s[2] ) {
 			continue;
 		}
+		$url = 'youtube' === $s[2] ? 'https://www.youtube.com/feeds/videos.xml?channel_id=' . $s[3] : $s[3];
+		if ( $wide ) {
+			// 구글 뉴스는 검색 주소 자체에 기간(when:3d)이 들어 있어서, 창을 넓혀도 주소를 같이 바꿔야 7일치가 온다
+			$url = str_replace( 'when%3A3d', 'when%3A' . TP_RADAR_FEED_WIDE_DAYS . 'd', $url );
+		}
 		$reqs[ $name ] = array(
-			'url'     => 'youtube' === $s[2] ? 'https://www.youtube.com/feeds/videos.xml?channel_id=' . $s[3] : $s[3],
+			'url'     => $url,
 			'type'    => 'GET',
 			'headers' => array( 'User-Agent' => TP_RADAR_UA ),
 		);
