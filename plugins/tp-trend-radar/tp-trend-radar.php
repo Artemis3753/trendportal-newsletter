@@ -298,9 +298,37 @@ function tp_radar_feed( $force = false ) {
 		$items = array_merge( $items, array_slice( $got, 0, TP_RADAR_FEED_EACH ) );
 	}
 	usort( $items, fn( $a, $b ) => $b['t'] <=> $a['t'] );
-	$feed = array( 'at' => time(), 'items' => $items, 'errors' => $errors );
+	$feed = array( 'at' => time(), 'items' => tp_radar_mix( $items ), 'errors' => $errors );
 	set_transient( 'tp_radar_feed', $feed, TP_RADAR_FEED_TTL );
 	return $feed;
+}
+
+/**
+ * 최신순을 거의 그대로 두되, 같은 정보원이 TP_RADAR_RUN개 넘게 연달아 나오지 않게 살짝 섞는다.
+ * 10/20 사용자: 최신순 유지 + GIGAZINE처럼 한꺼번에 여러 개 올리는 곳이 맨 위를 도배하지 않게.
+ * 매 칸마다 "남은 글 중 가장 새 글"을 넣되, 그 글이 같은 정보원 연속을 넘기면 그다음 새 글을 넣는다.
+ * 남은 글이 한 정보원뿐이면 어쩔 수 없이 그대로 잇는다.
+ */
+const TP_RADAR_RUN = 3;
+
+function tp_radar_mix( $items ) {
+	$out = array();
+	while ( $items ) {
+		$run  = array_slice( $out, -TP_RADAR_RUN );
+		$full = count( $run ) === TP_RADAR_RUN && 1 === count( array_unique( array_column( $run, 'source' ) ) );
+		$pick = 0;
+		if ( $full ) {
+			foreach ( $items as $k => $it ) {
+				if ( $it['source'] !== $run[0]['source'] ) {
+					$pick = $k;
+					break;
+				}
+			}
+		}
+		$out[] = $items[ $pick ];
+		array_splice( $items, $pick, 1 );
+	}
+	return $out;
 }
 
 /** 이미 찾아 둔 대표 사진(3일 보관). 없으면 false, 찾았는데 사진이 없는 글이면 '' */
