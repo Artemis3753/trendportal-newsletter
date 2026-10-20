@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.14.0
+ * Version: 1.14.1
  * Author: Trendportal
  */
 
@@ -935,7 +935,8 @@ function tp_radar_page() {
 <div class="tprd">
 <style>
 /* 10/20 사용자 결정: "스티커 주방" 대신 "현장 연결"(시안 3) — 트란시스가 현장 기자로 나오는 뉴스 화면.
-   LIVE 표시 · 흐르는 자막 · 사진 아래 자막 띠(갈래 색)에 나라와 정보원. 귀여운 쪽(Jua·둥근 모서리)은 그대로 */
+   LIVE 표시 · 흐르는 자막 · 사진 아래 자막 띠(갈래 색)에 나라와 정보원. 귀여운 쪽(Jua·둥근 모서리)은 그대로.
+   10/21 사용자: 이름은 "현장 연결" 말고 "취재 일지"로 — 이름·말투만 바꾸고 화면 꾸밈은 그대로 둠 */
 body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar #wpfooter { background: #fdfbf7; }
 .tprd { --ink: #3b2f2a; --muted: #8c7f73; --card: #ffffff; --soft: #efe8dc; --live: #e4572e; --hl: #fff7d1;
   max-width: 1000px; margin: 18px 20px 40px 0; color: var(--ink); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; font-size: 14px; line-height: 1.55; word-break: keep-all; }
@@ -1049,9 +1050,9 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-bell input { width: 100%; max-width: 640px; }
 </style>
 <div class="tprd-bug">
-<span class="tprd-live">● LIVE</span>
+<span class="tprd-live">📓 취재 일지</span>
 <img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="트란시스 특파원">
-<div><h1>트란시스 현장 연결</h1><p>정보원 새 글을 둘러보고, 마음에 드는 글을 체크하면 특파원이 리포트로 정리해 와요</p></div>
+<div><h1>트란시스 특파원 취재 일지</h1><p>정보원 새 글을 둘러보고, 마음에 드는 글을 체크하면 특파원이 리포트로 정리해 와요</p></div>
 </div>
 	<?php
 	// 흐르는 자막: 받아 둔 피드의 최신 제목 8개(번역이 있으면 한국어). 피드를 아직 안 받았으면 없음
@@ -1112,7 +1113,7 @@ function tp_radar_report_view( $asks, $show ) {
 		<?php endif; ?>
 </h2>
 		<?php if ( 'done' === $st ) : ?>
-<p class="tprd-anchor"><img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">트란시스 특파원, 현장 연결합니다! <?php echo esc_html( empty( $a['morning'] ) ? '부탁하신 글 ' . count( (array) $a['result'] ) . '개 정리했어요' : '오늘 거리 ' . count( (array) $a['result'] ) . '개예요' ); ?></p>
+<p class="tprd-anchor"><img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">트란시스 특파원 취재 일지 — <?php echo esc_html( empty( $a['morning'] ) ? '부탁하신 글 ' . count( (array) $a['result'] ) . '개 정리했어요' : '오늘 거리 ' . count( (array) $a['result'] ) . '개예요' ); ?></p>
 <div class="tprd-grid">
 			<?php
 			foreach ( array_values( (array) $a['result'] ) as $i => $it ) {
