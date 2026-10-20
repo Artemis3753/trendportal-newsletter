@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.10.2
+ * Version: 1.11.0
  * Author: Trendportal
  */
 
@@ -68,49 +68,49 @@ function tp_radar_lang( $orig ) {
  */
 const TP_RADAR_SOURCES = array(
 	// 해외 캠페인 — 하트가 잘 나오는 갈래. Famous Campaigns는 우리 카드 출처 1위(46편), 런던 Speakeasy Media
-	'Famous Campaigns'      => array( '영', 'camp', 'rss', 'https://www.famouscampaigns.com/feed/' ), // www 없는 주소는 526
-	'Muse by Clio'          => array( '미', 'camp', 'rss', 'https://musebycl.io/rss.xml' ),
-	'AdverTimes'            => array( '일', 'camp', 'rss', 'https://www.advertimes.com/feed/' ),
+	'Famous Campaigns'      => array( 'gb', 'camp', 'rss', 'https://www.famouscampaigns.com/feed/' ), // www 없는 주소는 526
+	'Muse by Clio'          => array( 'us', 'camp', 'rss', 'https://musebycl.io/rss.xml' ),
+	'AdverTimes'            => array( 'jp', 'camp', 'rss', 'https://www.advertimes.com/feed/' ),
 	// 플랫폼·크리에이터 — "인스타그램 이렇게 변합니다" 같은 글의 출처가 이 매체들이었다
-	'Social Media Today'    => array( '미', 'plat', 'rss', 'https://www.socialmediatoday.com/feeds/news/' ),
+	'Social Media Today'    => array( 'us', 'plat', 'rss', 'https://www.socialmediatoday.com/feeds/news/' ),
 	// 10/20 밤 추가 — 브랜드가 SNS에서 밈을 타는 법만 다루는 뉴스레터(Rachel Karten). 주 1~2편이라 속도보다 아이디어용
-	'Link in Bio'           => array( '미', 'plat', 'rss', 'https://www.milkkarten.net/feed' ),
+	'Link in Bio'           => array( 'us', 'plat', 'rss', 'https://www.milkkarten.net/feed' ),
 	// 웹·앱·디지털 놀이 — "신기한 사이트 모음" 갈래
-	'GIGAZINE'              => array( '일', 'web', 'rss', 'https://gigazine.net/news/rss_2.0/' ),
-	'Laughing Squid'        => array( '미', 'web', 'rss', 'https://laughingsquid.com/feed/' ), // ねとらぼ 자리 — 그쪽 RSS는 2025-05에 멈춤
+	'GIGAZINE'              => array( 'jp', 'web', 'rss', 'https://gigazine.net/news/rss_2.0/' ),
+	'Laughing Squid'        => array( 'us', 'web', 'rss', 'https://laughingsquid.com/feed/' ), // ねとらぼ 자리 — 그쪽 RSS는 2025-05에 멈춤
 	// 밈·트렌드 — 화제 비율 1위 갈래
-	'Know Your Meme'        => array( '미', 'trend', 'rss', 'https://knowyourmeme.com/newsfeed.rss' ),
-	'Mashable'              => array( '미', 'trend', 'rss', 'https://mashable.com/feeds/rss/all' ),
-	'오픈서베이'             => array( '한', 'trend', 'rss', 'https://blog.opensurvey.co.kr/feed/' ),
+	'Know Your Meme'        => array( 'us', 'trend', 'rss', 'https://knowyourmeme.com/newsfeed.rss' ),
+	'Mashable'              => array( 'us', 'trend', 'rss', 'https://mashable.com/feeds/rss/all' ),
+	'오픈서베이'             => array( 'kr', 'trend', 'rss', 'https://blog.opensurvey.co.kr/feed/' ),
 	// 10/20 밤 추가 — 틱톡·인터넷 화제를 가장 빨리 쓰는 곳(사용자: "트렌디하고 밈을 가장 빠르게")
-	'Daily Dot'             => array( '미', 'trend', 'rss', 'https://www.dailydot.com/feed/' ),
+	'Daily Dot'             => array( 'us', 'trend', 'rss', 'https://www.dailydot.com/feed/' ),
 	// 10/20 밤 추가 — X에서 뜬 걸 누군가 정리해 온 곳(사용자: "그걸 우리가 빠르게 낚아채는 거지").
 	// ねとらぼ(RSS 멈춤) 대신 おたくま = X 화제·이상한 신상품·콜라보.
 	// Togetter 인기(일본 X 화제 글 모음)도 넣었다가 뺐다 — 사이트 서버에서 받으면 403(로컬은 200, 10/20 밤)
-	'おたくま経済新聞'       => array( '일', 'trend', 'rss', 'https://otakuma.net/feed' ),
+	'おたくま経済新聞'       => array( 'jp', 'trend', 'rss', 'https://otakuma.net/feed' ),
 	// 국내 광고·팝업 — 10/20 사용자가 원한 "캡틴큐 이선민 광고" 같은 국내 화제 광고는 브랜드브리프 RSS 맨 위에 그 기사가 있었다
-	'브랜드브리프'           => array( '한', 'kr', 'rss', 'https://www.brandbrief.co.kr/rss/allArticle.xml' ),
-	'매드타임스'             => array( '한', 'kr', 'rss', 'https://www.madtimes.co.kr/rss/allArticle.xml' ),
+	'브랜드브리프'           => array( 'kr', 'kr', 'rss', 'https://www.brandbrief.co.kr/rss/allArticle.xml' ),
+	'매드타임스'             => array( 'kr', 'kr', 'rss', 'https://www.madtimes.co.kr/rss/allArticle.xml' ),
 	// 10/20 밤 추가 — 콜라보·한정판 드롭. 한국어판이라 번역 토큰이 안 든다
-	'Hypebeast KR'          => array( '한', 'kr', 'rss', 'https://hypebeast.kr/feed' ),
+	'Hypebeast KR'          => array( 'kr', 'kr', 'rss', 'https://hypebeast.kr/feed' ),
 	// 10/20 밤 추가 — 화제에 숟가락 얹은 브랜드 패러디를 국내 언론이 묶어 쓴 기사를 낚는 그물.
 	// 시험 때 테슬라 로드스터 패러디 기사 8개가 잡혔다. 링크는 구글 뉴스 주소라 특파원이 본문은 못 읽는다(radar.py)
-	'구글 뉴스'              => array( '한', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%94%EC%9D%B4%EB%9F%B4+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%88+%EB%A7%88%EC%BC%80%ED%8C%85%22+OR+%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EC%98%81%EC%83%81%22+OR+%22%EA%B2%8C%EC%9E%84+%EC%BD%9C%EB%9D%BC%EB%B3%B4%22+OR+%22%EC%88%9F%EA%B0%80%EB%9D%BD+%EC%96%B9%EA%B8%B0%22%29+when%3A3d&hl=ko&gl=KR&ceid=KR:ko' ),
+	'구글 뉴스'              => array( 'kr', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%94%EC%9D%B4%EB%9F%B4+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%88+%EB%A7%88%EC%BC%80%ED%8C%85%22+OR+%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EC%98%81%EC%83%81%22+OR+%22%EA%B2%8C%EC%9E%84+%EC%BD%9C%EB%9D%BC%EB%B3%B4%22+OR+%22%EC%88%9F%EA%B0%80%EB%9D%BD+%EC%96%B9%EA%B8%B0%22%29+when%3A3d&hl=ko&gl=KR&ceid=KR:ko' ),
 	// heyPOP: /feed/는 2021년에 멈춘 기본 글 종류라 못 쓰고, 실제 기사는 'n' 글 종류
-	'heyPOP'                => array( '한', 'kr', 'wpjson', 'https://heypop.kr/wp-json/wp/v2/n?per_page=20&_fields=date,link,title,excerpt' ),
+	'heyPOP'                => array( 'kr', 'kr', 'wpjson', 'https://heypop.kr/wp-json/wp/v2/n?per_page=20&_fields=date,link,title,excerpt' ),
 	// 10/20 저녁에 뺀 곳(사용자: "정치·시사·사건사고, 대놓고 스포츠 뉴스, 너무 테크 기사는 필요 없어") — 그때 피드 실측:
 	// Google 트렌드 8개 전부 뉴스 검색어(김정은 속보·역삼동 화재·태풍), Front Office Sports 8개 전부 스포츠 비즈니스 뉴스,
 	// The Verge 8개·TechCrunch 4개 대부분 기기·투자·AI 산업 뉴스. 지난 리포트의 알약 색 때문에만 남긴다(읽는 법 '')
-	'Front Office Sports'   => array( '미', 'camp', '', '' ),
-	'TechCrunch'            => array( '미', 'plat', '', '' ),
-	'The Verge'             => array( '미', 'plat', '', '' ),
-	'Google 트렌드'          => array( '한', 'trend', '', '' ),
+	'Front Office Sports'   => array( 'us', 'camp', '', '' ),
+	'TechCrunch'            => array( 'us', 'plat', '', '' ),
+	'The Verge'             => array( 'us', 'plat', '', '' ),
+	'Google 트렌드'          => array( 'kr', 'trend', '', '' ),
 	// 10/20 오후에 뺀 곳 — 지난 리포트의 알약 색 때문에만 남긴다(읽는 법 '').
 	// 사용자 원칙: "작동 안 하면 빼 버려. 정상적인 컨디션에서 양질을 검토하는 게 목표".
 	// WLDO·a:mag = 유튜브 RSS가 이 두 채널만 오후 내내 404(채널 id는 맞음, 다른 채널은 200).
 	// 레딧 = 부를 때마다 막히는 게시판이 바뀌는 요청 제한(429). 다시 넣을 땐 reader(youtube·reddit)는 그대로 있다
-	'WLDO'                  => array( '한', 'camp', '', '' ),
-	'a:mag'                 => array( '한', 'camp', '', '' ),
+	'WLDO'                  => array( 'kr', 'camp', '', '' ),
+	'a:mag'                 => array( 'kr', 'camp', '', '' ),
 );
 // 성현 님이 원래 보던 곳 중 못 넣은 곳(10/20 확인): exchange4media(Cloudflare가 프로그램 접근 403), X·틱톡(RSS 없음, 로그인 필요)
 
@@ -138,9 +138,26 @@ function tp_radar_chip_color( $source ) {
 	return TP_RADAR_GROUP_COLOR[ $group ] ?? array( '#efe3cf', '#8c7f73', '#5a4a42' );
 }
 
-// 정보원 나라 한 글자(한·미·일·영…), 표에 없으면 ''(10/20 사용자 아이디어: 소스의 나라 표기)
+// 정보원 나라 코드(kr·us·jp·gb), 표에 없으면 ''(10/20 사용자 아이디어: 소스의 나라 표기)
 function tp_radar_country( $source ) {
 	return TP_RADAR_SOURCES[ $source ][0] ?? '';
+}
+
+const TP_RADAR_COUNTRY_NAME = array( 'kr' => '한국', 'us' => '미국', 'jp' => '일본', 'gb' => '영국' );
+
+/*
+ * 나라 국기 — 10/21 사용자: 한 글자 대신 국기로.
+ * 국기 이모지(🇰🇷)를 쓰지 않는 이유: Windows는 국기 이모지를 그림으로 그리지 못하고 "KR" 글자로 보여 준다(성현 님 PC가 Windows).
+ * 그래서 그림 파일을 쓴다 — flag-icons(MIT 라이선스) 정사각형 판을 버전을 못 박아 jsdelivr에서 받고, 동그랗게 잘라 보여 준다.
+ * 새 나라를 넣을 땐 TP_RADAR_COUNTRY_NAME에도 같이 적는다(마우스를 올리면 나라 이름이 뜬다).
+ */
+function tp_radar_flag( $source, $class = 'tprd-flag' ) {
+	$c = tp_radar_country( $source );
+	if ( '' === $c ) {
+		return '';
+	}
+	$name = TP_RADAR_COUNTRY_NAME[ $c ] ?? strtoupper( $c );
+	return '<img class="' . esc_attr( $class ) . '" src="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/flags/1x1/' . esc_attr( $c ) . '.svg" alt="' . esc_attr( $name ) . '" title="' . esc_attr( $name ) . '" width="17" height="17" loading="lazy">';
 }
 
 // ── 실시간 피드: 정보원 새 글을 사이트가 직접 모은다(토큰 0) ──────────────
@@ -816,16 +833,14 @@ function tp_radar_card( $it, $i ) {
 /** 사진 위 자막 띠: 갈래 색 바탕에 흰 글씨 "나라 · 정보원"(10/20 사용자: 지금 분류하는 색으로) */
 function tp_radar_where( $source ) {
 	$fg = tp_radar_chip_color( $source )[2]; // 갈래 색 중 가장 진한 것 — 흰 글씨가 읽히게
-	$c  = tp_radar_country( $source );
-	return '<span class="tprd-where" style="background:' . esc_attr( $fg ) . '">' . esc_html( ( $c ? $c . ' · ' : '' ) . $source ) . '</span>';
+	return '<span class="tprd-where" style="background:' . esc_attr( $fg ) . '">' . tp_radar_flag( $source, 'tprd-flag tprd-flag-s' ) . esc_html( $source ) . '</span>';
 }
 
 /** 정보원 알약: 나라 동그라미 + 이름 · 날짜(월-일) */
 function tp_radar_chip( $source, $date ) {
 	list( $bg, $line, $fg ) = tp_radar_chip_color( $source );
-	$c                      = tp_radar_country( $source );
 	echo '<span class="tprd-chip" style="background:' . esc_attr( $bg ) . ';border-color:' . esc_attr( $line ) . ';color:' . esc_attr( $fg ) . '">'
-		. ( $c ? '<span class="tprd-flag">' . esc_html( $c ) . '</span>' : '' )
+		. tp_radar_flag( $source )
 		. esc_html( $source . ' · ' . substr( $date, 5 ) ) . '</span>';
 }
 
@@ -911,7 +926,8 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-no { position: absolute; top: 9px; left: 9px; z-index: 1; padding: 1px 9px; border-radius: 6px; background: var(--live); color: #fff; font: 400 14px/1.4 "Do Hyeon", sans-serif; }
 .tprd-bd { padding: 12px 14px 14px; }
 .tprd-chip { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1.5px solid; font-size: 11.5px; font-weight: 700; }
-.tprd-flag { display: inline-block; width: 17px; height: 17px; margin: 0 5px 0 -5px; border-radius: 50%; background: #3b2f2a; color: #fffdf8; font-size: 10px; line-height: 17px; text-align: center; vertical-align: 1px; }
+.tprd-flag { display: inline-block; width: 17px; height: 17px; margin: 0 5px 0 -5px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.18); vertical-align: -3px; object-fit: cover; }
+.tprd-flag-s { width: 14px; height: 14px; margin: 0 5px 0 -3px; vertical-align: -2px; box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
 .tprd-tr { display: inline-block; padding: 0 7px; border-radius: 6px; background: #ebe5ff; color: #5b3fd0; font-size: 11px; font-weight: 700; }
 .tprd-tr.wait { background: var(--soft); color: var(--muted); }
 .tprd-bd h3 { margin: 6px 0 2px; font: 400 19px/1.3 "Jua", sans-serif; }
@@ -973,7 +989,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 	<?php if ( $tick ) : ?>
 <div class="tprd-ticker" aria-label="최신 소식"><div>
 		<?php foreach ( array_merge( $tick, $tick ) as $it ) : // 두 번 이어 붙여야 끊김 없이 돈다 ?>
-<span><b><?php echo esc_html( tp_radar_country( $it['source'] ) . ' ' . $it['source'] ); ?></b><?php echo esc_html( $trs[ $it['link'] ][0] ?? $it['orig'] ); ?></span>
+<span><b><?php echo tp_radar_flag( $it['source'], 'tprd-flag tprd-flag-s' ) . esc_html( $it['source'] ); // phpcs:ignore WordPress.Security.EscapeOutput -- 함수가 이미 이스케이프함 ?></b><?php echo esc_html( $trs[ $it['link'] ][0] ?? $it['orig'] ); ?></span>
 		<?php endforeach; ?>
 </div></div>
 	<?php endif; ?>
