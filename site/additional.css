@@ -923,6 +923,22 @@ body:has(.tp-copy-stage) { overflow-x: clip; }
   .tp-related-card:nth-child(n+4) { display: none; }
 }
 
+/* ---------- Saves 1,000+ badge (10/20, mockup 1020-1 A1) ---------- */
+/* Posts tagged tp1000 (saved 1,000+ times on Instagram) get a black badge on the photo's top-left corner.
+   List cards carry WordPress's own tag-tp1000 class; TP Related Posts 1.1.0 adds the same class to its cards.
+   The icon is Instagram's save (bookmark) shape so it reads as "saves" at a glance */
+.wp-block-post.tag-tp1000 .wp-block-post-featured-image,
+.tp-related-card.tag-tp1000 { position: relative; }
+.wp-block-post.tag-tp1000 .wp-block-post-featured-image::after,
+.tp-related-card.tag-tp1000::before {
+  content: "\C800\C7A5  1,000+";
+  position: absolute; top: 8px; left: 8px; z-index: 1;
+  padding: 3px 6px 3px 19px; border-radius: 4px;
+  background: #111 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 3h12v18l-6-4.5L6 21z' fill='%23fff'/%3E%3C/svg%3E") no-repeat 6px 50% / 10px 10px;
+  color: #fff; font-size: 11px; font-weight: 800; line-height: 1.2; letter-spacing: .01em; white-space: nowrap;
+  pointer-events: none;
+}
+
 /* ---------- Newsletter ---------- */
 .tp-nl-wrap { background: #f4f4f4; padding: 3.5rem 1.5rem !important; margin-top: 0 !important; }
 .wp-site-blocks > :has(.tp-nl-wrap) + footer { margin-block-start: 0 !important; }
