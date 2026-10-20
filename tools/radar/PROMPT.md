@@ -38,8 +38,8 @@ A4. Run `python3 tools/radar/radar.py answer <id>`. If you truly cannot (the scr
 C1. Run `python3 tools/radar/radar.py titles`. If it says there is nothing to look at, stop.
 C2. Write `local/radar/titles-ko.json` as
     `{"titles": {"<number>": "한국어 제목", ...}, "hide": [<number>, ...]}`.
-    - `titles`: one entry for every line marked `[번역]` that you do not hide (hidden lines need no
-      title): a natural Korean headline the
+    - `titles`: one entry for every line marked `[번역]`, hidden or not (the team opens the
+      hidden pile too and needs to read it): a natural Korean headline the
       way a Trendportal card would title it (about 30 characters, brand or person first when there
       is one, no translationese). Keep names and numbers exactly, add nothing the original title and
       summary do not say.

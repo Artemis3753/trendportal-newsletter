@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.13.0
+ * Version: 1.14.0
  * Author: Trendportal
  */
 
@@ -441,7 +441,7 @@ add_action(
  * → 정규식으로는 "너무 테크"를 못 가려서, 제목을 번역하는 김에 특파원이 한국어 글까지 훑어 "접기"를 같이 표시한다.
  * 지우지 않고 접는 이유: 잘못 접힌 글이 있어도 피드 맨 아래에서 찾을 수 있게(사용자 선택).
  * routine이 깨어날 때마다(정리 부탁 · 아래 "번역·거르기 부탁") 아직 안 훑은 글만 본다.
- * tp_radar_titles: 링크 => array( 한국어 제목(한국어 글은 ''), 저장 시각, 접기 true|false )  — 가장 긴 피드 창(Link in Bio 14일)보다 넉넉히 15일 보관
+ * tp_radar_titles: 링크 => array( 한국어 제목(한국어 글은 ''), 저장 시각, 접기 true|false, 새 규칙으로 훑음 true )  — 가장 긴 피드 창(Link in Bio 14일)보다 넉넉히 15일 보관
  *   접기 칸이 없는 것 = 번역만 하고 아직 안 훑은 글(10/20 저녁 전 번역분)
  */
 function tp_radar_titles() {
@@ -449,10 +449,23 @@ function tp_radar_titles() {
 	return is_array( $t ) ? $t : array();
 }
 
-/** 피드에서 특파원이 아직 안 훑은 글(번역할 외국어 글 + 접을지 볼 한국어 글) */
+/*
+ * 피드에서 특파원이 아직 안 훑은 글(번역할 외국어 글 + 접을지 볼 한국어 글).
+ * 10/21 사용자: 접힌 글도 번역해 달라 — 전엔 토큰을 아끼려고 접은 외국어 글은 번역하지 않았다.
+ * 그때 접혀 번역 없이 남은 글도 한 번만 다시 보낸다. 새 규칙으로 훑은 글은 넷째 칸(true)이 있어서,
+ * 특파원이 번역을 빠뜨려도 다시 안 보낸다 — 안 그러면 그 글 때문에 자동 부탁이 30분마다 되풀이된다.
+ */
 function tp_radar_unjudged( $feed ) {
 	$tr = tp_radar_titles();
-	return array_values( array_filter( $feed['items'], fn( $it ) => ! isset( $tr[ $it['link'] ][2] ) ) );
+	return array_values(
+		array_filter(
+			$feed['items'],
+			function ( $it ) use ( $tr ) {
+				$t = $tr[ $it['link'] ] ?? null;
+				return ! isset( $t[2] ) || ( $t[2] && '' === $t[0] && empty( $t[3] ) && '' !== tp_radar_lang( $it['orig'] ) );
+			}
+		)
+	);
 }
 
 /** 특파원이 접어 둔 글인가 */
@@ -764,7 +777,7 @@ add_action(
 						// judged = 이번에 훑은 글 전부(접지 않은 글도 "훑었다"로 남겨야 다음에 다시 안 읽는다)
 						foreach ( array_map( 'esc_url_raw', (array) $req->get_param( 'judged' ) ) as $link ) {
 							$title         = '' !== ( $ko[ $link ] ?? '' ) ? $ko[ $link ] : ( $tr[ $link ][0] ?? '' );
-							$tr[ $link ]   = array( $title, time(), isset( $fold[ $link ] ) );
+							$tr[ $link ]   = array( $title, time(), isset( $fold[ $link ] ), true ); // 넷째 칸: 접은 글도 번역하는 규칙으로 훑음
 							$n            += isset( $fold[ $link ] ) ? 1 : 0;
 						}
 						update_option( 'tp_radar_titles', $tr, false );
