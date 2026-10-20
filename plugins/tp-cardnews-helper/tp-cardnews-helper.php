@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.24.0
+ * Version: 1.25.0
  * Author: Trendportal
  */
 
@@ -23,6 +23,7 @@ const TP_CN_TYPE = 'tp_cn_order';
 const TP_CN_DIR  = 'tp-cardnews';
 const TP_CN_SLUG = 'tp-cardnews';
 const TP_CN_MAX  = 200 * 1024 * 1024; // zip 상한. 764(카드 17장)가 16MB였다
+const TP_CN_PAGE = 30;                // 주문 현황을 한 번에 펼치는 개수
 
 // 상태 이름은 영어로 저장하고, 화면에는 한국어로 (REST로 오가는 값이 글자 깨짐 걱정 없게)
 const TP_CN_STATUS = array(
@@ -1082,10 +1083,19 @@ function tp_cn_page() {
 	} elseif ( isset( $_GET['tp_cn_rev'] ) && 'revise' === get_post_meta( (int) $_GET['tp_cn_rev'], '_tp_cn_status', true ) ) {
 		$msg = array( 'ok', '수정 요청 받았어요! 셰프 트란시스가 같은 초안을 고쳐 둘게요.' );
 	}
+	// 지난 주문 더 보기(1.25.0, 10/20 사용자): 처음엔 최근 30개만 그리고, 누를 때마다 30개씩 더.
+	// 숫자만 키우지 않은 이유: 뉴스레터 주문은 메일 HTML을 통째로 품고 있어서 주문이 쌓일수록 탭을 열 때마다 무거워진다.
+	// 하나 더 읽어 보고 남는 게 있을 때만 버튼을 단다. 300개에서 멈춘다(그 이상은 지울 때가 된 것)
+	$show   = min( 300, max( TP_CN_PAGE, (int) ( $_GET['show'] ?? TP_CN_PAGE ) ) );
+	$orders = tp_cn_orders( null, $show + 1 );
+	$more   = count( $orders ) > $show && $show < 300;
 	tp_cn_render(
-		tp_cn_orders(),
+		array_slice( $orders, 0, $show ),
 		$msg,
 		array(
+			'show'   => $show,
+			// 새로 펼친 첫 주문으로 바로 내려가게 그 자리에 책갈피(#tpcn-next)를 단다
+			'more'   => $more ? admin_url( 'admin.php?page=' . TP_CN_SLUG . '&show=' . ( $show + TP_CN_PAGE ) . '#tpcn-next' ) : '',
 			'face'   => plugins_url( 'mascot.jpg', __FILE__ ),
 			'rest'   => plugins_url( 'mascot-rest.png', __FILE__ ),
 			'pcap'   => plugins_url( 'profile-capture.mp4', __FILE__ ),
@@ -1312,6 +1322,8 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-publish button:hover { background: #ec6a43; }
 .tpcn-field label.tpcn-saved { display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
 .tpcn-saved-btn { margin: 0; }
+.tpcn-more { display: block; margin: 14px auto 0; padding: 10px 16px; max-width: 260px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; color: var(--ink); text-align: center; text-decoration: none; font-weight: 700; box-shadow: 3px 3px 0 var(--ink); }
+.tpcn-more:hover { color: var(--ink); background: #fff7e6; }
 .tpcn-saved-btn button { padding: 5px 12px; border: 1.5px solid var(--line); border-radius: 999px; background: #fff; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .tpcn-saved-btn.is-on button { background: #111; border-color: #111; color: #fff; }
 .tpcn-body details { margin-top: 8px; }
@@ -1577,7 +1589,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 </section>
 
 <section class="tpcn-panel">
-	<h2>주문 현황 <small>최근 30개</small></h2>
+	<h2>주문 현황 <small><?php echo $u['more'] ? '최근 ' . (int) $u['show'] . '개' : '전체 ' . count( $orders ) . '개'; ?></small></h2>
 	<?php if ( ! $orders ) : ?>
 	<div class="tpcn-empty">
 		<img src="<?php echo esc_url( $u['rest'] ); ?>" width="180" alt="쉬고 있는 트란시스">
@@ -1586,12 +1598,14 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	<?php else : ?>
 	<ol class="tpcn-list">
 		<?php
-		foreach ( $orders as $o ) :
+		foreach ( $orders as $i => $o ) :
 			$s = isset( TP_CN_STATUS[ $o['status'] ] ) ? $o['status'] : 'new';
+			// 더 보기로 새로 펼친 첫 주문(= 지난번 마지막 다음)에 책갈피
+			$next = $i > 0 && $i === $u['show'] - TP_CN_PAGE ? ' id="tpcn-next"' : '';
 			// 발행된 주문은 '완성' 대신 '발행됨' 딱지(10/18 사용자). 화면 표시만 바꾸고 저장된 상태는 그대로 done
 			$pub = 'done' === $s && 'publish' === $o['post_status'];
 			?>
-		<li class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $pub ? ' is-pub' : ''; ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
+		<li<?php echo $next; // phpcs:ignore WordPress.Security.EscapeOutput -- 고정 문자열 ?> class="tpcn-item s-<?php echo esc_attr( $s ); ?> is-<?php echo esc_attr( $s ); ?><?php echo $pub ? ' is-pub' : ''; ?><?php echo $o['finished'] > $u['seen'] ? ' is-fresh' : ''; ?>" data-id="<?php echo (int) $o['id']; ?>" data-status="<?php echo esc_attr( $s ); ?>">
 			<span class="tpcn-no" title="주문 번호"><?php echo (int) $o['id']; ?></span>
 			<div>
 				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php elseif ( 'ad' === $o['kind'] ) : ?><span class="tpcn-tag is-sponsor">📢 광고</span><?php elseif ( 'newsletter' === $o['kind'] ) : ?><span class="tpcn-tag is-nl">📮 뉴스레터</span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
@@ -1747,6 +1761,9 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		</li>
 		<?php endforeach; ?>
 	</ol>
+		<?php if ( $u['more'] ) : ?>
+	<a class="tpcn-more" href="<?php echo esc_url( $u['more'] ); ?>">지난 주문 <?php echo (int) TP_CN_PAGE; ?>개 더 보기 ↓</a>
+		<?php endif; ?>
 	<?php endif; ?>
 </section>
 
