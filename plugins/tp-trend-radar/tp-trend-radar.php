@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.12.0
+ * Version: 1.12.1
  * Author: Trendportal
  */
 
@@ -21,6 +21,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 
 const TP_RADAR_SLUG = 'tp-trend-radar';
+
+// 안내 문구(?tprd_msg=)는 한 번만 보여 준다 — 워드프레스가 페이지를 띄운 뒤 주소창에서 지워 준다.
+// 10/21 사용자: 번역이 끝나도 문구가 안 사라짐 → '훑는 중' 30초 자동 새로고침이 문구 붙은 주소를 그대로 다시 읽고 있었다
+add_filter( 'removable_query_args', fn( $args ) => array_merge( $args, array( 'tprd_msg' ) ) );
 
 // ── 리포트 카드 ──────────────────────────────────────────
 
