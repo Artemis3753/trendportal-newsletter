@@ -22,13 +22,17 @@ import cardnews  # noqa: E402  주문 폴더·사이트 REST·사진 올리기·
 
 LOGO = "https://i0.wp.com/trendportal.kr/wp-content/uploads/2026/09/cropped-tp-icon-square.png?fit=128%2C128&ssl=1"
 FONT = "-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"
+# 양옆 여백. 폰 Gmail 앱에선 앱 자체 여백까지 더해져 32px이면 글·사진이 좁아 보여서 20px로 줄임(10/20 사용자 A안, 폰·PC 같은 값)
+GUTTER_PX = 20
+GUTTER = f"{GUTTER_PX}px"
 
 # 메일 프로그램(특히 Gmail)이 <style>을 지우는 경우가 있어서 꾸밈은 전부 태그에 직접 적는다(인라인).
 # 값은 모의 뉴스레터 docs/트렌드포털-시안비교/1006-4 의 class 값을 그대로 옮긴 것(디자인 확정 10/18)
 S = {
     "page": f"margin:0;padding:24px 0;background:#fff;font-family:{FONT};color:#111;word-break:keep-all;",
-    "mail": "width:100%;max-width:600px;margin:0 auto;background:#fff;",
-    "rule": "border-top:1px solid #111;margin:36px 32px;",
+    # 스티비 HTML 편집기(10/20 미리보기)와 Gmail은 <body> 꾸밈을 버린다 → 글꼴·글자색·줄바꿈은 본문 상자에도 적어 둔다
+    "mail": f"width:100%;max-width:600px;margin:0 auto;background:#fff;font-family:{FONT};color:#111;word-break:keep-all;",
+    "rule": f"border-top:1px solid #111;margin:36px {GUTTER};",
     "issue": "margin:0 0 10px;font-size:12px;font-weight:800;letter-spacing:1px;color:#888;",
     "h1": "margin:0;font-size:30px;font-weight:800;line-height:1.3;letter-spacing:-1.1px;color:#111;",
     "letter_p": "margin:0 0 14px;font-size:15px;line-height:1.8;",
@@ -43,11 +47,13 @@ S = {
     "h4": "margin:0 0 6px;font-size:13px;font-weight:800;color:#888;letter-spacing:0.5px;",
     "p": "margin:0 0 18px;font-size:15px;line-height:1.8;",
     "insight_p": "margin:0 0 10px;font-size:14.5px;line-height:1.8;",
-    # **핵심 구절**에만 굵게+형광(사이트 💡와 같은 모양, 10/19 사용자). 그라디언트를 못 읽는 메일 앱에선 굵게만 남는다
-    "hl": "font-weight:800;background:linear-gradient(transparent 55%,#fff1a8 55%);-webkit-box-decoration-break:clone;box-decoration-break:clone;",
+    # **핵심 구절**에만 굵게+형광(사이트 💡와 같은 모양, 10/19 사용자). 그라디언트를 못 읽는 메일 앱에선 굵게만 남는다.
+    # 색은 반투명 노랑: 흰 바탕에선 #fff1a8과 같고, Gmail 앱 다크 모드(글자는 흰색으로 뒤집고 그라디언트는 그대로 둠)에선
+    # 어두운 바탕과 섞여 진한 황토색이 돼 흰 글자가 읽힌다(10/20 테스트 메일에서 불투명 #fff1a8 위 흰 글자가 안 보였음)
+    "hl": "font-weight:800;background:linear-gradient(transparent 55%,rgba(255,215,6,0.35) 55%);-webkit-box-decoration-break:clone;box-decoration-break:clone;",
     "refs": "margin:10px 0 0;font-size:12px;line-height:1.7;color:#888;",
     "btn": "display:inline-block;background:#111;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:13px 24px;border-radius:999px;",
-    "foot": "padding:28px 32px 32px;font-size:12px;line-height:1.8;color:#999;background:#f7f7f7;margin-top:40px;",
+    "foot": f"padding:28px {GUTTER} 32px;font-size:12px;line-height:1.8;color:#999;background:#f7f7f7;margin-top:40px;",
 }
 DEFAULT_CLOSING = [
     "이번 주 가장 인상 깊었던 마케팅이 있다면 이 메일에 답장으로 알려 주세요.",
@@ -129,7 +135,7 @@ def card_html(i, c, nl, table, post_url):
             img = (f'<img src="{html.escape(photon(url, 480))}" alt="" width="240" '
                    f'style="display:block;width:240px;max-width:70%;height:auto;margin:0 auto;border:0;">')
         else:
-            img = f'<img src="{html.escape(photon(url, 1200))}" alt="" width="536" style="display:block;width:100%;height:auto;border:0;">'
+            img = f'<img src="{html.escape(photon(url, 1200))}" alt="" width="{600 - 2 * GUTTER_PX}" style="display:block;width:100%;height:auto;border:0;">'
         out.append(f'<a href="{html.escape(link)}">{img}</a>' if link else img)
     if link:
         # 메일 안에서는 영상이 재생되지 않아서 원본(우리 영상은 사이트 글)으로 보내는 링크
@@ -147,7 +153,7 @@ def card_html(i, c, nl, table, post_url):
         links = " · ".join(f'<a href="{html.escape(s["url"])}" style="color:#888;">{e(s["label"])}</a>' for s in nl["sources"])
         inner.append(f'<p style="{S["refs"]}">참고: {links}</p>')
     out.append(f'<div style="{S["box"]}">{"".join(inner)}</div>')
-    return f'<div style="padding:0 32px;">{"".join(out)}</div>'
+    return f'<div style="padding:0 {GUTTER};">{"".join(out)}</div>'
 
 
 def sender():
@@ -165,17 +171,17 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
     by_no = {x["no"]: x for x in nl["cards"]}
     parts = []
     # 머리: 웰컴메일과 같은 모양 + 오른쪽에 호수
-    parts.append(f'<div style="padding:28px 32px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'
+    parts.append(f'<div style="padding:28px {GUTTER} 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'
                  f'<td style="width:46px;"><img src="{LOGO}" alt="트렌드포털" width="36" height="36" style="display:block;border-radius:8px;"></td>'
                  f'<td style="font-size:13px;font-weight:800;letter-spacing:0.5px;">TRENDPORTAL</td>'
                  f'<td style="text-align:right;font-size:11px;color:#888;letter-spacing:1px;font-weight:800;">WEEKLY · {e(order["issue"])}</td></tr></table></div>')
-    parts.append(f'<div style="padding:40px 32px 0;"><p style="{S["issue"]}">{e(dateline(order["issue"]))}</p>'
+    parts.append(f'<div style="padding:40px {GUTTER} 0;"><p style="{S["issue"]}">{e(dateline(order["issue"]))}</p>'
                  f'<h1 style="{S["h1"]}">이번 주 일어난<br>마케팅 이슈 총정리</h1></div>')
     letter = "".join(f'<p style="{S["letter_p"]}">{cardnews.marked(p, S["hl"])}</p>' for p in nl["letter"])
-    parts.append(f'<div style="padding:28px 32px 0;">{letter}<p style="{S["sig"]}">트렌드포털</p></div>')
+    parts.append(f'<div style="padding:28px {GUTTER} 0;">{letter}<p style="{S["sig"]}">트렌드포털</p></div>')
     if nl.get("picks"):
         lis = "".join(f'<li>{e(p)}</li>' for p in nl["picks"])
-        parts.append(f'<div style="margin:8px 32px 0;{S["box"]}"><span style="{S["box_t"]}">이번 주 에디터 픽</span>'
+        parts.append(f'<div style="margin:8px {GUTTER} 0;{S["box"]}"><span style="{S["box_t"]}">이번 주 에디터 픽</span>'
                      f'<ol style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;font-weight:700;">{lis}</ol></div>')
     # 공지(이벤트 등) — 사이트 목표가 제보 게시판 활성화라 위쪽에 둔다. 모양은 홈 공지 줄의 파란 '공지' 알약과 같은 계열
     if nl.get("notice"):
@@ -184,7 +190,7 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
         paras = [n["text"]] if isinstance(n["text"], str) else n["text"]
         body = "".join(f'<p style="margin:0 0 10px;font-size:14.5px;line-height:1.8;">{e(p)}</p>' for p in paras)
         btn = f'<p style="margin:14px 0 0;"><a href="{html.escape(n["url"])}" style="{S["btn"]}">{e(n["button"])}</a></p>' if n.get("url") else ""
-        parts.append(f'<div style="margin:16px 32px 0;background:#f1f5ff;border-radius:10px;padding:18px 20px;">'
+        parts.append(f'<div style="margin:16px {GUTTER} 0;background:#f1f5ff;border-radius:10px;padding:18px 20px;">'
                      f'<span style="display:inline-block;padding:2px 6px;border-radius:3px;background:#2f6bff;color:#fff;font-size:11px;font-weight:800;margin-bottom:10px;">공지</span>'
                      f'<p style="margin:0 0 8px;font-size:16px;font-weight:800;line-height:1.5;">{e(n["title"])}</p>{body}{btn}</div>')
     # 이번 주 선정 제보(10/30 호부터, 제보 이벤트): 누가 무엇을 제보했는지 + 제보 글 링크. 제보자 이름은 게시판에 공개된 그대로
@@ -195,7 +201,7 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
             link = f' <a href="{html.escape(r["url"])}" style="color:#111;font-weight:700;">제보 보기 →</a>' if r.get("url") else ""
             items.append(f'<div style="padding:12px 0;border-top:1px solid #e5e5e5;"><p style="margin:0;font-size:15px;font-weight:800;line-height:1.5;">{e(r["title"])}</p>'
                          f'<p style="margin:2px 0 0;font-size:12px;color:#888;">제보 {e(r.get("user", ""))}{link}</p>{text}</div>')
-        parts.append(f'<div style="margin:16px 32px 0;{S["box"]}"><span style="{S["box_t"]}">이번 주 선정 제보 ☕</span>{"".join(items)}'
+        parts.append(f'<div style="margin:16px {GUTTER} 0;{S["box"]}"><span style="{S["box_t"]}">이번 주 선정 제보 ☕</span>{"".join(items)}'
                      f'<p style="margin:10px 0 0;font-size:12px;color:#888;">선정된 분께는 적어 주신 이메일로 스타벅스 아메리카노 기프티콘을 보내 드려요.</p></div>')
     parts.append(rule)
     # 목차: 메일 프로그램 다수가 #앵커 이동을 지원하지 않아 링크 없이 목록만(모의본과 같음)
@@ -204,14 +210,14 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
         last = "border-bottom:0;" if i == len(cs) else ""
         rows.append(f'<tr><td style="{S["toc_td"]}{last}width:34px;font-weight:800;color:#aaa;">{i:02d}</td>'
                     f'<td style="{S["toc_td"]}{last}">{e(c["title"])}</td></tr>')
-    parts.append(f'<div style="padding:0 32px;"><p style="{S["toc_h"]}">이번 주 {len(cs)}가지</p>'
+    parts.append(f'<div style="padding:0 {GUTTER};"><p style="{S["toc_h"]}">이번 주 {len(cs)}가지</p>'
                  f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{"".join(rows)}</table></div>')
     for i, c in enumerate(cs, 1):
         parts.append(rule)
         parts.append(card_html(i, c, by_no.get(c["no"], {}), table, post_url))
     parts.append(rule)
     cl = "".join(f'<p style="margin:0 0 14px;font-size:15px;line-height:1.8;">{e(p)}</p>' for p in (nl.get("closing") or DEFAULT_CLOSING))
-    parts.append(f'<div style="padding:0 32px;"><p style="margin:0 0 10px;font-size:16px;font-weight:800;">여러분의 이번 주 픽은?</p>{cl}'
+    parts.append(f'<div style="padding:0 {GUTTER};"><p style="margin:0 0 10px;font-size:16px;font-weight:800;">여러분의 이번 주 픽은?</p>{cl}'
                  f'<p style="margin:0 0 14px;"><a href="https://trendportal.kr/report/" style="{S["btn"]}">제보하러 가기</a></p>'
                  f'<p style="margin:28px 0 0;font-size:15px;line-height:1.8;">매주 금요일, 국내외에서 실제로 터진 마케팅만 골라 보내 드릴게요.<br>그럼 다음 주 금요일에 만나요!<br><b>트렌드포털 주인장</b> 드림</p></div>')
     # 푸터: 광고성 메일이라 발신자 정보와 수신거부 링크가 꼭 있어야 한다. $%…%$ 는 스티비가 발송할 때 채우는 자리

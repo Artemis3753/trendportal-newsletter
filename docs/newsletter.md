@@ -46,6 +46,12 @@ python3 tools/newsletter/newsletter.py shot <order>      # the mail at 390px and
 
 The builder writes inline styles (mail apps can drop `<style>`), sends site photos through Jetpack's image server at mail size, shows a vertical video still small and centred with a `▶ … 영상 보기` link, and points our own clips to the site's weekly post (build again after the site draft exists). Fixed parts: the header, the table of contents, the closing with the report button and the gift line, and the footer with Stibee's `$%permalink%$` and `$%unsubscribe%$` (the unsubscribe link must stay: it is an ad-consent mailing).
 
+Format fixed after the first Stibee test mail (10/20, Gmail on iPhone). Keep these when changing the builder, and never hand-edit `stibee.html`: change the builder and build again.
+
+- **Font and text colour sit on the 600px mail box, not only on `<body>`.** Stibee's HTML editor and Gmail drop `<body>` styles, and the mail fell back to a serif font.
+- **The highlight is a translucent yellow, `rgba(255,215,6,0.35)`**, not the solid `#fff1a8`. Gmail's dark mode turns the text white but leaves gradients alone, so white text sat on pale yellow and could not be read. The translucent colour looks the same on white and turns a dark ochre on a dark background.
+- **Side margins are 20px** (`GUTTER_PX`), on phone and PC alike. With Gmail's own margin added, 32px left the text and photos narrow on a phone. A phone-only margin would need a `<style>` media query, which Gmail does not reliably keep. Photo `width` attributes follow from it (600 − 2 × 20).
+
 ## Stibee facts
 
 - Paste `out/stibee.html` into Stibee's HTML editor. A mail made in the HTML editor cannot be saved as a Stibee template, which is fine: the builder is the template.
