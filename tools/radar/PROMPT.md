@@ -49,7 +49,7 @@ C2. Write `local/radar/titles-ko.json` as
       viral moments, memes, odd or useful websites and apps, new app features people will notice
       and use, pop-ups and collabs, game marketing and anything else young people (teens to
       30s) would care about, trend data about how people live, and funny or relatable posts that
-      blew up on X and that someone rounded up (Togetter, おたくま経済新聞 and the like — we want
+      blew up on X and that someone rounded up (おたくま経済新聞 and the like — we want
       to grab these fast). Keep especially brands
       riding a hot topic with their own joke — e.g. when Tesla showed its "flying" Roadster, other
       brands like Domino's and IKEA put out their own spoofs of it (a pizza edited into the car,

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.10.0
+ * Version: 1.10.1
  * Author: Trendportal
  */
 
@@ -85,9 +85,9 @@ const TP_RADAR_SOURCES = array(
 	// 10/20 밤 추가 — 틱톡·인터넷 화제를 가장 빨리 쓰는 곳(사용자: "트렌디하고 밈을 가장 빠르게")
 	'Daily Dot'             => array( '미', 'trend', 'rss', 'https://www.dailydot.com/feed/' ),
 	// 10/20 밤 추가 — X에서 뜬 걸 누군가 정리해 온 곳(사용자: "그걸 우리가 빠르게 낚아채는 거지").
-	// ねとらぼ(RSS 멈춤) 대신 おたくま = X 화제·이상한 신상품·콜라보, Togetter 인기 = 일본 X 화제 글 모음
+	// ねとらぼ(RSS 멈춤) 대신 おたくま = X 화제·이상한 신상품·콜라보.
+	// Togetter 인기(일본 X 화제 글 모음)도 넣었다가 뺐다 — 사이트 서버에서 받으면 403(로컬은 200, 10/20 밤)
 	'おたくま経済新聞'       => array( '일', 'trend', 'rss', 'https://otakuma.net/feed' ),
-	'Togetter'              => array( '일', 'trend', 'rss', 'https://togetter.com/rss/hot' ),
 	// 국내 광고·팝업 — 10/20 사용자가 원한 "캡틴큐 이선민 광고" 같은 국내 화제 광고는 브랜드브리프 RSS 맨 위에 그 기사가 있었다
 	'브랜드브리프'           => array( '한', 'kr', 'rss', 'https://www.brandbrief.co.kr/rss/allArticle.xml' ),
 	'매드타임스'             => array( '한', 'kr', 'rss', 'https://www.madtimes.co.kr/rss/allArticle.xml' ),
