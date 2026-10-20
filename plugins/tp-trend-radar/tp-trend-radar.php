@@ -916,7 +916,7 @@ add_action(
 			return;
 		}
 		// 카드뉴스 도우미 탭과 같은 글꼴(둘 다 SIL OFL 1.1)
-		wp_enqueue_style( 'tp-radar-fonts', 'https://fonts.googleapis.com/css2?family=Jua&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap', array(), null );
+		wp_enqueue_style( 'tp-radar-fonts', 'https://fonts.googleapis.com/css2?family=Jua&family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap', array(), null ); // Do Hyeon = 방송 자막 글꼴(SIL OFL)
 	}
 );
 
@@ -926,14 +926,16 @@ function tp_radar_card( $it, $i ) {
 	$lang                   = tp_radar_lang( $it['orig'] );
 	?>
 <article class="tprd-card">
+<span class="tprd-no">#<?php echo (int) $i + 1; ?></span>
 	<?php if ( ! empty( $it['image'] ) ) : ?>
-<a href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $it['image'] ); ?>" alt="" loading="lazy" referrerpolicy="no-referrer"></a>
+<a class="tprd-screen" href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><img class="ph" src="<?php echo esc_url( $it['image'] ); ?>" alt="" loading="lazy" referrerpolicy="no-referrer"><span class="tprd-cap"><?php echo tp_radar_where( $it['source'] ); // phpcs:ignore -- tp_radar_where가 이미 이스케이프 ?></span></a>
+	<?php else : ?>
+<span class="tprd-screen empty"><span class="tprd-cap"><?php echo tp_radar_where( $it['source'] ); // phpcs:ignore ?></span></span>
 	<?php endif; ?>
-<span class="tprd-no"><?php echo (int) $i + 1; ?></span>
-<div class="tprd-bd"<?php echo empty( $it['image'] ) ? ' style="padding-top:54px"' : ''; ?>>
-<?php tp_radar_chip( $it['source'], $it['date'] ); ?>
+<div class="tprd-bd">
+<span class="tprd-orig" style="margin:0"><?php echo esc_html( substr( $it['date'], 5 ) ); ?> 원문</span>
 	<?php if ( $lang ) : ?>
-<span class="tprd-chip" style="background:<?php echo esc_attr( TP_RADAR_TR[0] ); ?>;border-color:<?php echo esc_attr( TP_RADAR_TR[1] ); ?>;color:<?php echo esc_attr( TP_RADAR_TR[2] ); ?>">🌐 특파원 번역</span>
+<span class="tprd-tr">🌐 특파원 번역</span>
 	<?php endif; ?>
 <h3><a href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $it['title'] ); ?></a></h3>
 <p><?php echo esc_html( $it['note'] ); ?></p>
@@ -948,6 +950,13 @@ function tp_radar_card( $it, $i ) {
 </div>
 </article>
 	<?php
+}
+
+/** 사진 위 자막 띠: 갈래 색 바탕에 흰 글씨 "나라 · 정보원"(10/20 사용자: 지금 분류하는 색으로) */
+function tp_radar_where( $source ) {
+	$fg = tp_radar_chip_color( $source )[2]; // 갈래 색 중 가장 진한 것 — 흰 글씨가 읽히게
+	$c  = tp_radar_country( $source );
+	return '<span class="tprd-where" style="background:' . esc_attr( $fg ) . '">' . esc_html( ( $c ? $c . ' · ' : '' ) . $source ) . '</span>';
 }
 
 /** 정보원 알약: 나라 동그라미 + 이름 · 날짜(월-일) */
@@ -980,116 +989,132 @@ function tp_radar_page() {
 	?>
 <div class="tprd">
 <style>
-/* 10/20 사용자 결정: A 스티커 주방(카드뉴스 도우미 탭과 한 가족) + 맨 위만 C 스크랩북처럼 가운데 얼굴·큰 제목,
-   이름 "트란시스 특파원"에 맞춰 항공우편 띠 · PRESS 모자 · 날짜 소인 도장 */
-body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar #wpfooter { background: #fbf4e6 radial-gradient(#ead9bb 1.2px, transparent 1.3px) 0 0 / 16px 16px; }
-.tprd { --ink: #3b2f2a; --muted: #8c7f73; --card: #fffdf8; --post: #3a5bbf;
-  max-width: 980px; margin: 18px 20px 40px 0; color: var(--ink); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; font-size: 14px; line-height: 1.55; word-break: keep-all; }
+/* 10/20 사용자 결정: "스티커 주방" 대신 "현장 연결"(시안 3) — 트란시스가 현장 기자로 나오는 뉴스 화면.
+   LIVE 표시 · 흐르는 자막 · 사진 아래 자막 띠(갈래 색)에 나라와 정보원. 귀여운 쪽(Jua·둥근 모서리)은 그대로 */
+body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar #wpfooter { background: #fdfbf7; }
+.tprd { --ink: #3b2f2a; --muted: #8c7f73; --card: #ffffff; --soft: #efe8dc; --live: #e4572e; --hl: #fff7d1;
+  max-width: 1000px; margin: 18px 20px 40px 0; color: var(--ink); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; font-size: 14px; line-height: 1.55; word-break: keep-all; }
 .tprd * { box-sizing: border-box; }
-/* 맨 위 항공우편 띠: 셰프 탭의 깅엄 행주 띠 자리 */
-.tprd-air { height: 14px; border: 2.5px solid var(--ink); border-radius: 999px;
-  background: repeating-linear-gradient(-45deg, #e4572e 0 12px, #fffdf8 12px 20px, #3a86ff 20px 32px, #fffdf8 32px 40px); }
-.tprd-head { text-align: center; margin: 14px 0 22px; }
-.tprd-head img { width: 104px; height: 104px; }
-.tprd-head h1 { margin: 2px 0 4px; padding: 0; font: 400 30px/1.15 "Jua", sans-serif; color: var(--ink); }
-.tprd-head p { margin: 0; color: var(--muted); font-size: 13px; }
-.tprd-head p b { display: inline-block; margin-right: 6px; padding: 1px 9px; border-radius: 6px; background: var(--ink); color: #fffdf8; font-size: 11px; letter-spacing: .08em; }
+/* 방송 머리: LIVE · 트란시스 · 제목 · 칸 */
+.tprd-bug { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 12px; }
+.tprd-live { padding: 3px 10px; border-radius: 6px; background: var(--live); color: #fff; font: 400 15px/1.3 "Do Hyeon", sans-serif; letter-spacing: .04em; }
+.tprd-bug img { width: 54px; height: 54px; }
+.tprd-bug h1 { margin: 0; padding: 0; font: 400 28px/1.2 "Jua", sans-serif; color: var(--ink); }
+.tprd-bug p { margin: 0; color: var(--muted); font-size: 12.5px; }
 @media (prefers-reduced-motion: no-preference) {
-  .tprd-head img { animation: tprd-bob 3s ease-in-out infinite; }
-  @keyframes tprd-bob { 50% { transform: translateY(-4px) rotate(-3deg); } }
+  .tprd-bug img { animation: tprd-bob 3s ease-in-out infinite; }
+  @keyframes tprd-bob { 50% { transform: translateY(-3px) rotate(-3deg); } }
 }
-/* 위쪽 칸 나누기(10/20 사용자): 리포트 | 실시간 피드, 오른쪽에 데이터마이닝 보고서(정보원을 고른 근거) */
-.tprd-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 26px; }
+/* 흐르는 자막: 피드의 최신 제목들. 움직임을 줄이는 설정이면 멈춘 한 줄 */
+.tprd-ticker { overflow: hidden; margin: 0 0 16px; border-radius: 8px; background: var(--ink); color: #fff; font-size: 13px; }
+.tprd-ticker > div { display: inline-flex; gap: 28px; padding: 6px 14px; white-space: nowrap; }
+.tprd-ticker b { color: #ffe45c; font-weight: 700; margin-right: 6px; }
+@media (prefers-reduced-motion: no-preference) {
+  .tprd-ticker > div { animation: tprd-tick 60s linear infinite; }
+  .tprd-ticker:hover > div { animation-play-state: paused; }
+  @keyframes tprd-tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+}
+.tprd-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 22px; }
 .tprd-nav a { text-decoration: none; }
-.tprd-tab { padding: 8px 18px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font: 400 17px/1.2 "Jua", sans-serif; box-shadow: 3px 3px 0 var(--ink); }
-.tprd-tab.on { background: var(--ink); color: #fffdf8; box-shadow: none; transform: translate(3px, 3px); }
-.tprd-tab small { font: 700 11px "IBM Plex Sans KR", sans-serif; opacity: .7; }
+.tprd-tab { padding: 6px 16px; border-radius: 999px; background: var(--soft); color: var(--ink); font: 400 16px/1.2 "Jua", sans-serif; }
+.tprd-tab.on { background: var(--ink); color: #fff; }
+.tprd-tab small { font: 700 11px "IBM Plex Sans KR", sans-serif; opacity: .75; }
 .tprd-doc { margin-left: auto; padding: 5px 12px; border: 1.5px dashed var(--ink); border-radius: 999px; color: var(--ink); font-size: 12.5px; font-weight: 700; }
-.tprd-doc:hover { background: var(--card); }
-.tprd-msg { margin: 0 0 18px; padding: 10px 14px; border: 2px solid var(--ink); border-radius: 12px; background: #fff7d1; font-weight: 700; }
+.tprd-doc:hover { background: var(--hl); }
+.tprd-msg { margin: 0 0 18px; padding: 10px 14px; border-radius: 10px; background: var(--hl); font-weight: 700; }
+/* 날짜·정리 부탁 머리 = 방송 코너 제목 */
 .tprd-day { margin: 0 0 34px; scroll-margin-top: 50px; }
-.tprd-day h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 16px; font: 400 20px/1.2 "Jua", sans-serif; color: var(--ink); }
-/* 날짜 = 우체국 소인 도장 */
-.tprd-stamp { flex: none; display: grid; place-items: center; width: 66px; height: 66px; border: 3px double var(--post); border-radius: 50%; color: var(--post); transform: rotate(-12deg); text-align: center; line-height: 1; opacity: .9; }
-.tprd-stamp small { display: block; font: 700 8px/1 "IBM Plex Sans KR", sans-serif; letter-spacing: .12em; }
-.tprd-stamp strong { display: block; margin: 3px 0 2px; font: 400 17px/1 "Jua", sans-serif; }
-/* 정리 부탁 = 소인 대신 메모지 도장 */
-.tprd-stamp.ask { border-style: solid; border-width: 2.5px; border-color: var(--ink); color: var(--ink); background: #ffe45c; transform: rotate(8deg); font-size: 28px; }
+.tprd-day h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; font: 400 21px/1.2 "Jua", sans-serif; color: var(--ink); }
+.tprd-corner { padding: 3px 10px; border-radius: 6px; background: var(--live); color: #fff; font: 400 14px/1.3 "Do Hyeon", sans-serif; }
+.tprd-corner.ask { background: #1f5fc4; }
+.tprd-anchor { display: flex; align-items: center; gap: 8px; margin: -4px 0 14px; padding: 7px 12px; border-radius: 10px; background: var(--hl); font-size: 13px; }
+.tprd-anchor img { width: 30px; height: 30px; }
 .tprd-mail { padding: 2px 10px; border-radius: 999px; background: #d9f1e3; color: #13784f; font: 700 12px/1.5 "IBM Plex Sans KR", sans-serif; }
 .tprd-mail.bad { background: #fde3da; color: #b42333; }
 .tprd-mail.wait { background: #fff1c2; color: #8a6400; }
-.tprd-wait { margin: 0; padding: 12px 16px 12px 32px; border: 2px dashed #dcc9ab; border-radius: 14px; background: #fdf8ee; }
+.tprd-wait { margin: 0; padding: 12px 16px 12px 32px; border-radius: 12px; background: var(--card); box-shadow: 0 2px 10px rgba(59,47,42,.08); }
 .tprd-wait li { margin: 3px 0; }
 .tprd-recall { display: inline; margin-left: 4px; }
-.tprd-recall button, .tprd-btn { padding: 6px 14px; border: 2.5px solid var(--ink); border-radius: 999px; background: #ffe45c; color: var(--ink); font: 700 13px "IBM Plex Sans KR", sans-serif; cursor: pointer; box-shadow: 3px 3px 0 var(--ink); }
-.tprd-btn:disabled { background: #efe3cf; color: var(--muted); box-shadow: none; cursor: default; }
-/* 10/20 사용자: 사진은 작게, 글(핵심 정리)을 더 → 2열로 넓히고 사진은 납작한 띠(2.4:1) */
-.tprd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 22px 18px; align-items: start; }
-.tprd-card { position: relative; display: flex; flex-direction: column; background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px; box-shadow: 5px 5px 0 var(--ink); overflow: hidden; transition: transform .15s, box-shadow .15s; }
-.tprd-card:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--ink); }
-/* overflow를 숨겨야 유튜브 원본(16:9) 높이가 띠를 밀어 늘리지 않는다(aspect-ratio의 최소 높이가 0이 됨) */
-.tprd-card > a { display: block; overflow: hidden; aspect-ratio: 2.4 / 1; border-bottom: 2.5px solid var(--ink); background: #efe3cf; }
-.tprd-card > a img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.tprd-no { position: absolute; top: 10px; left: 10px; width: 36px; height: 36px; border-radius: 50%; background: #ffe45c; border: 2.5px solid var(--ink); font: 400 19px/31px "Jua", sans-serif; text-align: center; transform: rotate(-8deg); }
+.tprd-recall button, .tprd-btn { padding: 6px 14px; border: 0; border-radius: 999px; background: #ffe45c; color: var(--ink); font: 700 13px "IBM Plex Sans KR", sans-serif; cursor: pointer; box-shadow: 0 2px 0 #d9b800; }
+.tprd-btn:disabled { background: var(--soft); color: var(--muted); box-shadow: none; cursor: default; }
+/* 사진 위 자막 띠: 갈래 색 바탕 + 흰 글씨(나라 · 정보원), 그 아래 제목 */
+.tprd-screen { position: relative; display: block; overflow: hidden; background: #2b2320; }
+.tprd-screen img.ph { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tprd-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 11px 9px; background: linear-gradient(transparent, rgba(0,0,0,.72)); color: #fff; }
+.tprd-where { display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: 4px; color: #fff; font: 400 13px/1.45 "Do Hyeon", sans-serif; }
+.tprd-cap .tt { display: block; font: 400 17px/1.3 "Do Hyeon", sans-serif; color: #fff; text-decoration: none; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tprd-cap a.tt:hover { text-decoration: underline; }
+.tprd-reporter { position: absolute; top: 8px; right: 8px; width: 38px; height: 38px; border-radius: 50%; background: #fff; padding: 1px; }
+/* 리포트 카드: 넓은 화면(16:9) + 아래 원고 */
+.tprd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px 18px; align-items: start; }
+.tprd-card { position: relative; display: flex; flex-direction: column; background: var(--card); border-radius: 16px; box-shadow: 0 4px 16px rgba(59,47,42,.10); overflow: hidden; }
+.tprd-card .tprd-screen { aspect-ratio: 2.2 / 1; }
+.tprd-card .tprd-screen.empty { aspect-ratio: auto; min-height: 92px; }
+.tprd-no { position: absolute; top: 9px; left: 9px; z-index: 1; padding: 1px 9px; border-radius: 6px; background: var(--live); color: #fff; font: 400 14px/1.4 "Do Hyeon", sans-serif; }
 .tprd-bd { padding: 12px 14px 14px; }
 .tprd-chip { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1.5px solid; font-size: 11.5px; font-weight: 700; }
 .tprd-flag { display: inline-block; width: 17px; height: 17px; margin: 0 5px 0 -5px; border-radius: 50%; background: #3b2f2a; color: #fffdf8; font-size: 10px; line-height: 17px; text-align: center; vertical-align: 1px; }
-.tprd-bd h3 { margin: 7px 0 4px; font: 400 19px/1.3 "Jua", sans-serif; }
+.tprd-tr { display: inline-block; padding: 0 7px; border-radius: 6px; background: #ebe5ff; color: #5b3fd0; font-size: 11px; font-weight: 700; }
+.tprd-tr.wait { background: var(--soft); color: var(--muted); }
+.tprd-bd h3 { margin: 6px 0 2px; font: 400 19px/1.3 "Jua", sans-serif; }
 .tprd-bd h3 a { color: var(--ink); text-decoration: none; }
 .tprd-bd h3 a:hover { text-decoration: underline; }
-.tprd-bd p { margin: 0; font-size: 13.5px; line-height: 1.6; }
+.tprd-bd p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.6; }
 .tprd-bd .tprd-orig { margin-top: 6px; font-size: 12px; color: var(--muted); }
-/* 영어 원문 거리의 핵심 정리: 셰프 탭의 안내 상자처럼 점선 메모 */
-.tprd-pts { margin-top: 10px; padding: 10px 12px; border: 1.5px dashed #dcc9ab; border-radius: 12px; background: #fdf8ee; font-size: 13px; }
+.tprd-pts { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #faf6ef; font-size: 13px; }
 .tprd-pts b { display: block; margin-bottom: 2px; }
 .tprd-pts b span { font-weight: 400; color: var(--muted); }
 .tprd-pts ul { margin: 0; padding-left: 16px; list-style: "· "; }
 .tprd-pts li { margin: 2px 0; }
-.tprd-more { display: inline-block; padding: 8px 18px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-weight: 700; text-decoration: none; box-shadow: 3px 3px 0 var(--ink); }
-/* 실시간 피드: 거르기 알약 줄 → 한 줄짜리 글 목록(체크) → 아래에 붙는 정리 부탁 막대 */
+.tprd-more { display: inline-block; padding: 8px 18px; border-radius: 999px; background: var(--ink); color: #fff; font-weight: 700; text-decoration: none; }
+/* 실시간 피드: 거르기 → 카드 격자(체크) → 아래에 붙는 정리 부탁 막대 */
 .tprd-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
 .tprd-filters button { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font: 700 12.5px "IBM Plex Sans KR", sans-serif; cursor: pointer; }
-.tprd-filters button[aria-pressed="true"] { background: var(--ink); color: #fffdf8; }
+.tprd-filters button[aria-pressed="true"] { background: var(--ink); color: #fff; }
 .tprd-filters .tprd-refresh { margin-left: auto; font-size: 12px; color: var(--muted); }
-.tprd-filters .tprd-refresh button { background: #ffe45c; }
+.tprd-filters .tprd-refresh button { background: #ffe45c; border-color: #ffe45c; }
+.tprd-trb { margin-left: 0 !important; }
+.tprd-trb button { background: #ebe5ff !important; border-color: #ebe5ff !important; }
 .tprd-errs { margin: -6px 0 12px; font-size: 12px; color: #b42333; }
 .tprd-feed { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-/* 10/20 사용자: 피드는 카드 격자(시안 B) — 카드뉴스는 사진이 먼저라 그림이 되는 거리를 한눈에 */
-.tprd-feed li { position: relative; background: var(--card); border: 2.5px solid var(--ink); border-radius: 16px; box-shadow: 4px 4px 0 var(--ink); overflow: hidden; transition: transform .15s, box-shadow .15s; }
-.tprd-feed li:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); }
-.tprd-feed li.on { background: #fff7d1; box-shadow: 4px 4px 0 #e0a800; }
+.tprd-feed li { position: relative; background: var(--card); border-radius: 14px; box-shadow: 0 3px 12px rgba(59,47,42,.10); overflow: hidden; transition: transform .15s, box-shadow .15s; }
+.tprd-feed li:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(59,47,42,.16); }
+.tprd-feed li.on { box-shadow: 0 0 0 3px var(--live), 0 8px 20px rgba(59,47,42,.16); }
 .tprd-feed label { display: flex; flex-direction: column; height: 100%; cursor: pointer; }
-/* overflow를 숨겨야 큰 사진이 16:10 칸을 밀어 늘리지 않는다(리포트 카드와 같은 이유) */
-.tprd-feed .thumb { display: block; overflow: hidden; aspect-ratio: 16 / 10; border-bottom: 2.5px solid var(--ink); }
-.tprd-feed .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.tprd-feed input { position: absolute; top: 9px; left: 9px; z-index: 1; width: 20px; height: 20px; margin: 0; accent-color: var(--ink); }
-.tprd-feed .bd { display: grid; gap: 5px; padding: 9px 11px 12px; }
-.tprd-feed .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
-.tprd-feed .ttl { font: 400 16px/1.35 "Jua", sans-serif; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.tprd-feed .ttl a { color: var(--ink); text-decoration: none; }
-.tprd-feed .ttl a:hover { text-decoration: underline; }
+/* overflow를 숨겨야 큰 사진이 16:10 칸을 밀어 늘리지 않는다 */
+.tprd-feed .thumb { aspect-ratio: 16 / 10; }
+.tprd-feed input { position: absolute; top: 9px; left: 9px; z-index: 2; width: 20px; height: 20px; margin: 0; accent-color: var(--live); }
+.tprd-feed .bd { display: grid; gap: 4px; padding: 8px 11px 11px; }
+.tprd-feed .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .tprd-feed .sub { font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.tprd-feed .tr { display: inline-block; padding: 0 6px; border-radius: 6px; background: #ebe5ff; color: #5b3fd0; font-size: 10.5px; font-weight: 700; }
-.tprd-feed .tr.wait { background: #efe3cf; color: var(--muted); }
-.tprd-feed .st { padding: 0 8px; border-radius: 999px; background: #efe3cf; color: var(--ink); font-weight: 700; font-size: 11px; text-decoration: none; }
-.tprd-trb { margin-left: 0; }
-.tprd-trb button { background: #ebe5ff !important; }
-.tprd-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 0; padding: 12px 16px; border: 2.5px solid var(--ink); border-radius: 16px; background: var(--card); box-shadow: 5px 5px 0 var(--ink); }
-.tprd-bar span { color: var(--muted); font-size: 13px; }
-.tprd-bell { margin: 30px 0 0; padding: 12px 16px; border: 2px dashed #dcc9ab; border-radius: 14px; background: #fdf8ee; }
+.tprd-feed .st { padding: 0 8px; border-radius: 999px; background: var(--soft); color: var(--ink); font-weight: 700; font-size: 11px; text-decoration: none; }
+.tprd-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 0; padding: 12px 16px; border-radius: 14px; background: var(--ink); color: #fff; box-shadow: 0 8px 24px rgba(59,47,42,.25); }
+.tprd-bar span { color: #e9e2d8; font-size: 13px; }
+.tprd-bell { margin: 30px 0 0; padding: 12px 16px; border-radius: 12px; background: var(--card); box-shadow: 0 2px 10px rgba(59,47,42,.08); }
 .tprd-bell summary { cursor: pointer; font-weight: 700; }
 .tprd-bell summary small { font-weight: 400; color: var(--muted); }
 .tprd-bell label { display: block; margin: 10px 0 4px; font-weight: 700; font-size: 12.5px; }
 .tprd-bell input { width: 100%; max-width: 640px; }
 </style>
-<div class="tprd-air"></div>
-<div class="tprd-head">
+<div class="tprd-bug">
+<span class="tprd-live">● LIVE</span>
 <img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="트란시스 특파원">
-<h1><?php echo 'report' === $view && $first ? '특파원 리포트 - 기사 ' . count( (array) $first['items'] ) . '개' : '트란시스 특파원'; ?></h1>
-<p><b>PRESS</b>트란시스 특파원이 매일 아침 9시에 카드뉴스 거리를 송고해요</p>
+<div><h1>트란시스 현장 연결</h1><p>트란시스 특파원이 매일 아침 9시에 카드뉴스 거리를 송고해요</p></div>
 </div>
+	<?php
+	// 흐르는 자막: 받아 둔 피드의 최신 제목 8개(번역이 있으면 한국어). 피드를 아직 안 받았으면 없음
+	$tick = is_array( $feed ) ? array_slice( $feed['items'], 0, 8 ) : array();
+	$trs  = tp_radar_titles();
+	?>
+	<?php if ( $tick ) : ?>
+<div class="tprd-ticker" aria-label="최신 소식"><div>
+		<?php foreach ( array_merge( $tick, $tick ) as $it ) : // 두 번 이어 붙여야 끊김 없이 돈다 ?>
+<span><b><?php echo esc_html( tp_radar_country( $it['source'] ) . ' ' . $it['source'] ); ?></b><?php echo esc_html( $trs[ $it['link'] ][0] ?? $it['orig'] ); ?></span>
+		<?php endforeach; ?>
+</div></div>
+	<?php endif; ?>
 <nav class="tprd-nav">
-<a class="tprd-tab<?php echo 'report' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) ); ?>">✈️ 리포트</a>
+<a class="tprd-tab<?php echo 'report' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) ); ?>">🎙️ 리포트</a>
 <a class="tprd-tab<?php echo 'feed' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=feed' ) ); ?>">📰 실시간 피드<?php echo is_array( $feed ) ? ' <small>' . count( $feed['items'] ) . '</small>' : ''; ?></a>
 <a class="tprd-doc" href="<?php echo esc_url( TP_RADAR_REPORT ); ?>" target="_blank" rel="noopener">📊 트렌드포털 데이터마이닝 보고서</a>
 </nav>
@@ -1123,7 +1148,7 @@ function tp_radar_report_view( $days, $asks, $show, $more ) {
 		$cls      = 'done' === $st ? '' : ( 'failed' === $st || ! empty( $a['err'] ) ? ' bad' : ' wait' );
 		?>
 <section class="tprd-day" id="ask-<?php echo (int) $id; ?>">
-<h2><span class="tprd-stamp ask" aria-hidden="true">📝</span>정리 부탁 · <?php echo esc_html( tp_radar_weekday( wp_date( 'Y-m-d', (int) $a['at'] ) ) . ' ' . wp_date( 'H:i', (int) $a['at'] ) ); ?> · <?php echo count( (array) $a['items'] ); ?>개
+<h2><span class="tprd-corner ask">📝 정리 부탁</span><?php echo esc_html( tp_radar_weekday( wp_date( 'Y-m-d', (int) $a['at'] ) ) . ' ' . wp_date( 'H:i', (int) $a['at'] ) ); ?> · <?php echo count( (array) $a['items'] ); ?>개
 <span class="tprd-mail<?php echo esc_attr( $cls ); ?>"><?php echo esc_html( $says . ( ! empty( $a['err'] ) ? ' — ' . $a['err'] : '' ) ); ?></span>
 		<?php if ( $late || ! empty( $a['err'] ) ) : ?>
 <form class="tprd-recall" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_recall' ); ?><input type="hidden" name="action" value="tp_radar_recall"><input type="hidden" name="id" value="<?php echo (int) $id; ?>"><button type="submit">🔔 다시 부르기</button></form>
@@ -1159,7 +1184,8 @@ function tp_radar_report_view( $days, $asks, $show, $more ) {
 		$says = 'sent' === $mail ? '메일 보냄' : ( 'duplicate' === $mail ? '메일은 이미 보냄' : ( 0 === strpos( $mail, 'preview:' ) ? '미리보기 메일만' : $mail ) );
 		?>
 <section class="tprd-day">
-<h2><span class="tprd-stamp" aria-hidden="true"><span><small>AIR MAIL</small><strong><?php echo esc_html( substr( $ymd, 5, 2 ) . '.' . substr( $ymd, 8, 2 ) ); ?></strong><small>SEOUL</small></span></span><?php echo esc_html( tp_radar_weekday( $ymd ) ); ?> 리포트 <span class="tprd-mail<?php echo $ok ? '' : ' bad'; ?>"><?php echo esc_html( $says ); ?></span></h2>
+<h2><span class="tprd-corner">LIVE · <?php echo esc_html( substr( $ymd, 5, 2 ) . '.' . substr( $ymd, 8, 2 ) ); ?></span><?php echo esc_html( tp_radar_weekday( $ymd ) ); ?> 아침 리포트 <span class="tprd-mail<?php echo $ok ? '' : ' bad'; ?>"><?php echo esc_html( $says ); ?></span></h2>
+<p class="tprd-anchor"><img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">트란시스 특파원, 현장 연결합니다! 오늘 거리 <?php echo count( (array) $day['items'] ); ?>개예요</p>
 <div class="tprd-grid">
 		<?php
 		foreach ( array_values( (array) $day['items'] ) as $i => $it ) {
@@ -1231,22 +1257,22 @@ function tp_radar_feed_view( $feed, $days, $asks ) {
 		$img  = $it['image'] ?? '';
 		$img  = '' !== $img ? $img : tp_radar_img_cached( $it['link'] );
 		$need = false === $img;
-		list( $gbg ) = tp_radar_chip_color( $it['source'] );
 		?>
 <li data-g="<?php echo esc_attr( TP_RADAR_SOURCES[ $it['source'] ][1] ?? '' ); ?>"><label for="tprd-f<?php echo (int) $k; ?>">
 <input type="checkbox" id="tprd-f<?php echo (int) $k; ?>" name="links[]" value="<?php echo esc_attr( $it['link'] ); ?>">
-<span class="thumb" style="background-color:<?php echo esc_attr( $gbg ); ?>"<?php echo $need ? ' data-need="' . esc_attr( $it['link'] ) . '"' : ''; ?>><?php echo $img ? '<img src="' . esc_url( $img ) . '" alt="" loading="lazy" referrerpolicy="no-referrer">' : ''; ?></span>
+<span class="thumb tprd-screen"<?php echo $need ? ' data-need="' . esc_attr( $it['link'] ) . '"' : ''; ?>><?php echo $img ? '<img class="ph" src="' . esc_url( $img ) . '" alt="" loading="lazy" referrerpolicy="no-referrer">' : ''; ?>
+<img class="tprd-reporter" src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">
+<span class="tprd-cap"><?php echo tp_radar_where( $it['source'] ); // phpcs:ignore -- 이미 이스케이프 ?><a class="tt" href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $ko ? $ko : $it['orig'] ); ?></a></span></span>
 <span class="bd">
-<span class="meta"><?php tp_radar_chip( $it['source'], $it['date'] ); ?> <?php echo esc_html( tp_radar_ago( $it['t'] ) ); ?>
+<span class="meta"><?php echo esc_html( substr( $it['date'], 5 ) . ' · ' . tp_radar_ago( $it['t'] ) ); ?> 송출
 		<?php if ( $st ) : ?>
 <a class="st" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) . $st[1] ); ?>"><?php echo esc_html( $st[0] ); ?></a>
 		<?php endif; ?>
 </span>
-<span class="ttl"><a href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $ko ? $ko : $it['orig'] ); ?></a></span>
-		<?php if ( $ko ) : // 번역 제목 아래에 원제 — 원문 확인용 ?>
-<span class="sub"><span class="tr">번역</span> <?php echo esc_html( $it['orig'] ); ?></span>
+		<?php if ( $ko ) : // 번역 제목은 사진 위, 원제는 여기 — 원문 확인용 ?>
+<span class="sub"><span class="tprd-tr">번역</span> <?php echo esc_html( $it['orig'] ); ?></span>
 		<?php elseif ( $lang ) : ?>
-<span class="sub"><span class="tr wait">번역 전</span></span>
+<span class="sub"><span class="tprd-tr wait">번역 전</span></span>
 		<?php elseif ( $it['text'] ) : ?>
 <span class="sub"><?php echo esc_html( $it['text'] ); ?></span>
 		<?php endif; ?>
@@ -1284,7 +1310,7 @@ function tp_radar_feed_view( $feed, $days, $asks ) {
 		fetch(ajaxurl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
 			batch.forEach(function (el) {
 				var src = res && res.success ? res.data[el.dataset.need] : '';
-				if (src) { var im = new Image(); im.alt = ''; im.referrerPolicy = 'no-referrer'; im.src = src; el.appendChild(im); }
+				if (src) { var im = new Image(); im.className = 'ph'; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.src = src; el.insertBefore(im, el.firstChild); }
 				el.removeAttribute('data-need');
 			});
 		}).catch(function () {}).then(function () { if (waiting.length) timer = setTimeout(ask, 300); });
