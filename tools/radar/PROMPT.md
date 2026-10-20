@@ -47,7 +47,11 @@ C2. Write `local/radar/titles-ko.json` as
       the team does not want news. Keep only lines with a fun or clever hook that people laugh at,
       share or save: brand campaigns and ads with a fun idea (like a comedian's retro liquor ad),
       viral moments, memes, odd or useful websites and apps, new app features people will notice
-      and use, pop-ups and collabs, trend data about how people live. Hide everything that reads
+      and use, pop-ups and collabs, trend data about how people live. Also keep a big brand's
+      spectacle and the buzz around it even when the subject is tech or a launch — e.g. Tesla
+      lifting a "flying" Roadster off the ground in a live demo and taking reservations: a show
+      made to get people talking is marketing, so keep it (but not its specs, earnings or stock
+      moves). Hide everything that reads
       like a news report — something happened, was announced, decided, reported or launched, and
       the story is the fact itself rather than an idea people would pass around. That covers:
       politics, current affairs, crime, accidents, disasters and war; plain sports news (scores,
