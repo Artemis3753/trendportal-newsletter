@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""트렌드 레이더 — 매일 아침 카드뉴스 거리 모으기.
+"""트란시스 특파원(처음 이름 트렌드 레이더) — 매일 아침 카드뉴스 거리 모으기.
 
     python3 tools/radar/radar.py collect            (정보원 새 글 → local/radar/<오늘>/candidates.txt·.json)
-    python3 tools/radar/radar.py send [--preview]   (Claude가 쓴 picks.json → 사이트 "트렌드 레이더" 탭 + 알림 메일)
+    python3 tools/radar/radar.py send [--preview]   (Claude가 쓴 picks.json → 사이트 "트란시스 특파원" 탭 + 알림 메일)
 
 토큰을 아끼는 나눔(10/20 사용자: "토큰 최소화 구조로"):
   · 손 노동(정보원 읽기, 날짜·중복 거르기, 링크 붙이기)은 이 스크립트가 한다
@@ -137,6 +137,24 @@ def cmd_collect():
         print("새 후보가 없어요 — 오늘은 보낼 거리가 없어요")
 
 
+def image_of(link):
+    """원문 페이지의 대표 사진(og:image). 고른 거리에만 부르니 Claude 토큰과 무관하다.
+    메일에 바로 넣으면 heyPOP은 3000px·800KB에 webp까지 있어서, WordPress.com 사진 변환기(Photon)로 폭 560 jpg로 줄인다.
+    유튜브 썸네일은 Photon이 받지 않지만(302) 원래 작은 jpg라 그대로 쓴다."""
+    try:
+        h = get(link)
+    except Exception:
+        return ""
+    m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', h)
+         or re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', h))
+    if not m:
+        return ""
+    url = html.unescape(m.group(1))
+    if "ytimg.com" in url:
+        return url
+    return "https://i0.wp.com/" + re.sub(r"^https?://", "", url).split("?")[0] + "?w=560&ssl=1"
+
+
 def cmd_send(preview=False):
     d = day_dir()
     cands = {c["n"]: c for c in json.loads((d / "candidates.json").read_text(encoding="utf-8"))}
@@ -147,7 +165,7 @@ def cmd_send(preview=False):
         if not c:
             sys.exit(f"picks.json의 {p['n']}번은 후보에 없어요")
         items.append({"source": c["source"], "title": p["title"], "note": p["note"],
-                      "orig": c["orig"], "link": c["link"], "date": c["date"]})
+                      "orig": c["orig"], "link": c["link"], "date": c["date"], "image": image_of(c["link"])})
     res = wp("days", {"date": today().isoformat(), "items": items, "preview": preview,
                       # 고르지 않은 후보도 "봤다"로 남긴다 — 내일 같은 글을 다시 읽지 않게
                       "offered": [c["link"] for c in cands.values()]}, base=RADAR_API)
