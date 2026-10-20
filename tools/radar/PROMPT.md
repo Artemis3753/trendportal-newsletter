@@ -43,14 +43,19 @@ C2. Write `local/radar/titles-ko.json` as
       way a Trendportal card would title it (about 30 characters, brand or person first when there
       is one, no translationese). Keep names and numbers exactly, add nothing the original title and
       summary do not say.
-    - `hide`: the numbers of every line (any language) that is not Trendportal material. We want
-      things people laugh at, share or save: brand campaigns and ads with a fun idea (like a
-      comedian's retro liquor ad), viral moments, memes, odd or useful websites and apps, platform
-      feature changes, pop-ups and collabs, trend data about how people live. Hide:
+    - `hide`: the numbers of every line (any language) that is not Trendportal material. Be strict:
+      the team does not want news. Keep only lines with a fun or clever hook that people laugh at,
+      share or save: brand campaigns and ads with a fun idea (like a comedian's retro liquor ad),
+      viral moments, memes, odd or useful websites and apps, new app features people will notice
+      and use, pop-ups and collabs, trend data about how people live. Hide everything that reads
+      like a news report — something happened, was announced, decided, reported or launched, and
+      the story is the fact itself rather than an idea people would pass around. That covers:
       politics, current affairs, crime, accidents, disasters and war; plain sports news (scores,
       injuries, trades, league business — but keep sports moments that became memes or marketing);
-      industry news (executive moves, earnings, funding, awards lists, agency wins); hard tech
-      (chips, devices specs, AI industry, energy, security). When unsure, keep it.
+      industry and business news (executive moves, earnings, deals, funding, lawsuits, regulation,
+      company strategy or repositioning, awards lists, agency wins); hard tech (chips, device
+      specs, AI industry, energy, security). The test: would someone send it to a friend with
+      "이거 봐"? If not, or if you are unsure, hide it — the tab keeps hidden lines one click away.
     Then run `python3 tools/radar/radar.py titles --save`.
 
 Report in Korean in one or two lines: requests handled (if any), titles translated, lines hidden.
