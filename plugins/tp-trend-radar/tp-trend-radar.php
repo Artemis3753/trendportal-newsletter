@@ -286,7 +286,36 @@ function tp_radar_plain( $s ) {
 	return trim( preg_replace( '/\s+/u', ' ', html_entity_decode( wp_strip_all_tags( (string) $s ), ENT_QUOTES, 'UTF-8' ) ) );
 }
 
-/** 정보원 하나의 응답 본문 → 글 목록 [orig, link, t, text]. radar.py의 리더들과 같은 규칙 */
+/**
+ * 피드 작은 사진 주소. 원본은 수 MB짜리도 있어서 WordPress.com 사진 변환기(Photon)로 192×120으로 줄여 받는다
+ * (radar.py image_of와 같은 방법). 구글 트렌드(gstatic)·유튜브 썸네일은 Photon이 받지 않아 그대로.
+ */
+function tp_radar_thumb( $url ) {
+	$url = html_entity_decode( trim( (string) $url ) );
+	if ( ! preg_match( '#^https?://#', $url ) ) {
+		return '';
+	}
+	if ( preg_match( '#gstatic\.com|ytimg\.com#', $url ) ) {
+		return esc_url_raw( $url );
+	}
+	return esc_url_raw( 'https://i0.wp.com/' . preg_replace( '#^https?://#', '', strtok( $url, '?' ) ) . '?resize=192,120&ssl=1' );
+}
+
+/** RSS 글 하나에 딸린 사진 — media:content·enclosure·본문 첫 <img> 순서(10/20 실측: 15곳 중 6곳이 RSS에 사진을 넣어 준다) */
+function tp_radar_item_img( $it, $html ) {
+	$media = $it->children( 'http://search.yahoo.com/mrss/' );
+	foreach ( array( 'content', 'thumbnail' ) as $tag ) {
+		if ( isset( $media->$tag ) && (string) $media->$tag->attributes()->url ) {
+			return (string) $media->$tag->attributes()->url;
+		}
+	}
+	if ( isset( $it->enclosure ) && 0 === strpos( (string) $it->enclosure['type'], 'image' ) ) {
+		return (string) $it->enclosure['url'];
+	}
+	return preg_match( '/<img[^>]+src=["\']([^"\']+)/i', $html, $m ) ? $m[1] : '';
+}
+
+/** 정보원 하나의 응답 본문 → 글 목록 [orig, link, t, text, 사진]. radar.py의 리더들과 같은 규칙 */
 function tp_radar_parse( $kind, $body ) {
 	$out = array();
 	if ( 'wpjson' === $kind ) {
@@ -294,7 +323,7 @@ function tp_radar_parse( $kind, $body ) {
 		$pos  = strpos( $body, '[{' );
 		$list = false === $pos ? array() : (array) json_decode( substr( $body, $pos ), true );
 		foreach ( $list as $p ) {
-			$out[] = array( $p['title']['rendered'] ?? '', $p['link'] ?? '', tp_radar_when( $p['date'] ?? '' ), $p['excerpt']['rendered'] ?? '' );
+			$out[] = array( $p['title']['rendered'] ?? '', $p['link'] ?? '', tp_radar_when( $p['date'] ?? '' ), $p['excerpt']['rendered'] ?? '', '' );
 		}
 		return $out;
 	}
@@ -314,11 +343,12 @@ function tp_radar_parse( $kind, $body ) {
 				$list[] = (string) $n->news_item_title;
 			}
 			if ( $list ) {
-				$out[] = array( '[검색 급상승 ' . (string) $news->approx_traffic . '] ' . (string) $it->title, (string) $news->news_item[0]->news_item_url, tp_radar_when( $it->pubDate ), implode( ' / ', $list ) );
+				$out[] = array( '[검색 급상승 ' . (string) $news->approx_traffic . '] ' . (string) $it->title, (string) $news->news_item[0]->news_item_url, tp_radar_when( $it->pubDate ), implode( ' / ', $list ), (string) $news->picture );
 			}
 			continue;
 		}
-		$out[] = array( (string) $it->title, (string) $it->link, tp_radar_when( $it->pubDate ), (string) $it->description );
+		$body  = (string) $it->description . (string) $it->children( 'http://purl.org/rss/1.0/modules/content/' )->encoded;
+		$out[] = array( (string) $it->title, (string) $it->link, tp_radar_when( $it->pubDate ), (string) $it->description, tp_radar_item_img( $it, $body ) );
 	}
 	// Atom (The Verge · 유튜브 · 레딧)
 	foreach ( $x->children( 'http://www.w3.org/2005/Atom' )->entry ?? array() as $e ) {
@@ -335,9 +365,17 @@ function tp_radar_parse( $kind, $body ) {
 		if ( 'youtube' === $kind ) {
 			$text = (string) $e->children( 'http://search.yahoo.com/mrss/' )->group->description;
 		}
-		$out[] = array( (string) $e->title, $href, tp_radar_when( (string) $e->published ? $e->published : $e->updated ), $text );
+		$img   = preg_match( '/<img[^>]+src=["\']([^"\']+)/i', (string) $e->content . (string) $e->summary, $m ) ? $m[1] : '';
+		$out[] = array( (string) $e->title, $href, tp_radar_when( (string) $e->published ? $e->published : $e->updated ), $text, $img );
 	}
 	return $out;
+}
+
+/** 주소 여러 개를 한꺼번에(병렬로) 받는다. 키 => 응답 객체(status_code·body) */
+function tp_radar_multi( $reqs ) {
+	// 워드프레스 6.2부터 Requests 2(이름공간 있음), 그 전은 옛 이름
+	$multi = class_exists( '\WpOrg\Requests\Requests' ) ? array( '\WpOrg\Requests\Requests', 'request_multiple' ) : array( 'Requests', 'request_multiple' );
+	return call_user_func( $multi, $reqs, array( 'timeout' => 15, 'follow_redirects' => true ) );
 }
 
 /**
@@ -360,13 +398,11 @@ function tp_radar_feed( $force = false ) {
 			'headers' => array( 'User-Agent' => TP_RADAR_UA ),
 		);
 	}
-	// 워드프레스 6.2부터 Requests 2(이름공간 있음), 그 전은 옛 이름
-	$multi = class_exists( '\WpOrg\Requests\Requests' ) ? array( '\WpOrg\Requests\Requests', 'request_multiple' ) : array( 'Requests', 'request_multiple' );
-	$resps = call_user_func( $multi, $reqs, array( 'timeout' => 15, 'follow_redirects' => true ) );
-	// 유튜브 RSS는 방금 되던 주소가 가끔 404를 낸다(radar.py get()과 같은 현상) → 실패한 곳만 한 번 더
+	$resps = tp_radar_multi( $reqs );
+	// 잠깐 흔들린 곳은 한 번 더(radar.py get()의 재시도와 같은 뜻)
 	$again = array_filter( $reqs, fn( $k ) => ! is_object( $resps[ $k ] ?? null ) || ! isset( $resps[ $k ]->status_code ) || $resps[ $k ]->status_code >= 400, ARRAY_FILTER_USE_KEY );
 	if ( $again ) {
-		$resps = array_merge( $resps, call_user_func( $multi, $again, array( 'timeout' => 15, 'follow_redirects' => true ) ) );
+		$resps = array_merge( $resps, tp_radar_multi( $again ) );
 	}
 
 	$cut    = time() - TP_RADAR_FEED_DAYS * DAY_IN_SECONDS;
@@ -379,7 +415,7 @@ function tp_radar_feed( $force = false ) {
 		}
 		$skip = TP_RADAR_SKIP[ $name ] ?? '';
 		$got  = array();
-		foreach ( tp_radar_parse( TP_RADAR_SOURCES[ $name ][2], $r->body ) as list( $orig, $link, $t, $text ) ) {
+		foreach ( tp_radar_parse( TP_RADAR_SOURCES[ $name ][2], $r->body ) as list( $orig, $link, $t, $text, $img ) ) {
 			$orig = tp_radar_plain( $orig );
 			if ( $t < $cut || '' === $link || ( $skip && preg_match( '~' . $skip . '~i', $orig ) ) ) {
 				continue;
@@ -391,6 +427,7 @@ function tp_radar_feed( $force = false ) {
 				't'      => $t,
 				'date'   => wp_date( 'Y-m-d', $t ),
 				'text'   => mb_substr( tp_radar_plain( $text ), 0, 140 ),
+				'image'  => tp_radar_thumb( $img ), // 없으면 '' → 탭이 화면에 보일 때 tp_radar_img로 찾는다
 			);
 		}
 		usort( $got, fn( $a, $b ) => $b['t'] <=> $a['t'] );
@@ -401,6 +438,49 @@ function tp_radar_feed( $force = false ) {
 	set_transient( 'tp_radar_feed', $feed, TP_RADAR_FEED_TTL );
 	return $feed;
 }
+
+/** 이미 찾아 둔 대표 사진(3일 보관). 없으면 false, 찾았는데 사진이 없는 글이면 '' */
+function tp_radar_img_cached( $link ) {
+	return get_transient( 'tp_radar_img_' . md5( $link ) );
+}
+
+/*
+ * 피드 사진 B안(10/20 사용자): RSS에 사진이 없는 글(15곳 중 9곳)은 그 줄이 화면에 보일 때만 탭이 이 창구를 부른다.
+ * 서버가 기사 페이지를 열어 대표 사진(og:image)을 찾고 3일 보관 — 스크롤한 만큼만 비용이 들고, 한 번 찾은 글은 다시 안 연다.
+ * 피드에 있는 글 주소만 받는다(아무 주소나 서버가 열지 않게).
+ */
+add_action(
+	'wp_ajax_tp_radar_img',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( null, 403 );
+		}
+		check_ajax_referer( 'tp_radar_img' );
+		$feed  = get_transient( 'tp_radar_feed' );
+		$known = is_array( $feed ) ? wp_list_pluck( $feed['items'], 'link' ) : array();
+		$out   = array();
+		$reqs  = array();
+		foreach ( array_slice( array_map( 'esc_url_raw', array_map( 'wp_unslash', (array) ( $_POST['links'] ?? array() ) ) ), 0, 8 ) as $l ) {
+			if ( ! in_array( $l, $known, true ) ) {
+				continue;
+			}
+			$c = tp_radar_img_cached( $l );
+			if ( false !== $c ) {
+				$out[ $l ] = $c;
+				continue;
+			}
+			$reqs[ $l ] = array( 'url' => $l, 'type' => 'GET', 'headers' => array( 'User-Agent' => TP_RADAR_UA ) );
+		}
+		foreach ( $reqs ? tp_radar_multi( $reqs ) : array() as $l => $r ) {
+			$body = is_object( $r ) && isset( $r->body ) ? (string) $r->body : '';
+			$img  = preg_match( '/<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)/i', $body, $m )
+				|| preg_match( '/<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image/i', $body, $m ) ? tp_radar_thumb( $m[1] ) : '';
+			set_transient( 'tp_radar_img_' . md5( $l ), $img, 3 * DAY_IN_SECONDS );
+			$out[ $l ] = $img;
+		}
+		wp_send_json_success( $out );
+	}
+);
 
 // ── 정리 부탁: 피드에서 고른 글만 특파원이 핵심 정리·번역 ─────────────────
 /*
@@ -902,15 +982,19 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-feed { list-style: none; margin: 0; padding: 0; background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px; box-shadow: 5px 5px 0 var(--ink); overflow: hidden; }
 .tprd-feed li { border-bottom: 1.5px solid #ead9bb; }
 .tprd-feed li:last-child { border-bottom: 0; }
-.tprd-feed label { display: grid; grid-template-columns: 22px 1fr; gap: 4px 10px; padding: 11px 16px; cursor: pointer; }
+.tprd-feed label { display: grid; grid-template-columns: 22px 112px minmax(0, 1fr); gap: 3px 12px; padding: 11px 16px; cursor: pointer; }
+/* 10/20 사용자 B안: 작은 사진(1.6:1). 사진이 없으면 정보원 갈래 색 칸 */
+.tprd-feed .thumb { grid-column: 2; grid-row: 1 / span 3; align-self: start; display: block; aspect-ratio: 1.6 / 1; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.tprd-feed .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tprd-feed .meta { grid-column: 3; }
 .tprd-feed label:hover { background: #fdf8ee; }
 .tprd-feed li.on label { background: #fff7d1; }
-.tprd-feed input { margin: 3px 0 0; width: 17px; height: 17px; accent-color: var(--ink); }
+.tprd-feed input { grid-row: 1; margin: 3px 0 0; width: 17px; height: 17px; accent-color: var(--ink); }
 .tprd-feed .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.tprd-feed .ttl { grid-column: 2; font-weight: 700; font-size: 14.5px; line-height: 1.45; }
+.tprd-feed .ttl { grid-column: 3; font-weight: 700; font-size: 14.5px; line-height: 1.45; }
 .tprd-feed .ttl a { color: var(--ink); text-decoration: none; }
 .tprd-feed .ttl a:hover { text-decoration: underline; }
-.tprd-feed .txt { grid-column: 2; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tprd-feed .txt { grid-column: 3; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tprd-feed .st { padding: 0 8px; border-radius: 999px; background: #efe3cf; color: var(--ink); font-weight: 700; font-size: 11px; text-decoration: none; }
 .tprd-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 0; padding: 12px 16px; border: 2.5px solid var(--ink); border-radius: 16px; background: var(--card); box-shadow: 5px 5px 0 var(--ink); }
 .tprd-bar span { color: var(--muted); font-size: 13px; }
@@ -1053,6 +1137,14 @@ function tp_radar_feed_view( $feed, $days, $asks ) {
 		<?php $st = $state[ $it['link'] ] ?? null; ?>
 <li data-g="<?php echo esc_attr( TP_RADAR_SOURCES[ $it['source'] ][1] ?? '' ); ?>"><label for="tprd-f<?php echo (int) $k; ?>">
 <input type="checkbox" id="tprd-f<?php echo (int) $k; ?>" name="links[]" value="<?php echo esc_attr( $it['link'] ); ?>">
+		<?php
+		// 사진: RSS에 있으면 그대로, 없으면 찾아 둔 것, 그것도 없으면 화면에 보일 때 찾는다(data-need)
+		$img  = $it['image'] ?? '';
+		$img  = '' !== $img ? $img : tp_radar_img_cached( $it['link'] );
+		$need = false === $img;
+		list( $gbg ) = tp_radar_chip_color( $it['source'] );
+		?>
+<span class="thumb" style="background-color:<?php echo esc_attr( $gbg ); ?>"<?php echo $need ? ' data-need="' . esc_attr( $it['link'] ) . '"' : ''; ?>><?php echo $img ? '<img src="' . esc_url( $img ) . '" alt="" loading="lazy" referrerpolicy="no-referrer">' : ''; ?></span>
 <span class="meta"><?php tp_radar_chip( $it['source'], $it['date'] ); ?> <?php echo esc_html( tp_radar_ago( $it['t'] ) ); ?>
 		<?php if ( $st ) : ?>
 <a class="st" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) . $st[1] ); ?>"><?php echo esc_html( $st[0] ); ?></a>
@@ -1082,6 +1174,35 @@ function tp_radar_feed_view( $feed, $days, $asks ) {
 		btn.textContent = n ? '📝 고른 ' + n + '개 정리 부탁' : '📝 정리 부탁';
 		say.textContent = n > max ? '한 번에 ' + max + '개까지예요 — ' + (n - max) + '개를 빼 주세요' : (n ? '특파원이 2~5분 안에 정리해 리포트 칸에 올려요' : '정리할 글을 골라 주세요 · 한 번에 ' + max + '개까지 · 끝나면 리포트 칸에 쌓여요');
 	});
+	// 사진 B안: 사진 없는 줄이 화면에 들어오면 모아서(0.3초) 한 번에 최대 8개씩 서버에 찾아 달라고 한다
+	var waiting = [], timer = null;
+	function ask() {
+		timer = null;
+		var batch = waiting.splice(0, 8);
+		if (!batch.length) return;
+		var fd = new FormData();
+		fd.append('action', 'tp_radar_img');
+		fd.append('_ajax_nonce', <?php echo wp_json_encode( wp_create_nonce( 'tp_radar_img' ) ); ?>);
+		batch.forEach(function (el) { fd.append('links[]', el.dataset.need); });
+		fetch(ajaxurl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (res) {
+			batch.forEach(function (el) {
+				var src = res && res.success ? res.data[el.dataset.need] : '';
+				if (src) { var im = new Image(); im.alt = ''; im.referrerPolicy = 'no-referrer'; im.src = src; el.appendChild(im); }
+				el.removeAttribute('data-need');
+			});
+		}).catch(function () {}).then(function () { if (waiting.length) timer = setTimeout(ask, 300); });
+	}
+	if ('IntersectionObserver' in window) {
+		var io = new IntersectionObserver(function (ents) {
+			ents.forEach(function (en) {
+				if (!en.isIntersecting) return;
+				io.unobserve(en.target);
+				waiting.push(en.target);
+				if (!timer) timer = setTimeout(ask, 300);
+			});
+		}, { rootMargin: '200px' });
+		document.querySelectorAll('.tprd-feed .thumb[data-need]').forEach(function (el) { io.observe(el); });
+	}
 	// 갈래 거르기: 화면에서 숨기기만(고른 체크는 그대로)
 	document.querySelectorAll('.tprd-filters button[data-g]').forEach(function (b) {
 		b.addEventListener('click', function () {
