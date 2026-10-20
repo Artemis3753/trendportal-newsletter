@@ -2,6 +2,7 @@
 """트란시스 특파원(처음 이름 트렌드 레이더) — 매일 아침 카드뉴스 거리 모으기.
 
     python3 tools/radar/radar.py collect            (정보원 새 글 → local/radar/<오늘>/candidates.txt·.json)
+    python3 tools/radar/radar.py body <번호> ...     (고른 영어 원문 거리의 본문 — 한국어 핵심 정리 재료)
     python3 tools/radar/radar.py send [--preview]   (Claude가 쓴 picks.json → 사이트 "트란시스 특파원" 탭 + 알림 메일)
 
 토큰을 아끼는 나눔(10/20 사용자: "토큰 최소화 구조로"):
@@ -10,7 +11,8 @@
   · 링크·원문 제목·날짜는 Claude가 베껴 쓰지 않고 send가 번호로 다시 붙인다
 
 picks.json (Claude가 쓰는 파일):
-    {"picks": [{"n": 3, "title": "한국어 제목", "note": "무엇이고, 왜 카드뉴스 거리인지 한두 문장"}]}
+    {"picks": [{"n": 3, "title": "한국어 제목", "note": "무엇이고, 왜 카드뉴스 거리인지 한두 문장",
+                "points": ["영어 원문일 때만: 본문을 우리 카드 말투로 녹인 핵심 정리 3~4줄"]}]}
 
 사이트 인증은 셰프(tools/cardnews/cardnews.py)와 같다: 이 맥은 local/cardnews.env, 클라우드는 환경의 network secret.
 표준 라이브러리만 쓴다 — 클라우드 routine에서 설치 없이 돌리려고.
@@ -137,6 +139,37 @@ def cmd_collect():
         print("새 후보가 없어요 — 오늘은 보낼 거리가 없어요")
 
 
+BODY_MAX = 2500  # 기사 하나에서 Claude에게 넘기는 글자 수 상한 (Famous Campaigns 기사는 보통 1,000~2,000자)
+# 기사 뒤에 붙는 구독 안내·사이트 소개 — 여기서부터는 본문이 아니다
+BODY_STOP = re.compile(r"Subscribe to|newsletter and get|is a brandzine", re.I)
+
+
+def cmd_body(nums):
+    """영어 원문 거리의 본문만 꺼내 보여 준다. 한국어 핵심 정리(10/20 사용자 A안)를 쓸 재료.
+    고른 영어 거리에만 부르므로 Claude가 읽는 양은 하루 2~3개 기사분이다."""
+    cands = {c["n"]: c for c in json.loads((day_dir() / "candidates.json").read_text(encoding="utf-8"))}
+    for n in nums:
+        c = cands[int(n)]
+        try:
+            h = get(c["link"])
+        except Exception as e:
+            print(f"## {n} · 본문을 못 읽었어요({type(e).__name__}) — 후보 줄만 보고 쓰세요\n")
+            continue
+        out = []
+        for p in re.findall(r"<p[^>]*>(.*?)</p>", h, re.S):
+            p = plain(p)
+            if BODY_STOP.search(p):
+                break
+            if len(p) > 60:  # 짧은 줄은 메뉴·사진 설명·공유 버튼이라 뺀다
+                out.append(p)
+        print(f"## {n} · {c['orig']}\n" + "\n".join(out)[:BODY_MAX] + "\n")
+
+
+def is_english(c):
+    # 원문 제목에 한글이 하나도 없으면 영어 원문으로 본다
+    return not re.search(r"[가-힣]", c["orig"])
+
+
 def image_of(link):
     """원문 페이지의 대표 사진(og:image). 고른 거리에만 부르니 Claude 토큰과 무관하다.
     메일에 바로 넣으면 heyPOP은 3000px·800KB에 webp까지 있어서, WordPress.com 사진 변환기(Photon)로 폭 560 jpg로 줄인다.
@@ -164,7 +197,10 @@ def cmd_send(preview=False):
         c = cands.get(int(p["n"]))
         if not c:
             sys.exit(f"picks.json의 {p['n']}번은 후보에 없어요")
-        items.append({"source": c["source"], "title": p["title"], "note": p["note"],
+        points = [str(x) for x in p.get("points", [])][:5]
+        if is_english(c) and not points:
+            sys.exit(f"{p['n']}번은 영어 원문이라 points(한국어 핵심 정리)가 필요해요 — radar.py body {p['n']}")
+        items.append({"source": c["source"], "title": p["title"], "note": p["note"], "points": points,
                       "orig": c["orig"], "link": c["link"], "date": c["date"], "image": image_of(c["link"])})
     res = wp("days", {"date": today().isoformat(), "items": items, "preview": preview,
                       # 고르지 않은 후보도 "봤다"로 남긴다 — 내일 같은 글을 다시 읽지 않게
@@ -177,6 +213,8 @@ def cmd_send(preview=False):
 def main(argv):
     if argv[:1] == ["collect"]:
         cmd_collect()
+    elif argv[:1] == ["body"] and argv[1:]:
+        cmd_body(argv[1:])
     elif argv[:1] == ["send"]:
         cmd_send(preview="--preview" in argv)
     else:
