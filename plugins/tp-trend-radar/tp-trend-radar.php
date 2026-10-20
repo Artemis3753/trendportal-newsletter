@@ -432,6 +432,45 @@ function tp_radar_save_asks( $asks ) {
 	update_option( 'tp_radar_asks', array_slice( $asks, 0, TP_RADAR_ASKS_KEEP, true ), false );
 }
 
+/*
+ * 1.6.0으로 올릴 때 한 번: 예전 아침 리포트(tp_radar_days)를 리포트 칸의 기록으로 옮긴다.
+ * 10/20 14:27에 실제로 한 번 나간 리포트(메일 발송분)가 탭에서 사라지지 않게. 옮긴 뒤엔 아침 리포트용 옵션을 지운다
+ * — tp_radar_mail에는 발신메일봇 열쇠가 있어서, 안 쓰는 비밀값을 사이트에 남겨 두지 않으려고(원본은 local/transis.env).
+ */
+add_action(
+	'admin_init',
+	function () {
+		$days = get_option( 'tp_radar_days', null );
+		if ( null === $days ) {
+			return;
+		}
+		$asks = tp_radar_asks();
+		foreach ( (array) $days as $ymd => $d ) {
+			if ( empty( $d['items'] ) || 0 === strpos( (string) ( $d['mail'] ?? '' ), 'preview:' ) ) {
+				continue; // 미리보기(시험)는 옮기지 않는다
+			}
+			$at = (int) ( $d['at'] ?? 0 );
+			$at = $at > 0 ? $at : (int) strtotime( $ymd . ' 09:00:00' );
+			while ( isset( $asks[ $at ] ) ) {
+				++$at;
+			}
+			$asks[ $at ] = array(
+				'at'      => $at,
+				'by'      => '아침 리포트',
+				'morning' => true,
+				'status'  => 'done',
+				'items'   => $d['items'],
+				'result'  => $d['items'],
+				'err'     => '',
+			);
+		}
+		tp_radar_save_asks( $asks );
+		delete_option( 'tp_radar_days' );
+		delete_option( 'tp_radar_offered' );
+		delete_option( 'tp_radar_mail' );
+	}
+);
+
 /** 초인종: 특파원 routine을 지금 깨운다. $note는 실행 기록에서 알아보는 표시일 뿐. 성공하면 true, 실패하면 이유 문장 */
 function tp_radar_ring( $note ) {
 	$bell = get_option( 'tp_radar_bell', array() );
@@ -924,14 +963,14 @@ function tp_radar_report_view( $asks, $show ) {
 		$cls      = 'done' === $st ? '' : ( 'failed' === $st || ! empty( $a['err'] ) ? ' bad' : ' wait' );
 		?>
 <section class="tprd-day" id="ask-<?php echo (int) $id; ?>">
-<h2><span class="tprd-corner ask">📝 정리 부탁</span><?php echo esc_html( tp_radar_weekday( wp_date( 'Y-m-d', (int) $a['at'] ) ) . ' ' . wp_date( 'H:i', (int) $a['at'] ) ); ?> · <?php echo count( (array) $a['items'] ); ?>개
+<h2><span class="tprd-corner ask"><?php echo empty( $a['morning'] ) ? '📝 정리 부탁' : '🌅 아침 리포트'; ?></span><?php echo esc_html( tp_radar_weekday( wp_date( 'Y-m-d', (int) $a['at'] ) ) . ' ' . wp_date( 'H:i', (int) $a['at'] ) ); ?> · <?php echo count( (array) $a['items'] ); ?>개
 <span class="tprd-state<?php echo esc_attr( $cls ); ?>"><?php echo esc_html( $says . ( ! empty( $a['err'] ) ? ' — ' . $a['err'] : '' ) ); ?></span>
 		<?php if ( $late || ! empty( $a['err'] ) ) : ?>
 <form class="tprd-recall" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_recall' ); ?><input type="hidden" name="action" value="tp_radar_recall"><input type="hidden" name="id" value="<?php echo (int) $id; ?>"><button type="submit">🔔 다시 부르기</button></form>
 		<?php endif; ?>
 </h2>
 		<?php if ( 'done' === $st ) : ?>
-<p class="tprd-anchor"><img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">트란시스 특파원, 현장 연결합니다! 부탁하신 글 <?php echo count( (array) $a['result'] ); ?>개 정리했어요</p>
+<p class="tprd-anchor"><img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">트란시스 특파원, 현장 연결합니다! <?php echo esc_html( empty( $a['morning'] ) ? '부탁하신 글 ' . count( (array) $a['result'] ) . '개 정리했어요' : '오늘 거리 ' . count( (array) $a['result'] ) . '개예요' ); ?></p>
 <div class="tprd-grid">
 			<?php
 			foreach ( array_values( (array) $a['result'] ) as $i => $it ) {
