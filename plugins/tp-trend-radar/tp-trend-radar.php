@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Trend Radar
- * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더).매일 아침 클라우드 routine(tools/radar/radar.py)이 고른 카드뉴스 거리를 REST로 받아 날짜별로 쌓고, 트란시스 발신메일봇으로 알림 메일을 보낸다.
- * Version: 1.5.0
+ * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
+ * Version: 1.6.0
  * Author: Trendportal
  */
 
@@ -11,25 +11,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /*
- * 10/20 사용자 결정: 거리는 관리자 탭에 쌓고(지난 거리도 다시 볼 수 있게), 알림은 메일로.
- * 메일은 사이트 메일(wp_mail)이 아니라 트란시스 발신메일봇(transis/mailer/Mailer.gs) — 성현 님 Gmail이 이미 스팸에서 풀어 둔 발신자라서.
- * 봇 주소·열쇠는 이 사이트 옵션에 둔다. 그래서 클라우드 routine은 사이트 열쇠(셰프와 같은 것) 하나만 있으면 된다.
+ * 10/20 사용자 결정: 이 도구는 "필요할 때 들어와서 아이디어를 얻는 곳"이다.
+ * 피드를 둘러보고 → 마음에 드는 글을 체크 → 특파원이 리포트로 정리. 매일 아침 리포트와 메일 발송은 범위에서 뺐다(1.6.0).
  *
- * 저장: 옵션 두 개(autoload 끔 — 이 탭과 REST에서만 읽는다).
- *   tp_radar_days    날짜(Y-m-d) → { items, at, mail }   최근 TP_RADAR_KEEP일만
- *   tp_radar_offered 후보로 한 번 보여 준 링크 → 시각     다음 날 같은 글을 Claude에게 다시 읽히지 않으려고(토큰)
+ * 저장: 옵션(autoload 끔 — 이 탭과 REST에서만 읽는다)
+ *   tp_radar_asks    정리 부탁과 그 결과(아래 "정리 부탁")
+ *   tp_radar_titles  피드 제목 번역(아래 "제목 번역")
+ *   tp_radar_bell    초인종(routine 트리거 주소·열쇠)
  */
 
 const TP_RADAR_SLUG = 'tp-trend-radar';
-const TP_RADAR_KEEP = 120; // 거리를 남겨 두는 날 수
-const TP_RADAR_SEEN = 30;  // 이미 본 링크를 기억하는 날 수 (정보원의 새 글 창보다 넉넉하게)
 
-// ── 저장 ────────────────────────────────────────────────
-
-function tp_radar_days() {
-	$days = get_option( 'tp_radar_days', array() );
-	return is_array( $days ) ? $days : array();
-}
+// ── 리포트 카드 ──────────────────────────────────────────
 
 function tp_radar_clean_item( $it ) {
 	return array(
@@ -45,14 +38,13 @@ function tp_radar_clean_item( $it ) {
 	);
 }
 
-// ── 메일 ────────────────────────────────────────────────
+// ── 표시 도우미 ──────────────────────────────────────────
 
 function tp_radar_weekday( $ymd ) {
 	$t = strtotime( $ymd . ' 12:00:00' );
 	return wp_date( 'n월 j일', $t ) . ' (' . array( '일', '월', '화', '수', '목', '금', '토' )[ (int) wp_date( 'w', $t ) ] . ')';
 }
 
-// 정보원 알약 색: 탭과 메일이 같은 색을 쓴다 (배경 · 테두리 · 글자)
 /**
  * 원문이 외국어면 그 언어 이름, 한국어면 ''. 원문 제목에 한글이 없으면 외국어로 본다(radar.py is_english와 같은 기준).
  * 10/20 사용자: 외국어 원문은 정보가 더 많고 특파원이 번역한 것이라 그 사실을 보여 준다
@@ -64,12 +56,9 @@ function tp_radar_lang( $orig ) {
 	return preg_match( '/[\x{3040}-\x{30ff}]/u', $orig ) ? '일본어' : '영어'; // 가나가 있으면 일본어
 }
 
-// 번역 표시 알약 색(보라): 정보원 알약과 겹치지 않게
-const TP_RADAR_TR = array( '#ebe5ff', '#7a5af8', '#5b3fd0' );
-
 /**
  * 정보원 표 — 정보원은 여기 한 곳에만 적는다: 이름 => 나라 한 글자, 갈래, 읽는 법, 주소.
- * 탭의 실시간 피드(이 파일)와 아침 리포트(tools/radar/radar.py, REST /sources로 이 표를 받는다)가 같은 표를 쓴다.
+ * 탭의 실시간 피드가 이 표대로 읽는다(1.6.0 전에는 아침 리포트도 REST /sources로 이 표를 받았다).
  *
  * 고른 근거(10/20, 사용자가 추천안 선택 + 밈·스포츠 2곳 → 오후에 불안정한 유튜브 2·레딧 2곳을 빼서 15곳): 인스타 892개에서 화제가 된 비율
  * (하트 공개 또는 저장 1,000회+)이 밈 59%·웹·앱 54%·플랫폼 40%·트렌드 39%·스포츠 37%, 국내 브랜드 뉴스 17%.
@@ -134,132 +123,6 @@ function tp_radar_chip_color( $source ) {
 // 정보원 나라 한 글자(한·미·일·영…), 표에 없으면 ''(10/20 사용자 아이디어: 소스의 나라 표기)
 function tp_radar_country( $source ) {
 	return TP_RADAR_SOURCES[ $source ][0] ?? '';
-}
-
-/**
- * 메일용 나라 동그라미(사용자 A안: 알약 맨 앞, 진한 동그라미 안 흰 글자).
- * 국기 이모지는 윈도우에서 'GB' 같은 글자 두 개로 보여서(성현 님 PC) 한 글자로 쓴다.
- * 탭은 같은 모양을 CSS .tprd-flag로 그린다.
- */
-function tp_radar_flag_mail( $source, $ink ) {
-	$c = tp_radar_country( $source );
-	return $c ? '<span style="display:inline-block;width:17px;height:17px;margin:0 5px 0 -5px;border-radius:50%;background:' . $ink . ';color:#fffdf8;font-size:10px;font-weight:700;line-height:17px;text-align:center;vertical-align:1px;">' . esc_html( $c ) . '</span>' : '';
-}
-
-// 항공우편 띠(빨강·흰·파랑) — 해외 소식을 부쳐 오는 특파원이라서. 탭과 메일이 같은 색
-const TP_RADAR_AIR = array( '#e4572e', '#fffdf8', '#3a86ff', '#fffdf8' );
-
-/**
- * 메일 본문 — 탭과 같은 '스티커 주방' 모양(10/20 사용자: A 바탕 + C의 맨 위 + 이름 "트란시스 특파원").
- * Gmail은 그림자·기울이기·겹치기·웹 글꼴·그라데이션을 지운다 → 그런 것 없이 테두리·둥근 모서리·색만으로 같은 느낌을 낸다.
- * 모자 쓴 얼굴은 겹치기 대신 한 장으로 합친 그림(press.png), 항공우편 띠는 그라데이션 대신 색칠한 칸을 늘어놓는다.
- * 바탕색이 지워져도 흰 바탕에 갈색 글자라 읽히는 데는 문제가 없다(10/14 트란시스 메일 원칙: 스타일을 버려도 안 깨지게).
- */
-function tp_radar_mail_html( $ymd, $items, $tab ) {
-	$ink   = '#3b2f2a';
-	$air   = '';
-	for ( $i = 0; $i < 24; $i++ ) {
-		$air .= '<td style="height:8px;font-size:0;line-height:0;background:' . TP_RADAR_AIR[ $i % 4 ] . ';">&nbsp;</td>';
-	}
-	$cards = '';
-	foreach ( $items as $i => $it ) {
-		list( $bg, $line, $fg ) = tp_radar_chip_color( $it['source'] );
-		$img    = $it['image'] ? '<a href="' . esc_url( $it['link'] ) . '"><img src="' . esc_url( $it['image'] ) . '" width="100%" alt="" style="display:block;width:100%;height:auto;border:0;border-radius:15px 15px 0 0;border-bottom:2.5px solid ' . $ink . ';"></a>' : '';
-		$cards .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border:2.5px solid ' . $ink . ';border-radius:18px;background:#fffdf8;border-collapse:separate;">'
-			. '<tr><td style="padding:0;">' . $img . '</td></tr>'
-			. '<tr><td style="padding:12px 14px 14px;">'
-			. '<span style="display:inline-block;width:26px;height:26px;margin-right:6px;border:2px solid ' . $ink . ';border-radius:50%;background:#ffe45c;color:' . $ink . ';font-size:14px;font-weight:700;line-height:26px;text-align:center;vertical-align:middle;">' . ( $i + 1 ) . '</span>'
-			. '<span style="display:inline-block;padding:2px 10px;border:1.5px solid ' . $line . ';border-radius:999px;background:' . $bg . ';color:' . $fg . ';font-size:12px;font-weight:700;vertical-align:middle;">' . tp_radar_flag_mail( $it['source'], $ink ) . esc_html( $it['source'] . ' · ' . substr( $it['date'], 5 ) ) . '</span>'
-			. ( tp_radar_lang( $it['orig'] ) ? '<span style="display:inline-block;margin-left:4px;padding:2px 10px;border:1.5px solid ' . TP_RADAR_TR[1] . ';border-radius:999px;background:' . TP_RADAR_TR[0] . ';color:' . TP_RADAR_TR[2] . ';font-size:12px;font-weight:700;vertical-align:middle;">🌐 특파원 번역</span>' : '' )
-			. '<div style="margin:8px 0 4px;font-size:18px;font-weight:700;line-height:1.35;"><a href="' . esc_url( $it['link'] ) . '" style="color:' . $ink . ';text-decoration:none;">' . esc_html( $it['title'] ) . '</a></div>'
-			. '<div style="font-size:14px;line-height:1.6;color:' . $ink . ';">' . esc_html( $it['note'] ) . '</div>'
-			. tp_radar_mail_points( $it['points'] ?? array(), tp_radar_lang( $it['orig'] ) )
-			. '</td></tr></table>';
-	}
-	return '<div style="background:#fbf4e6;padding:24px 14px;">'
-		. '<div style="max-width:520px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,\'Apple SD Gothic Neo\',\'Malgun Gothic\',sans-serif;color:' . $ink . ';">'
-		. '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border:2px solid ' . $ink . ';border-radius:6px;border-collapse:separate;overflow:hidden;"><tr>' . $air . '</tr></table>'
-		. '<div style="text-align:center;margin:0 0 20px;">'
-		. '<img src="' . esc_url( plugins_url( 'press.png', __FILE__ ) ) . '" width="88" height="88" alt="트란시스 특파원" style="display:inline-block;width:88px;height:88px;border:0;">'
-		. '<div style="margin:4px 0 2px;font-size:23px;font-weight:800;">특파원 리포트 - 기사 ' . count( $items ) . '개</div>'
-		. '<div style="font-size:13px;color:#8c7f73;">트란시스 특파원 · ' . esc_html( tp_radar_weekday( $ymd ) ) . ' 송고</div>'
-		. '</div>'
-		. $cards
-		. '<div style="text-align:center;margin-top:6px;"><a href="' . esc_url( $tab ) . '" style="display:inline-block;padding:9px 18px;border:2.5px solid ' . $ink . ';border-radius:999px;background:#fffdf8;color:' . $ink . ';text-decoration:none;font-weight:700;font-size:14px;">✈️ 지난 리포트까지 보기</a></div>'
-		. '</div></div>';
-}
-
-// 핵심 정리 상자(메일). 목록 태그(ul)는 메일 앱마다 들여쓰기가 달라서 줄마다 '·'를 붙인 문단으로
-function tp_radar_mail_points( $points, $lang = '' ) {
-	if ( ! $points ) {
-		return '';
-	}
-	$rows = '';
-	foreach ( $points as $p ) {
-		$rows .= '<div style="margin:3px 0;">· ' . esc_html( $p ) . '</div>';
-	}
-	return '<div style="margin-top:10px;padding:10px 12px;border:1.5px dashed #dcc9ab;border-radius:12px;background:#fdf8ee;font-size:13.5px;line-height:1.6;color:#3b2f2a;">'
-		. '<div style="margin-bottom:4px;font-weight:700;">📝 핵심 정리' . ( $lang ? '<span style="font-weight:400;color:#8c7f73;"> · ' . $lang . ' 원문을 특파원이 번역해 정리했어요</span>' : '' ) . '</div>' . $rows . '</div>';
-}
-
-function tp_radar_mail_text( $ymd, $items, $tab ) {
-	$out = '트란시스 특파원 리포트 · ' . tp_radar_weekday( $ymd ) . "\n\n";
-	foreach ( $items as $i => $it ) {
-		$out .= ( $i + 1 ) . '. ' . $it['title'] . ' (' . $it['source'] . ")\n" . $it['note'] . "\n";
-		foreach ( (array) ( $it['points'] ?? array() ) as $p ) {
-			$out .= '  · ' . $p . "\n";
-		}
-		$out .= $it['link'] . "\n\n";
-	}
-	return $out . '탭: ' . $tab . "\n";
-}
-
-/**
- * 발신메일봇에 보내고 결과를 한 단어로: sent · duplicate · 그 밖은 오류 문장.
- * 미리보기는 지환 님에게만, 같은 날 한 번만 규칙(id)도 안 건다 — 시험을 여러 번 해도 진짜 9시 메일이 막히지 않게.
- */
-function tp_radar_send_mail( $ymd, $items, $preview ) {
-	$cfg = get_option( 'tp_radar_mail', array() );
-	if ( empty( $cfg['url'] ) || empty( $cfg['token'] ) || empty( $cfg['to'] ) ) {
-		return '메일 설정이 없어요';
-	}
-	$tab     = admin_url( 'admin.php?page=' . TP_RADAR_SLUG );
-	$subject = '📰 특파원 리포트 - 기사 ' . count( $items ) . '개 · ' . tp_radar_weekday( $ymd );
-	$mail    = array(
-		'token'   => $cfg['token'],
-		'subject' => $preview ? '[미리보기] ' . $subject : $subject,
-		'html'    => tp_radar_mail_html( $ymd, $items, $tab ),
-		'text'    => tp_radar_mail_text( $ymd, $items, $tab ),
-	);
-	if ( $preview ) {
-		$mail['to'] = array( $cfg['preview'] ?? $cfg['bcc'][0] ?? '' );
-	} else {
-		$mail['to']  = (array) $cfg['to'];
-		$mail['bcc'] = (array) ( $cfg['bcc'] ?? array() );
-		$mail['id']  = 'radar:' . $ymd;
-	}
-	// Apps Script 웹앱은 POST에 302로 답하고, 결과는 넘겨준 주소를 GET으로 읽어야 나온다.
-	// 워드프레스 HTTP는 302를 따라갈 때 POST를 그대로 다시 보내서 실패한다 → 넘겨받기는 직접 GET으로
-	$r = wp_remote_post(
-		$cfg['url'],
-		array(
-			'body'        => wp_json_encode( $mail, JSON_UNESCAPED_UNICODE ),
-			'headers'     => array( 'Content-Type' => 'application/json' ),
-			'timeout'     => 40,
-			'redirection' => 0,
-		)
-	);
-	if ( ! is_wp_error( $r ) && in_array( wp_remote_retrieve_response_code( $r ), array( 301, 302, 303 ), true ) ) {
-		$r = wp_remote_get( wp_remote_retrieve_header( $r, 'location' ), array( 'timeout' => 40 ) );
-	}
-	if ( is_wp_error( $r ) ) {
-		return '메일 보내기 실패: ' . $r->get_error_message();
-	}
-	$res = json_decode( wp_remote_retrieve_body( $r ), true );
-	if ( empty( $res['ok'] ) ) {
-		return '메일 보내기 실패: ' . ( $res['error'] ?? 'HTTP ' . wp_remote_retrieve_response_code( $r ) );
-	}
-	return ! empty( $res['duplicate'] ) ? 'duplicate' : 'sent';
 }
 
 // ── 실시간 피드: 정보원 새 글을 사이트가 직접 모은다(토큰 0) ──────────────
@@ -487,7 +350,7 @@ add_action(
 // ── 제목 번역: 외국어 제목을 특파원이 우리 말투로 ──────────────────────
 /*
  * 10/20 사용자: 브라우저 내장 번역은 말투가 부자연스럽고 성현 님 PC에서 될지도 몰라서, 자원을 조금 써서 특파원이 번역한다.
- * routine이 깨어날 때마다(아침 8:50 · 정리 부탁 · 아래 "제목 번역 부탁") 피드에서 아직 번역 안 된 외국어 제목만 번역한다.
+ * routine이 깨어날 때마다(정리 부탁 · 아래 "제목 번역 부탁") 피드에서 아직 번역 안 된 외국어 제목만 번역한다.
  * tp_radar_titles: 링크 => array( 한국어 제목, 저장 시각 )  — 피드 창(3일)보다 넉넉히 7일 보관
  */
 function tp_radar_titles() {
@@ -521,7 +384,7 @@ add_action(
 // ── 정리 부탁: 피드에서 고른 글만 특파원이 핵심 정리·번역 ─────────────────
 /*
  * 10/20 사용자: 피드에서 여러 개 체크 → 한 번에 특파원 호출. routine은 한 번 깨울 때마다 고정 비용이 커서 묶어서 부른다.
- * 결과는 탭에만(메일 없음 — 부탁한 사람이 탭을 보고 있으니까).
+ * 결과는 탭의 리포트 칸에 쌓인다(부탁한 사람이 탭을 보고 있으니 따로 알리지 않는다).
  * 초인종은 셰프와 같은 방식: routine의 API 트리거 주소로 POST 한 번. 특파원은 신호에 딸린 글을 따르지 않고,
  * REST /asks에서 '기다리는 중' 부탁만 가져간다(tools/radar/PROMPT.md) — 열쇠가 새도 할 수 있는 건 "특파원 깨우기"뿐.
  *
@@ -609,7 +472,7 @@ add_action(
 		);
 		tp_radar_ring_ask( $asks, $id );
 		tp_radar_save_asks( $asks );
-		wp_safe_redirect( $back . '#ask-' . $id );
+		wp_safe_redirect( $back . '&view=report#ask-' . $id );
 		exit;
 	}
 );
@@ -628,7 +491,7 @@ add_action(
 			tp_radar_ring_ask( $asks, $id );
 			tp_radar_save_asks( $asks );
 		}
-		wp_safe_redirect( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) . '#ask-' . $id );
+		wp_safe_redirect( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report' ) . '#ask-' . $id );
 		exit;
 	}
 );
@@ -682,48 +545,6 @@ add_action(
 		$admin = function () {
 			return current_user_can( 'manage_options' ); // 애플리케이션 비밀번호로 들어온 관리자만
 		};
-
-		// 이미 후보로 보여 준 링크. radar.py collect가 이걸 빼고 새 글만 Claude에게 넘긴다
-		register_rest_route(
-			'tp-radar/v1',
-			'/seen',
-			array(
-				'methods'             => 'GET',
-				'permission_callback' => $admin,
-				'callback'            => function () {
-					// reported: 진짜(미리보기 아닌) 리포트를 보낸 날짜들 — 정리 부탁으로 낮에 깨어난 routine이 아침 리포트를 또 만들지 않게
-					$reported = array();
-					foreach ( tp_radar_days() as $ymd => $d ) {
-						if ( 0 !== strpos( (string) ( $d['mail'] ?? '' ), 'preview:' ) ) {
-							$reported[] = $ymd;
-						}
-					}
-					return array(
-						'links'    => array_keys( (array) get_option( 'tp_radar_offered', array() ) ),
-						'reported' => $reported,
-					);
-				},
-			)
-		);
-
-		// 정보원 표 — radar.py collect가 이걸 받아 읽는다(정보원은 이 플러그인 한 곳에만 적으려고)
-		register_rest_route(
-			'tp-radar/v1',
-			'/sources',
-			array(
-				'methods'             => 'GET',
-				'permission_callback' => $admin,
-				'callback'            => function () {
-					$out = array();
-					foreach ( TP_RADAR_SOURCES as $name => $s ) {
-						if ( '' !== $s[2] ) {
-							$out[] = array( 'name' => $name, 'kind' => $s[2], 'url' => $s[3], 'skip' => TP_RADAR_SKIP[ $name ] ?? '' );
-						}
-					}
-					return $out;
-				},
-			)
-		);
 
 		// 번역할 제목(피드에서 아직 번역 안 된 외국어 글) / 번역 저장
 		register_rest_route(
@@ -820,81 +641,6 @@ add_action(
 				},
 			)
 		);
-
-		// 오늘의 거리 받기 → 저장 → 메일. 같은 날 두 번 오면 거리는 새것으로 바꾸고, 메일은 봇이 두 번째를 버린다
-		register_rest_route(
-			'tp-radar/v1',
-			'/days',
-			array(
-				'methods'             => 'POST',
-				'permission_callback' => $admin,
-				'callback'            => function ( $req ) {
-					$ymd = (string) $req->get_param( 'date' );
-					if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $ymd ) ) {
-						return new WP_Error( 'tp_radar_date', 'date는 YYYY-MM-DD예요', array( 'status' => 400 ) );
-					}
-					$items = array_values( array_map( 'tp_radar_clean_item', (array) $req->get_param( 'items' ) ) );
-					if ( ! $items ) {
-						return new WP_Error( 'tp_radar_empty', '거리가 없어요', array( 'status' => 400 ) );
-					}
-					$preview = (bool) $req->get_param( 'preview' );
-					$mail    = tp_radar_send_mail( $ymd, $items, $preview );
-
-					$days         = tp_radar_days();
-					$days[ $ymd ] = array( 'items' => $items, 'at' => time(), 'mail' => $preview ? 'preview:' . $mail : $mail );
-					krsort( $days );
-					update_option( 'tp_radar_days', array_slice( $days, 0, TP_RADAR_KEEP, true ), false );
-
-					// 미리보기는 "봤다"로 치지 않는다 — 시험한 날에도 다음 날 진짜 실행이 같은 후보를 다시 고를 수 있게
-					if ( ! $preview ) {
-						$seen = (array) get_option( 'tp_radar_offered', array() );
-						foreach ( (array) $req->get_param( 'offered' ) as $link ) {
-							$seen[ esc_url_raw( $link ) ] = time();
-						}
-						$cut  = time() - TP_RADAR_SEEN * DAY_IN_SECONDS;
-						$seen = array_filter(
-							$seen,
-							function ( $t ) use ( $cut ) {
-								return $t > $cut;
-							}
-						);
-						update_option( 'tp_radar_offered', $seen, false );
-					}
-					return array( 'date' => $ymd, 'count' => count( $items ), 'mail' => $mail );
-				},
-			)
-		);
-
-		// 메일 설정(봇 주소·열쇠·받는 사람). 저장소가 공개라 코드에 적지 않고 여기로 넣는다. 열쇠는 돌려주지 않는다
-		register_rest_route(
-			'tp-radar/v1',
-			'/mail',
-			array(
-				'methods'             => 'POST',
-				'permission_callback' => $admin,
-				'callback'            => function ( $req ) {
-					$cfg = (array) get_option( 'tp_radar_mail', array() );
-					foreach ( array( 'url', 'token', 'preview' ) as $k ) {
-						if ( null !== $req->get_param( $k ) ) {
-							$cfg[ $k ] = sanitize_text_field( $req[ $k ] );
-						}
-					}
-					foreach ( array( 'to', 'bcc' ) as $k ) {
-						if ( null !== $req->get_param( $k ) ) {
-							$cfg[ $k ] = array_values( array_filter( array_map( 'sanitize_email', (array) $req[ $k ] ) ) );
-						}
-					}
-					update_option( 'tp_radar_mail', $cfg, false );
-					return array(
-						'url'     => ! empty( $cfg['url'] ),
-						'token'   => ! empty( $cfg['token'] ),
-						'to'      => $cfg['to'] ?? array(),
-						'bcc'     => $cfg['bcc'] ?? array(),
-						'preview' => $cfg['preview'] ?? '',
-					);
-				},
-			)
-		);
 	}
 );
 
@@ -920,7 +666,7 @@ add_action(
 	}
 );
 
-/** 리포트 카드 하나 — 아침 리포트와 정리 부탁 결과가 같은 모양을 쓴다 */
+/** 리포트 카드 하나 — 정리 부탁 결과 */
 function tp_radar_card( $it, $i ) {
 	list( $bg, $line, $fg ) = tp_radar_chip_color( $it['source'] );
 	$lang                   = tp_radar_lang( $it['orig'] );
@@ -975,16 +721,13 @@ function tp_radar_ago( $t ) {
 }
 
 function tp_radar_page() {
-	$view = 'feed' === ( $_GET['view'] ?? '' ) ? 'feed' : 'report';
-	$days = tp_radar_days();
+	// 첫 화면은 피드(10/20 사용자: 피드를 둘러보고 골라서 리포트로 — 들어오면 바로 고를 수 있게)
+	$view = 'report' === ( $_GET['view'] ?? '' ) ? 'report' : 'feed';
 	$asks = tp_radar_asks();
-	// 처음엔 2주만. 더 보기를 누를 때마다 2주씩
-	$show  = min( TP_RADAR_KEEP, max( 14, (int) ( $_GET['show'] ?? 14 ) ) );
-	$more  = count( $days ) > $show;
-	$days  = array_slice( $days, 0, $show, true );
-	$first = $days ? reset( $days ) : null;
-	$msg   = sanitize_text_field( wp_unslash( $_GET['tprd_msg'] ?? '' ) );
-	// 피드는 피드 칸을 열 때만 받는다(리포트만 볼 때 17곳을 부르지 않게). 보관본이 있으면 개수만 보여 준다
+	// 리포트는 처음엔 정리 부탁 6번만. 더 보기를 누를 때마다 6번씩
+	$show = max( 6, (int) ( $_GET['show'] ?? 6 ) );
+	$msg  = sanitize_text_field( wp_unslash( $_GET['tprd_msg'] ?? '' ) );
+	// 피드는 피드 칸을 열 때만 받는다(리포트만 볼 때 15곳을 부르지 않게). 보관본이 있으면 개수만 보여 준다
 	$feed = 'feed' === $view ? tp_radar_feed() : get_transient( 'tp_radar_feed' );
 	?>
 <div class="tprd">
@@ -1029,9 +772,9 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-corner.ask { background: #1f5fc4; }
 .tprd-anchor { display: flex; align-items: center; gap: 8px; margin: -4px 0 14px; padding: 7px 12px; border-radius: 10px; background: var(--hl); font-size: 13px; }
 .tprd-anchor img { width: 30px; height: 30px; }
-.tprd-mail { padding: 2px 10px; border-radius: 999px; background: #d9f1e3; color: #13784f; font: 700 12px/1.5 "IBM Plex Sans KR", sans-serif; }
-.tprd-mail.bad { background: #fde3da; color: #b42333; }
-.tprd-mail.wait { background: #fff1c2; color: #8a6400; }
+.tprd-state { padding: 2px 10px; border-radius: 999px; background: #d9f1e3; color: #13784f; font: 700 12px/1.5 "IBM Plex Sans KR", sans-serif; }
+.tprd-state.bad { background: #fde3da; color: #b42333; }
+.tprd-state.wait { background: #fff1c2; color: #8a6400; }
 .tprd-wait { margin: 0; padding: 12px 16px 12px 32px; border-radius: 12px; background: var(--card); box-shadow: 0 2px 10px rgba(59,47,42,.08); }
 .tprd-wait li { margin: 3px 0; }
 .tprd-recall { display: inline; margin-left: 4px; }
@@ -1099,7 +842,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 <div class="tprd-bug">
 <span class="tprd-live">● LIVE</span>
 <img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="트란시스 특파원">
-<div><h1>트란시스 현장 연결</h1><p>트란시스 특파원이 매일 아침 9시에 카드뉴스 거리를 송고해요</p></div>
+<div><h1>트란시스 현장 연결</h1><p>정보원 새 글을 둘러보고, 마음에 드는 글을 체크하면 특파원이 리포트로 정리해 와요</p></div>
 </div>
 	<?php
 	// 흐르는 자막: 받아 둔 피드의 최신 제목 8개(번역이 있으면 한국어). 피드를 아직 안 받았으면 없음
@@ -1114,8 +857,8 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 </div></div>
 	<?php endif; ?>
 <nav class="tprd-nav">
-<a class="tprd-tab<?php echo 'report' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) ); ?>">🎙️ 리포트</a>
-<a class="tprd-tab<?php echo 'feed' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=feed' ) ); ?>">📰 실시간 피드<?php echo is_array( $feed ) ? ' <small>' . count( $feed['items'] ) . '</small>' : ''; ?></a>
+<a class="tprd-tab<?php echo 'feed' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) ); ?>">📰 실시간 피드<?php echo is_array( $feed ) ? ' <small>' . count( $feed['items'] ) . '</small>' : ''; ?></a>
+<a class="tprd-tab<?php echo 'report' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report' ) ); ?>">🎙️ 리포트<?php echo $asks ? ' <small>' . count( $asks ) . '</small>' : ''; ?></a>
 <a class="tprd-doc" href="<?php echo esc_url( TP_RADAR_REPORT ); ?>" target="_blank" rel="noopener">📊 트렌드포털 데이터마이닝 보고서</a>
 </nav>
 	<?php if ( $msg ) : ?>
@@ -1123,19 +866,24 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 	<?php endif; ?>
 	<?php
 	if ( 'feed' === $view ) {
-		tp_radar_feed_view( $feed, $days, $asks );
+		tp_radar_feed_view( $feed, $asks );
 	} else {
-		tp_radar_report_view( $days, $asks, $show, $more );
+		tp_radar_report_view( $asks, $show );
 	}
 	?>
 </div>
 	<?php
 }
 
-/** ✈️ 리포트 칸: 정리 부탁(최근 것) → 날짜별 아침 리포트 */
-function tp_radar_report_view( $days, $asks, $show, $more ) {
+/** 🎙️ 리포트 칸: 정리 부탁과 그 결과, 최근 것부터 */
+function tp_radar_report_view( $asks, $show ) {
 	$pending = false;
-	foreach ( array_slice( $asks, 0, 6, true ) as $id => $a ) :
+	if ( ! $asks ) :
+		?>
+<p style="text-align:center">아직 리포트가 없어요. 📰 실시간 피드에서 마음에 드는 글을 체크하고 📝 정리 부탁을 눌러 보세요.</p>
+		<?php
+	endif;
+	foreach ( array_slice( $asks, 0, $show, true ) as $id => $a ) :
 		$st       = $a['status'] ?? 'waiting';
 		$pending  = $pending || in_array( $st, array( 'waiting', 'cooking' ), true );
 		$late     = in_array( $st, array( 'waiting', 'cooking' ), true ) && time() - (int) ( $a['rang'] ?? $a['at'] ) > TP_RADAR_ASK_STALE;
@@ -1149,12 +897,13 @@ function tp_radar_report_view( $days, $asks, $show, $more ) {
 		?>
 <section class="tprd-day" id="ask-<?php echo (int) $id; ?>">
 <h2><span class="tprd-corner ask">📝 정리 부탁</span><?php echo esc_html( tp_radar_weekday( wp_date( 'Y-m-d', (int) $a['at'] ) ) . ' ' . wp_date( 'H:i', (int) $a['at'] ) ); ?> · <?php echo count( (array) $a['items'] ); ?>개
-<span class="tprd-mail<?php echo esc_attr( $cls ); ?>"><?php echo esc_html( $says . ( ! empty( $a['err'] ) ? ' — ' . $a['err'] : '' ) ); ?></span>
+<span class="tprd-state<?php echo esc_attr( $cls ); ?>"><?php echo esc_html( $says . ( ! empty( $a['err'] ) ? ' — ' . $a['err'] : '' ) ); ?></span>
 		<?php if ( $late || ! empty( $a['err'] ) ) : ?>
 <form class="tprd-recall" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_recall' ); ?><input type="hidden" name="action" value="tp_radar_recall"><input type="hidden" name="id" value="<?php echo (int) $id; ?>"><button type="submit">🔔 다시 부르기</button></form>
 		<?php endif; ?>
 </h2>
 		<?php if ( 'done' === $st ) : ?>
+<p class="tprd-anchor"><img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">트란시스 특파원, 현장 연결합니다! 부탁하신 글 <?php echo count( (array) $a['result'] ); ?>개 정리했어요</p>
 <div class="tprd-grid">
 			<?php
 			foreach ( array_values( (array) $a['result'] ) as $i => $it ) {
@@ -1174,42 +923,16 @@ function tp_radar_report_view( $days, $asks, $show, $more ) {
 	<?php if ( $pending ) : // 정리 중인 부탁이 있으면 30초마다 새로 읽어 끝난 결과가 저절로 보이게 ?>
 <script>setTimeout(function () { location.reload(); }, 30000);</script>
 	<?php endif; ?>
-	<?php if ( ! $days ) : ?>
-<p style="text-align:center">아직 도착한 리포트가 없어요. 아침 9시에 첫 리포트가 와요.</p>
-	<?php endif; ?>
-	<?php foreach ( $days as $ymd => $day ) : ?>
-		<?php
-		$mail = (string) ( $day['mail'] ?? '' );
-		$ok   = in_array( $mail, array( 'sent', 'duplicate' ), true ) || 0 === strpos( $mail, 'preview:sent' );
-		$says = 'sent' === $mail ? '메일 보냄' : ( 'duplicate' === $mail ? '메일은 이미 보냄' : ( 0 === strpos( $mail, 'preview:' ) ? '미리보기 메일만' : $mail ) );
-		?>
-<section class="tprd-day">
-<h2><span class="tprd-corner">LIVE · <?php echo esc_html( substr( $ymd, 5, 2 ) . '.' . substr( $ymd, 8, 2 ) ); ?></span><?php echo esc_html( tp_radar_weekday( $ymd ) ); ?> 아침 리포트 <span class="tprd-mail<?php echo $ok ? '' : ' bad'; ?>"><?php echo esc_html( $says ); ?></span></h2>
-<p class="tprd-anchor"><img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">트란시스 특파원, 현장 연결합니다! 오늘 거리 <?php echo count( (array) $day['items'] ); ?>개예요</p>
-<div class="tprd-grid">
-		<?php
-		foreach ( array_values( (array) $day['items'] ) as $i => $it ) {
-			tp_radar_card( $it, $i );
-		}
-		?>
-</div>
-</section>
-	<?php endforeach; ?>
-	<?php if ( $more ) : ?>
-<p style="text-align:center"><a class="tprd-more" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&show=' . ( $show + 14 ) ) ); ?>">✈️ 지난 리포트 더 보기</a></p>
+	<?php if ( count( $asks ) > $show ) : ?>
+<p style="text-align:center"><a class="tprd-more" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report&show=' . ( $show + 6 ) ) ); ?>">✈️ 지난 리포트 더 보기</a></p>
 	<?php endif; ?>
 	<?php
 }
 
 /** 📰 실시간 피드 칸: 갈래 거르기 → 글 목록(체크) → 정리 부탁 막대 → 초인종 설정 */
-function tp_radar_feed_view( $feed, $days, $asks ) {
-	// 이미 리포트에 실렸거나 정리 부탁한 글은 표시 — 같은 글을 또 부탁하지 않게
+function tp_radar_feed_view( $feed, $asks ) {
+	// 이미 정리 부탁한 글은 표시 — 같은 글을 또 부탁하지 않게
 	$state = array();
-	foreach ( $days as $d ) {
-		foreach ( (array) $d['items'] as $it ) {
-			$state[ $it['link'] ] = array( '📨 리포트', '' );
-		}
-	}
 	foreach ( array_reverse( $asks, true ) as $id => $a ) {
 		foreach ( (array) $a['items'] as $it ) {
 			$state[ $it['link'] ] = array( 'done' === ( $a['status'] ?? '' ) ? '📝 정리됨' : '⏳ 정리 중', '#ask-' . $id );
@@ -1266,7 +989,7 @@ function tp_radar_feed_view( $feed, $days, $asks ) {
 <span class="bd">
 <span class="meta"><?php echo esc_html( substr( $it['date'], 5 ) . ' · ' . tp_radar_ago( $it['t'] ) ); ?> 송출
 		<?php if ( $st ) : ?>
-<a class="st" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) . $st[1] ); ?>"><?php echo esc_html( $st[0] ); ?></a>
+<a class="st" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report' ) . $st[1] ); ?>"><?php echo esc_html( $st[0] ); ?></a>
 		<?php endif; ?>
 </span>
 		<?php if ( $ko ) : // 번역 제목은 사진 위, 원제는 여기 — 원문 확인용 ?>

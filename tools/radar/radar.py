@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""트란시스 특파원(처음 이름 트렌드 레이더) — 매일 아침 카드뉴스 거리 모으기.
+"""트란시스 특파원(처음 이름 트렌드 레이더) — 탭에서 체크한 글을 리포트로 정리하고, 피드 제목을 번역한다.
 
-    python3 tools/radar/radar.py collect            (정보원 새 글 → local/radar/<오늘>/candidates.txt·.json)
-    python3 tools/radar/radar.py body <번호> ...     (고른 거리의 본문 — 핵심 정리 재료)
-    python3 tools/radar/radar.py send [--preview]   (Claude가 쓴 picks.json → 사이트 "트란시스 특파원" 탭 + 알림 메일)
     python3 tools/radar/radar.py asks               (탭에서 들어온 정리 부탁 가져오기 + 글마다 본문)
     python3 tools/radar/radar.py answer <id> [--fail 이유]  (local/radar/asks/<id>-picks.json → 탭 리포트 칸)
     python3 tools/radar/radar.py titles [--save]    (피드의 외국어 제목 목록 / local/radar/titles-ko.json → 탭 피드에 한국어 제목)
 
+1.6.0(10/20 사용자): 매일 아침 리포트(collect·body·send)와 알림 메일은 범위에서 뺐다 — 필요할 때 탭에 들어와 고르는 도구라서.
+정보원 읽기는 사이트(플러그인의 실시간 피드)가 하고, 이 스크립트는 사람이 고른 글의 본문만 읽는다.
+
 토큰을 아끼는 나눔(10/20 사용자: "토큰 최소화 구조로"):
-  · 손 노동(정보원 읽기, 날짜·중복 거르기, 링크 붙이기)은 이 스크립트가 한다
-  · Claude는 candidates.txt 한 파일만 읽고, 고른 번호와 한국어 제목·한두 문장만 쓴다 (원문 페이지를 열지 않는다)
-  · 링크·원문 제목·날짜는 Claude가 베껴 쓰지 않고 send가 번호로 다시 붙인다
+  · 손 노동(본문 읽기, 링크·원문 제목·날짜 붙이기, 사진 찾기)은 이 스크립트가 한다
+  · Claude는 본문을 읽고 한국어 제목·한두 문장·핵심 정리만 쓴다
+  · 링크·원문 제목·날짜는 Claude가 베껴 쓰지 않고 answer가 번호로 다시 붙인다
 
 picks.json (Claude가 쓰는 파일):
     {"picks": [{"n": 3, "title": "한국어 제목", "note": "무엇이고, 왜 카드뉴스 거리인지 한두 문장",
@@ -27,9 +27,6 @@ import sys
 import time
 import urllib.error
 import urllib.request
-import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cardnews"))
@@ -37,30 +34,11 @@ from cardnews import wp  # noqa: E402  재시도·인증을 셰프와 똑같이 
 
 ROOT = Path(__file__).resolve().parents[2]
 RADAR_API = "https://trendportal.kr/wp-json/tp-radar/v1/"
-KST = timezone(timedelta(hours=9))
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
-
-MAX_AGE_DAYS = 4   # 이보다 오래된 글은 후보에서 뺀다 (주말을 끼어도 놓치지 않을 만큼)
-SNIPPET = 140      # 후보 한 줄에 붙이는 요약 글자 수 — Claude가 읽는 양을 정하는 값
-PER_SOURCE = 5     # 정보원마다 최신 몇 개까지만 — 하루 30개씩 내는 곳(GIGAZINE·Mashable)이 후보를 덮지 않게(10/20 사용자)
-
-# 정보원 표는 플러그인(plugins/tp-trend-radar, TP_RADAR_SOURCES) 한 곳에만 있다 — 탭의 실시간 피드와 같은 표를
-# 쓰려고(10/20). collect가 REST /sources로 받아 온다: [{name, kind, url, skip}]
-# 고른 근거는 플러그인 주석과 정보원 보고서에.
-
-
-def today():
-    return datetime.now(KST).date()
-
-
-def day_dir():
-    d = ROOT / "local" / "radar" / today().isoformat()
-    d.mkdir(parents=True, exist_ok=True)
-    return d
 
 
 def get(url):
-    # 유튜브 RSS는 방금 되던 주소가 가끔 404를 낸다(10/20 실측: WLDO가 몇 분 사이에 200 → 404) → 쉬었다 두 번 더
+    # 기사 페이지가 잠깐 흔들리면(연결 끊김·시간 초과) 쉬었다 두 번 더
     for wait in (5, 15, None):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
@@ -78,121 +56,6 @@ def plain(s):
     return re.sub(r"\s+", " ", html.unescape(s)).strip()
 
 
-# ── 정보원별 읽기: 모두 (제목, 링크, 날짜, 요약) 목록으로 ──────────
-
-ATOM = {"a": "http://www.w3.org/2005/Atom"}
-
-
-def when(s):
-    """날짜 글자 → 시각. 정보원마다 표기가 다르다(10/20 실측):
-    RSS 표준 'Mon, 19 Oct 2026 18:37:45 -0400', Atom '2026-10-19T14:12:45-04:00',
-    매드타임스 '2026-10-20 09:00:00'(시간대 없음 → 한국 매체라 KST로 본다)"""
-    s = (s or "").strip()
-    try:
-        return parsedate_to_datetime(s)
-    except (TypeError, ValueError):
-        d = datetime.fromisoformat(s.replace("Z", "+00:00"))
-        return d if d.tzinfo else d.replace(tzinfo=KST)
-
-
-def read_rss(url):
-    # RSS 2.0과 Atom(The Verge)을 같이 읽는다 — 정보원마다 리더를 따로 두지 않으려고
-    root = ET.fromstring(get(url))
-    for it in root.iter("item"):
-        yield (it.findtext("title"), it.findtext("link"), when(it.findtext("pubDate")), it.findtext("description"))
-    for e in root.findall("a:entry", ATOM):
-        yield (e.findtext("a:title", namespaces=ATOM), e.find("a:link", ATOM).get("href"),
-               when(e.findtext("a:published", namespaces=ATOM) or e.findtext("a:updated", namespaces=ATOM)),
-               e.findtext("a:summary", namespaces=ATOM) or e.findtext("a:content", namespaces=ATOM))
-
-
-def read_reddit(url):
-    """r/InternetIsBeautiful: 글 하나 = 사이트 하나. 레딧 글 주소 대신 소개된 사이트 주소를 링크로 쓴다
-    — 거리는 그 사이트이고, 레딧 페이지는 본문·사진을 읽으려 하면 자주 막힌다."""
-    for title, link, t, content in read_rss(url):
-        m = re.search(r'<a href="([^"]+)">\[link\]</a>', content or "")
-        yield (title, html.unescape(m.group(1)) if m else link, t, "")
-
-
-def read_gtrends(url):
-    """Google 트렌드 한국 급상승 검색어: 검색어 하나에 관련 기사 몇 개가 붙은 모양(10/20 실측).
-    제목 = 검색어와 검색량, 링크 = 첫 기사, 요약 = 기사 제목들 → 왜 뜨는지가 한 줄에 보인다."""
-    ns = {"ht": "https://trends.google.com/trending/rss"}
-    for it in ET.fromstring(get(url)).iter("item"):
-        news = it.findall("ht:news_item", ns)
-        if not news:
-            continue
-        heads = " / ".join(n.findtext("ht:news_item_title", namespaces=ns) or "" for n in news)
-        yield (f"[검색 급상승 {it.findtext('ht:approx_traffic', namespaces=ns)}] {it.findtext('title')}",
-               news[0].findtext("ht:news_item_url", namespaces=ns), when(it.findtext("pubDate")), heads)
-
-
-def read_wpjson(url):
-    raw = get(url)
-    # heyPOP은 JSON 앞에 <style> 덩어리를 붙여서 내보낸다(테마 버그) → 글 목록이 시작하는 '[{'부터 읽는다
-    # ('['만 찾으면 CSS의 input[readonly]에 걸린다)
-    for p in json.loads(raw[raw.index("[{"):]):
-        yield (p["title"]["rendered"], p["link"],
-               datetime.fromisoformat(p["date"]).replace(tzinfo=KST), p.get("excerpt", {}).get("rendered"))
-
-
-def read_youtube(channel):
-    ns = {"a": "http://www.w3.org/2005/Atom", "media": "http://search.yahoo.com/mrss/"}
-    root = ET.fromstring(get("https://www.youtube.com/feeds/videos.xml?channel_id=" + channel))
-    for e in root.findall("a:entry", ns):
-        yield (e.findtext("a:title", namespaces=ns), e.find("a:link", ns).get("href"),
-               datetime.fromisoformat(e.findtext("a:published", namespaces=ns)),
-               e.findtext("media:group/media:description", namespaces=ns))
-
-
-READERS = {"rss": read_rss, "reddit": read_reddit, "gtrends": read_gtrends,
-           "wpjson": read_wpjson, "youtube": read_youtube}
-
-
-MORNING = 8  # 이 시(KST) 전에는 아침 리포트를 만들지 않는다 — 정리 부탁으로 새벽에 깨어나도 9시 리포트를 앞당기지 않게
-
-
-def cmd_collect():
-    s = wp("seen", base=RADAR_API)
-    # 정리 부탁(초인종)으로 낮에 깨어난 날에도 아침 리포트를 또 만들지 않게(10/20)
-    if today().isoformat() in s.get("reported", []):
-        print("오늘 아침 리포트는 이미 보냈어요 — 할 일 끝")
-        return
-    if datetime.now(KST).hour < MORNING:
-        print("아직 아침 리포트 시간 전이에요 — 할 일 끝")
-        return
-    seen = set(s["links"])
-    cut = datetime.now(KST) - timedelta(days=MAX_AGE_DAYS)
-    cands, notes = [], []
-    for src in wp("sources", base=RADAR_API):
-        name, kind = src["name"], src["kind"]
-        try:
-            got = list(READERS[kind](src["url"]))
-        except Exception as e:  # 한 곳이 막혀도 나머지로 계속 — 막힌 곳은 후보 파일 맨 위에 적는다
-            notes.append(f"{name} 읽기 실패: {type(e).__name__} {str(e)[:80]}")
-            continue
-        skip = re.compile(src["skip"], re.I) if src.get("skip") else None
-        fresh = [g for g in got if g[2] >= cut and g[1] not in seen and not (skip and skip.search(g[0] or ""))]
-        fresh.sort(key=lambda g: g[2], reverse=True)
-        for title, link, t, desc in fresh[:PER_SOURCE]:
-            cands.append({"source": name, "orig": plain(title), "link": link,
-                          "date": t.astimezone(KST).date().isoformat(), "text": plain(desc)[:SNIPPET],
-                          # 유튜브 영상 설명 전체는 body가 핵심 정리 재료로 쓴다(candidates.txt엔 안 들어가 토큰과 무관)
-                          "desc": plain(desc) if kind == "youtube" else ""})
-    d = day_dir()
-    for i, c in enumerate(cands, 1):
-        c["n"] = i
-    (d / "candidates.json").write_text(json.dumps(cands, ensure_ascii=False, indent=1), encoding="utf-8")
-    # Claude가 읽는 파일: JSON 대신 한 줄에 하나 (괄호·따옴표·키 이름만큼 토큰이 준다)
-    lines = [f"# {today().isoformat()} 새 후보 {len(cands)}개 — 번호 | 정보원 | 날짜 | 원문 제목 — 요약"]
-    lines += [f"# {n}" for n in notes]
-    lines += [f"{c['n']} | {c['source']} | {c['date'][5:]} | {c['orig']} — {c['text']}" for c in cands]
-    (d / "candidates.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"후보 {len(cands)}개 → {d / 'candidates.txt'}" + ("".join("\n" + n for n in notes)))
-    if not cands:
-        print("새 후보가 없어요 — 오늘은 보낼 거리가 없어요")
-
-
 # 기사 하나에서 Claude에게 넘기는 글자 수 상한. 영어 원문은 핵심 정리를 더 풍부하게 쓰니 넉넉히(10/20 사용자),
 # 한국어 원문은 독자가 원문을 바로 읽을 수 있어 짧게 — 한국어는 글자당 토큰이 더 들기도 한다
 BODY_MAX_EN = 3000
@@ -208,10 +71,10 @@ PARA = re.compile(r"<p(?:\s[^>]*)?>(.*?)</p>", re.S)
 
 def body_text(c):
     """기사 하나의 본문(글자 수 상한까지). 핵심 정리(10/20 사용자: 모든 거리에)를 쓸 재료.
-    유튜브는 페이지 대신 RSS의 영상 설명(collect가 남겨 둔 desc, 피드에서 온 정리 부탁은 text)을 쓴다."""
+    유튜브는 페이지 대신 피드의 영상 설명(text)을 쓴다."""
     cap = BODY_MAX_EN if is_english(c) else BODY_MAX_KO
     if "youtube.com" in c["link"]:
-        return "(영상 설명) " + (c.get("desc") or c.get("text", ""))[:cap]
+        return "(영상 설명) " + c.get("text", "")[:cap]
     try:
         h = get(c["link"])
     except Exception as e:
@@ -226,14 +89,6 @@ def body_text(c):
     return "\n".join(out)[:cap]
 
 
-def cmd_body(nums):
-    """고른 거리의 본문을 꺼내 보여 준다. 고른 5개 안팎에만 부르고 글자 수 상한이 있어서 Claude가 읽는 양이 정해져 있다."""
-    cands = {c["n"]: c for c in json.loads((day_dir() / "candidates.json").read_text(encoding="utf-8"))}
-    for n in nums:
-        c = cands[int(n)]
-        print(f"## {n} · {c['orig']}\n" + body_text(c) + "\n")
-
-
 def is_english(c):
     # 원문 제목에 한글이 하나도 없으면 영어 원문으로 본다
     return not re.search(r"[가-힣]", c["orig"])
@@ -241,9 +96,8 @@ def is_english(c):
 
 def image_of(link):
     """원문 페이지의 대표 사진(og:image). 고른 거리에만 부르니 Claude 토큰과 무관하다.
-    메일에 바로 넣으면 heyPOP은 3000px·800KB에 webp까지 있어서, WordPress.com 사진 변환기(Photon)로 560×234 jpg로 줄인다.
-    납작하게 자르는 이유(10/20 사용자: 사진은 작게, 글을 더): 메일(Gmail)은 CSS 자르기를 지워서 사진 자체를 잘라 와야 한다.
-    유튜브 썸네일은 Photon이 받지 않아서(302) 그대로 쓴다 — 메일에서만 16:9로 조금 크게 나온다."""
+    heyPOP은 3000px·800KB에 webp까지 있어서, WordPress.com 사진 변환기(Photon)로 560×234 jpg로 줄인다.
+    유튜브 썸네일은 Photon이 받지 않아서(302) 그대로 쓴다."""
     try:
         h = get(link)
     except Exception:
@@ -265,24 +119,6 @@ def make_item(c, p):
         sys.exit(f"{p['n']}번에 points(핵심 정리)가 없어요")
     return {"source": c["source"], "title": p["title"], "note": p["note"], "points": points,
             "orig": c["orig"], "link": c["link"], "date": c["date"], "image": image_of(c["link"])}
-
-
-def cmd_send(preview=False):
-    d = day_dir()
-    cands = {c["n"]: c for c in json.loads((d / "candidates.json").read_text(encoding="utf-8"))}
-    picks = json.loads((d / "picks.json").read_text(encoding="utf-8"))["picks"]
-    items = []
-    for p in picks:
-        c = cands.get(int(p["n"]))
-        if not c:
-            sys.exit(f"picks.json의 {p['n']}번은 후보에 없어요")
-        items.append(make_item(c, p))
-    res = wp("days", {"date": today().isoformat(), "items": items, "preview": preview,
-                      # 고르지 않은 후보도 "봤다"로 남긴다 — 내일 같은 글을 다시 읽지 않게
-                      "offered": [c["link"] for c in cands.values()]}, base=RADAR_API)
-    print(f"{res['date']} 거리 {res['count']}개 저장, 메일: {res['mail']}")
-    if res["mail"] not in ("sent", "duplicate"):
-        sys.exit(1)
 
 
 # ── 정리 부탁: 탭의 실시간 피드에서 사람이 고른 글만 정리(10/20 사용자) ──────────
@@ -308,7 +144,7 @@ def cmd_asks():
 
 
 def cmd_answer(aid, fail=None):
-    """정리 결과(또는 실패 이유)를 사이트로. 결과는 탭의 리포트 칸에 '정리 부탁'으로 쌓인다(메일 없음)."""
+    """정리 결과(또는 실패 이유)를 사이트로. 결과는 탭의 리포트 칸에 쌓인다."""
     if fail:
         wp(f"asks/{aid}", {"error": fail}, base=RADAR_API)
         print(f"정리 부탁 {aid}: 실패로 알렸어요")
@@ -324,7 +160,7 @@ def cmd_answer(aid, fail=None):
 
 def cmd_titles(save=False):
     """번역할 제목을 번호 붙여 보여 주거나(save=False), Claude가 쓴 titles-ko.json을 사이트에 저장한다.
-    링크는 Claude가 베껴 쓰지 않는다 — 번호로 다시 붙인다(collect·send와 같은 원칙)."""
+    링크는 Claude가 베껴 쓰지 않는다 — 번호로 다시 붙인다(answer와 같은 원칙)."""
     f = ROOT / "local" / "radar" / "titles.json"
     if save:
         todo = json.loads(f.read_text(encoding="utf-8"))
@@ -344,13 +180,7 @@ def cmd_titles(save=False):
 
 
 def main(argv):
-    if argv[:1] == ["collect"]:
-        cmd_collect()
-    elif argv[:1] == ["body"] and argv[1:]:
-        cmd_body(argv[1:])
-    elif argv[:1] == ["send"]:
-        cmd_send(preview="--preview" in argv)
-    elif argv[:1] == ["titles"]:
+    if argv[:1] == ["titles"]:
         cmd_titles(save="--save" in argv)
     elif argv[:1] == ["asks"]:
         cmd_asks()
