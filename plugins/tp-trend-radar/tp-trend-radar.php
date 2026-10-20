@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.12.1
+ * Version: 1.13.0
  * Author: Trendportal
  */
 
@@ -92,6 +92,9 @@ const TP_RADAR_SOURCES = array(
 	// ねとらぼ(RSS 멈춤) 대신 おたくま = X 화제·이상한 신상품·콜라보.
 	// Togetter 인기(일본 X 화제 글 모음)도 넣었다가 뺐다 — 사이트 서버에서 받으면 403(로컬은 200, 10/20 밤)
 	'おたくま経済新聞'       => array( 'jp', 'trend', 'rss', 'https://otakuma.net/feed' ),
+	// 10/21 추가(사용자: "한국꺼로 좁혀서") — SNS 마케터용 매거진. 월별 밈 모음·인기 릴스·브랜드 오프라인 기획, 하루 1편꼴.
+	// 국내 밈은 X·인스타·커뮤니티에서 도는데 거긴 RSS가 없거나 톤이 안 맞아서, 그걸 정리해 오는 곳으로 받는다
+	'고구마팜'               => array( 'kr', 'trend', 'rss', 'https://gogumafarm.kr/feed/' ),
 	// 국내 광고·팝업 — 10/20 사용자가 원한 "캡틴큐 이선민 광고" 같은 국내 화제 광고는 브랜드브리프 RSS 맨 위에 그 기사가 있었다
 	'브랜드브리프'           => array( 'kr', 'kr', 'rss', 'https://www.brandbrief.co.kr/rss/allArticle.xml' ),
 	'매드타임스'             => array( 'kr', 'kr', 'rss', 'https://www.madtimes.co.kr/rss/allArticle.xml' ),
@@ -100,6 +103,9 @@ const TP_RADAR_SOURCES = array(
 	// 10/20 밤 추가 — 화제에 숟가락 얹은 브랜드 패러디를 국내 언론이 묶어 쓴 기사를 낚는 그물.
 	// 시험 때 테슬라 로드스터 패러디 기사 8개가 잡혔다. 링크는 구글 뉴스 주소라 특파원이 본문은 못 읽는다(radar.py)
 	'구글 뉴스'              => array( 'kr', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%94%EC%9D%B4%EB%9F%B4+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%88+%EB%A7%88%EC%BC%80%ED%8C%85%22+OR+%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EC%98%81%EC%83%81%22+OR+%22%EA%B2%8C%EC%9E%84+%EC%BD%9C%EB%9D%BC%EB%B3%B4%22+OR+%22%EC%88%9F%EA%B0%80%EB%9D%BD+%EC%96%B9%EA%B8%B0%22%29+when%3A3d&hl=ko&gl=KR&ceid=KR:ko' ),
+	// 10/21 추가 — 두 번째 그물: 국내 언론의 "온라인·SNS에서 화제" 기사 중 광고·브랜드·콜라보·신제품만(おたくま의 한국판 역할).
+	// 시험 때 3일 4개 중 2개가 캡틴큐 이선민 광고. 위 그물과 합치지 않은 이유: 정보원마다 8개 상한이라 양 적은 이쪽이 밀려난다
+	'구글 뉴스 화제'          => array( 'kr', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%EC%98%A8%EB%9D%BC%EC%9D%B8%EC%97%90%EC%84%9C+%ED%99%94%EC%A0%9C%22+OR+%22SNS%EC%97%90%EC%84%9C+%ED%99%94%EC%A0%9C%22%29+%28%EA%B4%91%EA%B3%A0+OR+%EB%B8%8C%EB%9E%9C%EB%93%9C+OR+%EC%BD%9C%EB%9D%BC%EB%B3%B4+OR+%EC%8B%A0%EC%A0%9C%ED%92%88%29+when%3A3d&hl=ko&gl=KR&ceid=KR:ko' ),
 	// heyPOP: /feed/는 2021년에 멈춘 기본 글 종류라 못 쓰고, 실제 기사는 'n' 글 종류
 	'heyPOP'                => array( 'kr', 'kr', 'wpjson', 'https://heypop.kr/wp-json/wp/v2/n?per_page=20&_fields=date,link,title,excerpt' ),
 	// 10/20 저녁에 뺀 곳(사용자: "정치·시사·사건사고, 대놓고 스포츠 뉴스, 너무 테크 기사는 필요 없어") — 그때 피드 실측:
@@ -122,6 +128,8 @@ const TP_RADAR_SOURCES = array(
 // PHP와 Python(radar.py) 둘 다 이 문자열을 정규식으로 쓴다 → 두 쪽에 공통인 문법만
 const TP_RADAR_SKIP = array(
 	'Mashable' => 'how to watch|hints|answers|wordle|\bnyt\b|\bdeals?\b|% off|where to buy|how to buy|lowest price|price drop',
+	// 고구마팜의 매일 뉴스 묶음 글 — 하나에 여러 소식이라 카드 거리 하나로 못 쓴다
+	'고구마팜' => '뉴스클리핑',
 );
 
 // 정보원 재정비 보고서(10/20, 비공개 — 성현 님은 공유받아야 열림). 정보원이 바뀌면 Claude가 같이 고친다
