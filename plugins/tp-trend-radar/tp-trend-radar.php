@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더).매일 아침 클라우드 routine(tools/radar/radar.py)이 고른 카드뉴스 거리를 REST로 받아 날짜별로 쌓고, 트란시스 발신메일봇으로 알림 메일을 보낸다.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Trendportal
  */
 
@@ -40,6 +40,8 @@ function tp_radar_clean_item( $it ) {
 		'link'   => esc_url_raw( $it['link'] ?? '' ),
 		'date'   => sanitize_text_field( $it['date'] ?? '' ),   // 원문 날짜 Y-m-d
 		'image'  => esc_url_raw( $it['image'] ?? '' ),          // 원문 대표 사진(radar.py가 Photon으로 줄인 주소). 없을 수 있다
+		// 영어 원문일 때만: Claude가 본문을 우리 카드 말투로 녹인 핵심 정리(10/20 사용자 A안 — 전문 번역 대신)
+		'points' => array_slice( array_values( array_filter( array_map( 'sanitize_text_field', (array) ( $it['points'] ?? array() ) ) ) ), 0, 5 ),
 	);
 }
 
@@ -87,6 +89,7 @@ function tp_radar_mail_html( $ymd, $items, $tab ) {
 			. '<span style="display:inline-block;padding:2px 10px;border:1.5px solid ' . $line . ';border-radius:999px;background:' . $bg . ';color:' . $fg . ';font-size:12px;font-weight:700;vertical-align:middle;">' . esc_html( $it['source'] . ' · ' . substr( $it['date'], 5 ) ) . '</span>'
 			. '<div style="margin:8px 0 4px;font-size:18px;font-weight:700;line-height:1.35;"><a href="' . esc_url( $it['link'] ) . '" style="color:' . $ink . ';text-decoration:none;">' . esc_html( $it['title'] ) . '</a></div>'
 			. '<div style="font-size:14px;line-height:1.6;color:' . $ink . ';">' . esc_html( $it['note'] ) . '</div>'
+			. tp_radar_mail_points( $it['points'] ?? array() )
 			. '</td></tr></table>';
 	}
 	return '<div style="background:#fbf4e6;padding:24px 14px;">'
@@ -102,10 +105,27 @@ function tp_radar_mail_html( $ymd, $items, $tab ) {
 		. '</div></div>';
 }
 
+// 핵심 정리 상자(메일). 목록 태그(ul)는 메일 앱마다 들여쓰기가 달라서 줄마다 '·'를 붙인 문단으로
+function tp_radar_mail_points( $points ) {
+	if ( ! $points ) {
+		return '';
+	}
+	$rows = '';
+	foreach ( $points as $p ) {
+		$rows .= '<div style="margin:3px 0;">· ' . esc_html( $p ) . '</div>';
+	}
+	return '<div style="margin-top:10px;padding:10px 12px;border:1.5px dashed #dcc9ab;border-radius:12px;background:#fdf8ee;font-size:13.5px;line-height:1.6;color:#3b2f2a;">'
+		. '<div style="margin-bottom:4px;font-weight:700;">📝 핵심 정리</div>' . $rows . '</div>';
+}
+
 function tp_radar_mail_text( $ymd, $items, $tab ) {
 	$out = '트란시스 특파원 리포트 · ' . tp_radar_weekday( $ymd ) . "\n\n";
 	foreach ( $items as $i => $it ) {
-		$out .= ( $i + 1 ) . '. ' . $it['title'] . ' (' . $it['source'] . ")\n" . $it['note'] . "\n" . $it['link'] . "\n\n";
+		$out .= ( $i + 1 ) . '. ' . $it['title'] . ' (' . $it['source'] . ")\n" . $it['note'] . "\n";
+		foreach ( (array) ( $it['points'] ?? array() ) as $p ) {
+			$out .= '  · ' . $p . "\n";
+		}
+		$out .= $it['link'] . "\n\n";
 	}
 	return $out . '탭: ' . $tab . "\n";
 }
@@ -328,6 +348,11 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-bd h3 a:hover { text-decoration: underline; }
 .tprd-bd p { margin: 0; font-size: 13.5px; line-height: 1.6; }
 .tprd-bd .tprd-orig { margin-top: 6px; font-size: 12px; color: var(--muted); }
+/* 영어 원문 거리의 핵심 정리: 셰프 탭의 안내 상자처럼 점선 메모 */
+.tprd-pts { margin-top: 10px; padding: 10px 12px; border: 1.5px dashed #dcc9ab; border-radius: 12px; background: #fdf8ee; font-size: 13px; }
+.tprd-pts b { display: block; margin-bottom: 2px; }
+.tprd-pts ul { margin: 0; padding-left: 16px; list-style: "· "; }
+.tprd-pts li { margin: 2px 0; }
 .tprd-more { display: inline-block; padding: 8px 18px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-weight: 700; text-decoration: none; box-shadow: 3px 3px 0 var(--ink); }
 </style>
 <div class="tprd-air"></div>
@@ -359,6 +384,13 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 <span class="tprd-chip" style="background:<?php echo esc_attr( $bg ); ?>;border-color:<?php echo esc_attr( $line ); ?>;color:<?php echo esc_attr( $fg ); ?>"><?php echo esc_html( $it['source'] . ' · ' . substr( $it['date'], 5 ) ); ?></span>
 <h3><a href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $it['title'] ); ?></a></h3>
 <p><?php echo esc_html( $it['note'] ); ?></p>
+			<?php if ( ! empty( $it['points'] ) ) : ?>
+<div class="tprd-pts"><b>📝 핵심 정리</b><ul>
+				<?php foreach ( $it['points'] as $pt ) : ?>
+<li><?php echo esc_html( $pt ); ?></li>
+				<?php endforeach; ?>
+</ul></div>
+			<?php endif; ?>
 <p class="tprd-orig">원문: <?php echo esc_html( $it['orig'] ); ?></p>
 </div>
 </article>
