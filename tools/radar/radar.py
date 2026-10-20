@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""트란시스 특파원(처음 이름 트렌드 레이더) — 탭에서 체크한 글을 리포트로 정리하고, 피드 제목을 번역한다.
+"""트란시스 특파원(처음 이름 트렌드 레이더) — 탭에서 체크한 글을 리포트로 정리하고, 피드 제목을 번역하며 우리 거리가 아닌 글을 접는다.
 
     python3 tools/radar/radar.py asks               (탭에서 들어온 정리 부탁 가져오기 + 글마다 본문)
     python3 tools/radar/radar.py answer <id> [--fail 이유]  (local/radar/asks/<id>-picks.json → 탭 리포트 칸)
-    python3 tools/radar/radar.py titles [--save]    (피드의 외국어 제목 목록 / local/radar/titles-ko.json → 탭 피드에 한국어 제목)
+    python3 tools/radar/radar.py titles [--save]    (아직 안 훑은 피드 글 / local/radar/titles-ko.json → 탭 피드에 한국어 제목·접기)
 
 1.6.0(10/20 사용자): 매일 아침 리포트(collect·body·send)와 알림 메일은 범위에서 뺐다 — 필요할 때 탭에 들어와 고르는 도구라서.
 정보원 읽기는 사이트(플러그인의 실시간 피드)가 하고, 이 스크립트는 사람이 고른 글의 본문만 읽는다.
@@ -156,27 +156,33 @@ def cmd_answer(aid, fail=None):
     print(f"정리 부탁 {aid}: {len(items)}개 → {res['status']}")
 
 
-# ── 제목 번역: 피드의 외국어 제목을 우리 말투로(10/20 사용자 — 브라우저 번역은 부자연스러워서) ──────────
+# ── 번역·거르기: 피드의 외국어 제목을 우리 말투로 + 우리 거리 아닌 글 접기(10/20 사용자) ──────────
 
 def cmd_titles(save=False):
-    """번역할 제목을 번호 붙여 보여 주거나(save=False), Claude가 쓴 titles-ko.json을 사이트에 저장한다.
-    링크는 Claude가 베껴 쓰지 않는다 — 번호로 다시 붙인다(answer와 같은 원칙)."""
+    """아직 안 훑은 피드 글을 번호 붙여 보여 주거나(save=False), Claude가 쓴 titles-ko.json을 사이트에 저장한다.
+    링크는 Claude가 베껴 쓰지 않는다 — 번호로 다시 붙인다(answer와 같은 원칙).
+    titles-ko.json: {"titles": {"번호": "한국어 제목"}, "hide": [접을 번호, ...]}"""
     f = ROOT / "local" / "radar" / "titles.json"
     if save:
         todo = json.loads(f.read_text(encoding="utf-8"))
-        ko = json.loads((f.parent / "titles-ko.json").read_text(encoding="utf-8"))["titles"]
-        res = wp("titles", {"titles": {todo[int(n) - 1]["link"]: s for n, s in ko.items()}}, base=RADAR_API)
-        print(f"제목 {res['saved']}개를 피드에 저장했어요")
+        out = json.loads((f.parent / "titles-ko.json").read_text(encoding="utf-8"))
+        link = lambda n: todo[int(n) - 1]["link"]  # noqa: E731
+        res = wp("titles", {"titles": {link(n): s for n, s in out.get("titles", {}).items()},
+                            "hide": [link(n) for n in out.get("hide", [])],
+                            "judged": [c["link"] for c in todo]}, base=RADAR_API)
+        print(f"{res['saved']}개를 훑어 저장했어요 (접은 글 {res['folded']}개)")
         return
     todo = wp("titles", base=RADAR_API)
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(todo, ensure_ascii=False), encoding="utf-8")
     if not todo:
-        print("번역할 제목이 없어요")
+        print("훑을 글이 없어요")
         return
-    print(f"# 번역할 제목 {len(todo)}개 — 번호 | 정보원 | 원문 제목 — 요약 앞부분")
+    print(f"# 훑을 글 {len(todo)}개 — 번호 | 정보원 | 원문 제목 — 요약 앞부분")
+    print("# [번역] = 한국어 제목이 필요한 외국어 글, [번역됨] = 제목은 이미 있음(접을지만 판단)")
     for n, c in enumerate(todo, 1):
-        print(f"{n} | {c['source']} | {c['orig']} — {c['text'][:80]}")
+        tag = "" if not c["lang"] else ("[번역됨] " if c["ko"] else "[번역] ")
+        print(f"{n} | {c['source']} | {tag}{c['orig']} — {c['text'][:80]}")
 
 
 def main(argv):
