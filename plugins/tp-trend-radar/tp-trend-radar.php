@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더).매일 아침 클라우드 routine(tools/radar/radar.py)이 고른 카드뉴스 거리를 REST로 받아 날짜별로 쌓고, 트란시스 발신메일봇으로 알림 메일을 보낸다.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Trendportal
  */
 
@@ -97,7 +97,7 @@ function tp_radar_mail_html( $ymd, $items, $tab ) {
 		. '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border:2px solid ' . $ink . ';border-radius:6px;border-collapse:separate;overflow:hidden;"><tr>' . $air . '</tr></table>'
 		. '<div style="text-align:center;margin:0 0 20px;">'
 		. '<img src="' . esc_url( plugins_url( 'press.png', __FILE__ ) ) . '" width="88" height="88" alt="트란시스 특파원" style="display:inline-block;width:88px;height:88px;border:0;">'
-		. '<div style="margin:4px 0 2px;font-size:23px;font-weight:800;">특파원 리포트 · 거리 ' . count( $items ) . '개</div>'
+		. '<div style="margin:4px 0 2px;font-size:23px;font-weight:800;">특파원 리포트 - 기사 ' . count( $items ) . '개</div>'
 		. '<div style="font-size:13px;color:#8c7f73;">트란시스 특파원 · ' . esc_html( tp_radar_weekday( $ymd ) ) . ' 송고</div>'
 		. '</div>'
 		. $cards
@@ -140,7 +140,7 @@ function tp_radar_send_mail( $ymd, $items, $preview ) {
 		return '메일 설정이 없어요';
 	}
 	$tab     = admin_url( 'admin.php?page=' . TP_RADAR_SLUG );
-	$subject = '📰 특파원 리포트: 거리 ' . count( $items ) . '개 · ' . tp_radar_weekday( $ymd );
+	$subject = '📰 특파원 리포트 - 기사 ' . count( $items ) . '개 · ' . tp_radar_weekday( $ymd );
 	$mail    = array(
 		'token'   => $cfg['token'],
 		'subject' => $preview ? '[미리보기] ' . $subject : $subject,
@@ -335,10 +335,12 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-stamp strong { display: block; margin: 3px 0 2px; font: 400 17px/1 "Jua", sans-serif; }
 .tprd-mail { padding: 2px 10px; border-radius: 999px; background: #d9f1e3; color: #13784f; font: 700 12px/1.5 "IBM Plex Sans KR", sans-serif; }
 .tprd-mail.bad { background: #fde3da; color: #b42333; }
-.tprd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 22px 18px; }
+/* 10/20 사용자: 사진은 작게, 글(핵심 정리)을 더 → 2열로 넓히고 사진은 납작한 띠(2.4:1) */
+.tprd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 22px 18px; align-items: start; }
 .tprd-card { position: relative; display: flex; flex-direction: column; background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px; box-shadow: 5px 5px 0 var(--ink); overflow: hidden; transition: transform .15s, box-shadow .15s; }
 .tprd-card:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--ink); }
-.tprd-card > a { display: block; aspect-ratio: 16 / 9; border-bottom: 2.5px solid var(--ink); background: #efe3cf; }
+/* overflow를 숨겨야 유튜브 원본(16:9) 높이가 띠를 밀어 늘리지 않는다(aspect-ratio의 최소 높이가 0이 됨) */
+.tprd-card > a { display: block; overflow: hidden; aspect-ratio: 2.4 / 1; border-bottom: 2.5px solid var(--ink); background: #efe3cf; }
 .tprd-card > a img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tprd-no { position: absolute; top: 10px; left: 10px; width: 36px; height: 36px; border-radius: 50%; background: #ffe45c; border: 2.5px solid var(--ink); font: 400 19px/31px "Jua", sans-serif; text-align: center; transform: rotate(-8deg); }
 .tprd-bd { padding: 12px 14px 14px; }
@@ -358,7 +360,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 <div class="tprd-air"></div>
 <div class="tprd-head">
 <img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="트란시스 특파원">
-<h1><?php echo $first ? '특파원 리포트 · 거리 ' . count( (array) $first['items'] ) . '개' : '트란시스 특파원'; ?></h1>
+<h1><?php echo $first ? '특파원 리포트 - 기사 ' . count( (array) $first['items'] ) . '개' : '트란시스 특파원'; ?></h1>
 <p><b>PRESS</b>트란시스 특파원이 매일 아침 9시에 카드뉴스 거리를 송고해요</p>
 </div>
 	<?php if ( ! $days ) : ?>
