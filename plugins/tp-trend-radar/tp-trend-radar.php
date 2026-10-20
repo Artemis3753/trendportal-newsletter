@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더).매일 아침 클라우드 routine(tools/radar/radar.py)이 고른 카드뉴스 거리를 REST로 받아 날짜별로 쌓고, 트란시스 발신메일봇으로 알림 메일을 보낸다.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: Trendportal
  */
 
@@ -53,6 +53,20 @@ function tp_radar_weekday( $ymd ) {
 }
 
 // 정보원 알약 색: 탭과 메일이 같은 색을 쓴다 (배경 · 테두리 · 글자)
+/**
+ * 원문이 외국어면 그 언어 이름, 한국어면 ''. 원문 제목에 한글이 없으면 외국어로 본다(radar.py is_english와 같은 기준).
+ * 10/20 사용자: 외국어 원문은 정보가 더 많고 특파원이 번역한 것이라 그 사실을 보여 준다
+ */
+function tp_radar_lang( $orig ) {
+	if ( preg_match( '/[가-힣]/u', $orig ) ) {
+		return '';
+	}
+	return preg_match( '/[\x{3040}-\x{30ff}]/u', $orig ) ? '일본어' : '영어'; // 가나가 있으면 일본어
+}
+
+// 번역 표시 알약 색(보라): 정보원 알약과 겹치지 않게
+const TP_RADAR_TR = array( '#ebe5ff', '#7a5af8', '#5b3fd0' );
+
 function tp_radar_chip_color( $source ) {
 	$map = array(
 		'Famous Campaigns' => array( '#d9f1e3', '#2f9e6b', '#13784f' ),
@@ -87,9 +101,10 @@ function tp_radar_mail_html( $ymd, $items, $tab ) {
 			. '<tr><td style="padding:12px 14px 14px;">'
 			. '<span style="display:inline-block;width:26px;height:26px;margin-right:6px;border:2px solid ' . $ink . ';border-radius:50%;background:#ffe45c;color:' . $ink . ';font-size:14px;font-weight:700;line-height:26px;text-align:center;vertical-align:middle;">' . ( $i + 1 ) . '</span>'
 			. '<span style="display:inline-block;padding:2px 10px;border:1.5px solid ' . $line . ';border-radius:999px;background:' . $bg . ';color:' . $fg . ';font-size:12px;font-weight:700;vertical-align:middle;">' . esc_html( $it['source'] . ' · ' . substr( $it['date'], 5 ) ) . '</span>'
+			. ( tp_radar_lang( $it['orig'] ) ? '<span style="display:inline-block;margin-left:4px;padding:2px 10px;border:1.5px solid ' . TP_RADAR_TR[1] . ';border-radius:999px;background:' . TP_RADAR_TR[0] . ';color:' . TP_RADAR_TR[2] . ';font-size:12px;font-weight:700;vertical-align:middle;">🌐 특파원 번역</span>' : '' )
 			. '<div style="margin:8px 0 4px;font-size:18px;font-weight:700;line-height:1.35;"><a href="' . esc_url( $it['link'] ) . '" style="color:' . $ink . ';text-decoration:none;">' . esc_html( $it['title'] ) . '</a></div>'
 			. '<div style="font-size:14px;line-height:1.6;color:' . $ink . ';">' . esc_html( $it['note'] ) . '</div>'
-			. tp_radar_mail_points( $it['points'] ?? array() )
+			. tp_radar_mail_points( $it['points'] ?? array(), tp_radar_lang( $it['orig'] ) )
 			. '</td></tr></table>';
 	}
 	return '<div style="background:#fbf4e6;padding:24px 14px;">'
@@ -106,7 +121,7 @@ function tp_radar_mail_html( $ymd, $items, $tab ) {
 }
 
 // 핵심 정리 상자(메일). 목록 태그(ul)는 메일 앱마다 들여쓰기가 달라서 줄마다 '·'를 붙인 문단으로
-function tp_radar_mail_points( $points ) {
+function tp_radar_mail_points( $points, $lang = '' ) {
 	if ( ! $points ) {
 		return '';
 	}
@@ -115,7 +130,7 @@ function tp_radar_mail_points( $points ) {
 		$rows .= '<div style="margin:3px 0;">· ' . esc_html( $p ) . '</div>';
 	}
 	return '<div style="margin-top:10px;padding:10px 12px;border:1.5px dashed #dcc9ab;border-radius:12px;background:#fdf8ee;font-size:13.5px;line-height:1.6;color:#3b2f2a;">'
-		. '<div style="margin-bottom:4px;font-weight:700;">📝 핵심 정리</div>' . $rows . '</div>';
+		. '<div style="margin-bottom:4px;font-weight:700;">📝 핵심 정리' . ( $lang ? '<span style="font-weight:400;color:#8c7f73;"> · ' . $lang . ' 원문을 특파원이 번역해 정리했어요</span>' : '' ) . '</div>' . $rows . '</div>';
 }
 
 function tp_radar_mail_text( $ymd, $items, $tab ) {
@@ -353,6 +368,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 /* 영어 원문 거리의 핵심 정리: 셰프 탭의 안내 상자처럼 점선 메모 */
 .tprd-pts { margin-top: 10px; padding: 10px 12px; border: 1.5px dashed #dcc9ab; border-radius: 12px; background: #fdf8ee; font-size: 13px; }
 .tprd-pts b { display: block; margin-bottom: 2px; }
+.tprd-pts b span { font-weight: 400; color: var(--muted); }
 .tprd-pts ul { margin: 0; padding-left: 16px; list-style: "· "; }
 .tprd-pts li { margin: 2px 0; }
 .tprd-more { display: inline-block; padding: 8px 18px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-weight: 700; text-decoration: none; box-shadow: 3px 3px 0 var(--ink); }
@@ -384,10 +400,14 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 <span class="tprd-no"><?php echo (int) $i + 1; ?></span>
 <div class="tprd-bd"<?php echo empty( $it['image'] ) ? ' style="padding-top:54px"' : ''; ?>>
 <span class="tprd-chip" style="background:<?php echo esc_attr( $bg ); ?>;border-color:<?php echo esc_attr( $line ); ?>;color:<?php echo esc_attr( $fg ); ?>"><?php echo esc_html( $it['source'] . ' · ' . substr( $it['date'], 5 ) ); ?></span>
+			<?php $lang = tp_radar_lang( $it['orig'] ); ?>
+			<?php if ( $lang ) : ?>
+<span class="tprd-chip" style="background:<?php echo esc_attr( TP_RADAR_TR[0] ); ?>;border-color:<?php echo esc_attr( TP_RADAR_TR[1] ); ?>;color:<?php echo esc_attr( TP_RADAR_TR[2] ); ?>">🌐 특파원 번역</span>
+			<?php endif; ?>
 <h3><a href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $it['title'] ); ?></a></h3>
 <p><?php echo esc_html( $it['note'] ); ?></p>
 			<?php if ( ! empty( $it['points'] ) ) : ?>
-<div class="tprd-pts"><b>📝 핵심 정리</b><ul>
+<div class="tprd-pts"><b>📝 핵심 정리<?php echo $lang ? '<span> · ' . esc_html( $lang ) . ' 원문을 특파원이 번역해 정리했어요</span>' : ''; ?></b><ul>
 				<?php foreach ( $it['points'] as $pt ) : ?>
 <li><?php echo esc_html( $pt ); ?></li>
 				<?php endforeach; ?>
