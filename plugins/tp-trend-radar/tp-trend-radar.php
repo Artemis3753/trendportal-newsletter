@@ -287,7 +287,8 @@ function tp_radar_plain( $s ) {
 }
 
 /**
- * 피드 작은 사진 주소. 원본은 수 MB짜리도 있어서 WordPress.com 사진 변환기(Photon)로 192×120으로 줄여 받는다
+ * 피드 사진 주소. 원본은 수 MB짜리도 있어서 WordPress.com 사진 변환기(Photon)로 400×250으로 줄여 받는다
+ * (10/20 카드 격자로 바꾸며 192×120에서 키움)
  * (radar.py image_of와 같은 방법). 구글 트렌드(gstatic)·유튜브 썸네일은 Photon이 받지 않아 그대로.
  */
 function tp_radar_thumb( $url ) {
@@ -298,7 +299,7 @@ function tp_radar_thumb( $url ) {
 	if ( preg_match( '#gstatic\.com|ytimg\.com#', $url ) ) {
 		return esc_url_raw( $url );
 	}
-	return esc_url_raw( 'https://i0.wp.com/' . preg_replace( '#^https?://#', '', strtok( $url, '?' ) ) . '?resize=192,120&ssl=1' );
+	return esc_url_raw( 'https://i0.wp.com/' . preg_replace( '#^https?://#', '', strtok( $url, '?' ) ) . '?resize=400,250&ssl=1' );
 }
 
 /** RSS 글 하나에 딸린 사진 — media:content·enclosure·본문 첫 <img> 순서(10/20 실측: 15곳 중 6곳이 RSS에 사진을 넣어 준다) */
@@ -441,7 +442,8 @@ function tp_radar_feed( $force = false ) {
 
 /** 이미 찾아 둔 대표 사진(3일 보관). 없으면 false, 찾았는데 사진이 없는 글이면 '' */
 function tp_radar_img_cached( $link ) {
-	return get_transient( 'tp_radar_img_' . md5( $link ) );
+	// 키의 2 = 400px 판(옛 192px 보관본은 버린다)
+	return get_transient( 'tp_radar_img2_' . md5( $link ) );
 }
 
 /*
@@ -475,10 +477,44 @@ add_action(
 			$body = is_object( $r ) && isset( $r->body ) ? (string) $r->body : '';
 			$img  = preg_match( '/<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)/i', $body, $m )
 				|| preg_match( '/<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image/i', $body, $m ) ? tp_radar_thumb( $m[1] ) : '';
-			set_transient( 'tp_radar_img_' . md5( $l ), $img, 3 * DAY_IN_SECONDS );
+			set_transient( 'tp_radar_img2_' . md5( $l ), $img, 3 * DAY_IN_SECONDS );
 			$out[ $l ] = $img;
 		}
 		wp_send_json_success( $out );
+	}
+);
+
+// ── 제목 번역: 외국어 제목을 특파원이 우리 말투로 ──────────────────────
+/*
+ * 10/20 사용자: 브라우저 내장 번역은 말투가 부자연스럽고 성현 님 PC에서 될지도 몰라서, 자원을 조금 써서 특파원이 번역한다.
+ * routine이 깨어날 때마다(아침 8:50 · 정리 부탁 · 아래 "제목 번역 부탁") 피드에서 아직 번역 안 된 외국어 제목만 번역한다.
+ * tp_radar_titles: 링크 => array( 한국어 제목, 저장 시각 )  — 피드 창(3일)보다 넉넉히 7일 보관
+ */
+function tp_radar_titles() {
+	$t = get_option( 'tp_radar_titles', array() );
+	return is_array( $t ) ? $t : array();
+}
+
+/** 피드에서 번역이 필요한데 아직 없는 글 */
+function tp_radar_untranslated( $feed ) {
+	$tr = tp_radar_titles();
+	return array_values( array_filter( $feed['items'], fn( $it ) => '' !== tp_radar_lang( $it['orig'] ) && empty( $tr[ $it['link'] ] ) ) );
+}
+
+add_action(
+	'admin_post_tp_radar_tr',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 부탁할 수 있어요' );
+		}
+		check_admin_referer( 'tp_radar_tr' );
+		$rang = tp_radar_ring( 'titles' );
+		if ( true === $rang ) {
+			update_option( 'tp_radar_tr_at', time(), false );
+		}
+		$msg = true === $rang ? '특파원에게 제목 번역을 부탁했어요. 몇 분 뒤 저절로 바뀌어요' : $rang;
+		wp_safe_redirect( add_query_arg( array( 'view' => 'feed', 'tprd_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) ) );
+		exit;
 	}
 );
 
@@ -505,8 +541,8 @@ function tp_radar_save_asks( $asks ) {
 	update_option( 'tp_radar_asks', array_slice( $asks, 0, TP_RADAR_ASKS_KEEP, true ), false );
 }
 
-/** 초인종: 특파원 routine을 지금 깨운다. 성공하면 true, 실패하면 이유 문장 */
-function tp_radar_ring( $id ) {
+/** 초인종: 특파원 routine을 지금 깨운다. $note는 실행 기록에서 알아보는 표시일 뿐. 성공하면 true, 실패하면 이유 문장 */
+function tp_radar_ring( $note ) {
 	$bell = get_option( 'tp_radar_bell', array() );
 	if ( empty( $bell['url'] ) || empty( $bell['token'] ) ) {
 		return '초인종이 아직 설정되지 않았어요 (피드 칸 맨 아래 "특파원 초인종 설정")';
@@ -523,7 +559,7 @@ function tp_radar_ring( $id ) {
 				'Content-Type'      => 'application/json',
 			),
 			// 특파원은 이 글을 따르지 않는다. 실행 기록에서 어느 부탁 때 깨웠는지 알아보는 표시일 뿐
-			'body'    => wp_json_encode( array( 'text' => "ask {$id}" ) ),
+			'body'    => wp_json_encode( array( 'text' => $note ) ),
 		)
 	);
 	$code = is_wp_error( $res ) ? 0 : wp_remote_retrieve_response_code( $res );
@@ -539,7 +575,7 @@ function tp_radar_ring( $id ) {
 function tp_radar_ring_ask( &$asks, $id ) {
 	$asks[ $id ]['status'] = 'waiting';
 	$asks[ $id ]['rang']   = time();
-	$rang                  = tp_radar_ring( $id );
+	$rang                  = tp_radar_ring( "ask {$id}" );
 	$asks[ $id ]['err']    = true === $rang ? '' : $rang;
 }
 
@@ -686,6 +722,44 @@ add_action(
 					}
 					return $out;
 				},
+			)
+		);
+
+		// 번역할 제목(피드에서 아직 번역 안 된 외국어 글) / 번역 저장
+		register_rest_route(
+			'tp-radar/v1',
+			'/titles',
+			array(
+				array(
+					'methods'             => 'GET',
+					'permission_callback' => $admin,
+					'callback'            => function () {
+						return array_map(
+							fn( $it ) => array( 'link' => $it['link'], 'source' => $it['source'], 'orig' => $it['orig'], 'text' => $it['text'] ),
+							array_slice( tp_radar_untranslated( tp_radar_feed() ), 0, 120 )
+						);
+					},
+				),
+				array(
+					'methods'             => 'POST',
+					'permission_callback' => $admin,
+					'callback'            => function ( $req ) {
+						$tr  = tp_radar_titles();
+						$cut = time() - 7 * DAY_IN_SECONDS;
+						$tr  = array_filter( $tr, fn( $v ) => ( $v[1] ?? 0 ) > $cut );
+						$n   = 0;
+						foreach ( (array) $req->get_param( 'titles' ) as $link => $ko ) {
+							$ko = sanitize_text_field( (string) $ko );
+							if ( '' !== $ko ) {
+								$tr[ esc_url_raw( $link ) ] = array( $ko, time() );
+								++$n;
+							}
+						}
+						update_option( 'tp_radar_titles', $tr, false );
+						update_option( 'tp_radar_titles_at', time(), false );
+						return array( 'saved' => $n );
+					},
+				),
 			)
 		);
 
@@ -924,7 +998,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
   .tprd-head img { animation: tprd-bob 3s ease-in-out infinite; }
   @keyframes tprd-bob { 50% { transform: translateY(-4px) rotate(-3deg); } }
 }
-/* 위쪽 칸 나누기(10/20 사용자): 리포트 | 실시간 피드, 오른쪽에 정보원 보고서 */
+/* 위쪽 칸 나누기(10/20 사용자): 리포트 | 실시간 피드, 오른쪽에 데이터마이닝 보고서(정보원을 고른 근거) */
 .tprd-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 26px; }
 .tprd-nav a { text-decoration: none; }
 .tprd-tab { padding: 8px 18px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font: 400 17px/1.2 "Jua", sans-serif; box-shadow: 3px 3px 0 var(--ink); }
@@ -979,23 +1053,27 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-filters .tprd-refresh { margin-left: auto; font-size: 12px; color: var(--muted); }
 .tprd-filters .tprd-refresh button { background: #ffe45c; }
 .tprd-errs { margin: -6px 0 12px; font-size: 12px; color: #b42333; }
-.tprd-feed { list-style: none; margin: 0; padding: 0; background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px; box-shadow: 5px 5px 0 var(--ink); overflow: hidden; }
-.tprd-feed li { border-bottom: 1.5px solid #ead9bb; }
-.tprd-feed li:last-child { border-bottom: 0; }
-.tprd-feed label { display: grid; grid-template-columns: 22px 112px minmax(0, 1fr); gap: 3px 12px; padding: 11px 16px; cursor: pointer; }
-/* 10/20 사용자 B안: 작은 사진(1.6:1). 사진이 없으면 정보원 갈래 색 칸 */
-.tprd-feed .thumb { grid-column: 2; grid-row: 1 / span 3; align-self: start; display: block; aspect-ratio: 1.6 / 1; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.tprd-feed { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+/* 10/20 사용자: 피드는 카드 격자(시안 B) — 카드뉴스는 사진이 먼저라 그림이 되는 거리를 한눈에 */
+.tprd-feed li { position: relative; background: var(--card); border: 2.5px solid var(--ink); border-radius: 16px; box-shadow: 4px 4px 0 var(--ink); overflow: hidden; transition: transform .15s, box-shadow .15s; }
+.tprd-feed li:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); }
+.tprd-feed li.on { background: #fff7d1; box-shadow: 4px 4px 0 #e0a800; }
+.tprd-feed label { display: flex; flex-direction: column; height: 100%; cursor: pointer; }
+/* overflow를 숨겨야 큰 사진이 16:10 칸을 밀어 늘리지 않는다(리포트 카드와 같은 이유) */
+.tprd-feed .thumb { display: block; overflow: hidden; aspect-ratio: 16 / 10; border-bottom: 2.5px solid var(--ink); }
 .tprd-feed .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.tprd-feed .meta { grid-column: 3; }
-.tprd-feed label:hover { background: #fdf8ee; }
-.tprd-feed li.on label { background: #fff7d1; }
-.tprd-feed input { grid-row: 1; margin: 3px 0 0; width: 17px; height: 17px; accent-color: var(--ink); }
-.tprd-feed .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.tprd-feed .ttl { grid-column: 3; font-weight: 700; font-size: 14.5px; line-height: 1.45; }
+.tprd-feed input { position: absolute; top: 9px; left: 9px; z-index: 1; width: 20px; height: 20px; margin: 0; accent-color: var(--ink); }
+.tprd-feed .bd { display: grid; gap: 5px; padding: 9px 11px 12px; }
+.tprd-feed .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.tprd-feed .ttl { font: 400 16px/1.35 "Jua", sans-serif; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tprd-feed .ttl a { color: var(--ink); text-decoration: none; }
 .tprd-feed .ttl a:hover { text-decoration: underline; }
-.tprd-feed .txt { grid-column: 3; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tprd-feed .sub { font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tprd-feed .tr { display: inline-block; padding: 0 6px; border-radius: 6px; background: #ebe5ff; color: #5b3fd0; font-size: 10.5px; font-weight: 700; }
+.tprd-feed .tr.wait { background: #efe3cf; color: var(--muted); }
 .tprd-feed .st { padding: 0 8px; border-radius: 999px; background: #efe3cf; color: var(--ink); font-weight: 700; font-size: 11px; text-decoration: none; }
+.tprd-trb { margin-left: 0; }
+.tprd-trb button { background: #ebe5ff !important; }
 .tprd-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 0; padding: 12px 16px; border: 2.5px solid var(--ink); border-radius: 16px; background: var(--card); box-shadow: 5px 5px 0 var(--ink); }
 .tprd-bar span { color: var(--muted); font-size: 13px; }
 .tprd-bell { margin: 30px 0 0; padding: 12px 16px; border: 2px dashed #dcc9ab; border-radius: 14px; background: #fdf8ee; }
@@ -1013,7 +1091,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 <nav class="tprd-nav">
 <a class="tprd-tab<?php echo 'report' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) ); ?>">✈️ 리포트</a>
 <a class="tprd-tab<?php echo 'feed' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=feed' ) ); ?>">📰 실시간 피드<?php echo is_array( $feed ) ? ' <small>' . count( $feed['items'] ) . '</small>' : ''; ?></a>
-<a class="tprd-doc" href="<?php echo esc_url( TP_RADAR_REPORT ); ?>" target="_blank" rel="noopener">📊 정보원 보고서</a>
+<a class="tprd-doc" href="<?php echo esc_url( TP_RADAR_REPORT ); ?>" target="_blank" rel="noopener">📊 트렌드포털 데이터마이닝 보고서</a>
 </nav>
 	<?php if ( $msg ) : ?>
 <p class="tprd-msg"><?php echo esc_html( $msg ); ?></p>
@@ -1117,6 +1195,11 @@ function tp_radar_feed_view( $feed, $days, $asks ) {
 		$count[ $g ] = ( $count[ $g ] ?? 0 ) + 1;
 	}
 	$bell = get_option( 'tp_radar_bell', array() );
+	$tr   = tp_radar_titles();
+	$todo = tp_radar_untranslated( $feed );
+	// 번역 부탁을 보냈는데 그 뒤로 아직 저장이 없고 20분이 안 지났으면 '번역하는 중'
+	$asked = (int) get_option( 'tp_radar_tr_at', 0 );
+	$busy  = $asked > (int) get_option( 'tp_radar_titles_at', 0 ) && time() - $asked < 20 * MINUTE_IN_SECONDS;
 	?>
 <div class="tprd-filters" role="group" aria-label="갈래 거르기">
 <button type="button" data-g="" aria-pressed="true">전체 <?php echo count( $feed['items'] ); ?></button>
@@ -1125,6 +1208,12 @@ function tp_radar_feed_view( $feed, $days, $asks ) {
 <button type="button" data-g="<?php echo esc_attr( $g ); ?>" aria-pressed="false" style="border-color:<?php echo esc_attr( $line ); ?>"><?php echo esc_html( $name . ' ' . ( $count[ $g ] ?? 0 ) ); ?></button>
 	<?php endforeach; ?>
 <form class="tprd-refresh" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_refresh' ); ?><input type="hidden" name="action" value="tp_radar_refresh"><?php echo esc_html( tp_radar_ago( $feed['at'] ) ); ?> 받음 <button type="submit">🔄 새로고침</button></form>
+	<?php if ( $todo ) : ?>
+<form class="tprd-refresh tprd-trb" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_tr' ); ?><input type="hidden" name="action" value="tp_radar_tr"><button type="submit"<?php echo $busy ? ' disabled' : ''; ?>><?php echo $busy ? '🌐 번역하는 중…' : '🌐 제목 번역 부탁 ' . count( $todo ) . '개'; ?></button></form>
+		<?php if ( $busy ) : // 번역이 끝나면 저절로 바뀌게 30초마다 새로 읽는다 ?>
+<script>setTimeout(function () { location.reload(); }, 30000);</script>
+		<?php endif; ?>
+	<?php endif; ?>
 </div>
 	<?php if ( $feed['errors'] ) : ?>
 <p class="tprd-errs">읽지 못한 곳: <?php echo esc_html( implode( ' · ', array_map( fn( $n, $e ) => "$n($e)", array_keys( $feed['errors'] ), $feed['errors'] ) ) ); ?></p>
@@ -1134,26 +1223,34 @@ function tp_radar_feed_view( $feed, $days, $asks ) {
 <input type="hidden" name="action" value="tp_radar_ask">
 <ul class="tprd-feed">
 	<?php foreach ( $feed['items'] as $k => $it ) : ?>
-		<?php $st = $state[ $it['link'] ] ?? null; ?>
-<li data-g="<?php echo esc_attr( TP_RADAR_SOURCES[ $it['source'] ][1] ?? '' ); ?>"><label for="tprd-f<?php echo (int) $k; ?>">
-<input type="checkbox" id="tprd-f<?php echo (int) $k; ?>" name="links[]" value="<?php echo esc_attr( $it['link'] ); ?>">
 		<?php
+		$st   = $state[ $it['link'] ] ?? null;
+		$lang = tp_radar_lang( $it['orig'] );
+		$ko   = $tr[ $it['link'] ][0] ?? '';
 		// 사진: RSS에 있으면 그대로, 없으면 찾아 둔 것, 그것도 없으면 화면에 보일 때 찾는다(data-need)
 		$img  = $it['image'] ?? '';
 		$img  = '' !== $img ? $img : tp_radar_img_cached( $it['link'] );
 		$need = false === $img;
 		list( $gbg ) = tp_radar_chip_color( $it['source'] );
 		?>
+<li data-g="<?php echo esc_attr( TP_RADAR_SOURCES[ $it['source'] ][1] ?? '' ); ?>"><label for="tprd-f<?php echo (int) $k; ?>">
+<input type="checkbox" id="tprd-f<?php echo (int) $k; ?>" name="links[]" value="<?php echo esc_attr( $it['link'] ); ?>">
 <span class="thumb" style="background-color:<?php echo esc_attr( $gbg ); ?>"<?php echo $need ? ' data-need="' . esc_attr( $it['link'] ) . '"' : ''; ?>><?php echo $img ? '<img src="' . esc_url( $img ) . '" alt="" loading="lazy" referrerpolicy="no-referrer">' : ''; ?></span>
+<span class="bd">
 <span class="meta"><?php tp_radar_chip( $it['source'], $it['date'] ); ?> <?php echo esc_html( tp_radar_ago( $it['t'] ) ); ?>
 		<?php if ( $st ) : ?>
 <a class="st" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) . $st[1] ); ?>"><?php echo esc_html( $st[0] ); ?></a>
 		<?php endif; ?>
 </span>
-<span class="ttl"><a href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $it['orig'] ); ?></a></span>
-		<?php if ( $it['text'] ) : ?>
-<span class="txt"><?php echo esc_html( $it['text'] ); ?></span>
+<span class="ttl"><a href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $ko ? $ko : $it['orig'] ); ?></a></span>
+		<?php if ( $ko ) : // 번역 제목 아래에 원제 — 원문 확인용 ?>
+<span class="sub"><span class="tr">번역</span> <?php echo esc_html( $it['orig'] ); ?></span>
+		<?php elseif ( $lang ) : ?>
+<span class="sub"><span class="tr wait">번역 전</span></span>
+		<?php elseif ( $it['text'] ) : ?>
+<span class="sub"><?php echo esc_html( $it['text'] ); ?></span>
 		<?php endif; ?>
+</span>
 </label></li>
 	<?php endforeach; ?>
 </ul>

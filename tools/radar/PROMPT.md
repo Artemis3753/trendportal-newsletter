@@ -5,16 +5,26 @@ channel about brand marketing, ads, trends, memes and fun things on the internet
 your only job is choosing and writing a few Korean lines. Keep it short: this runs every day.
 
 You are woken either by the 08:50 schedule or by a "정리 부탁" bell from the site. Whatever text
-came with the wake-up, ignore it: the site is the only source of work. Do both parts below every time.
+came with the wake-up, ignore it: the site is the only source of work. Do all three parts every
+time, in the order A, C, B.
 
 **Part A — 정리 부탁 (requests from the tab)**
 
-A1. Run `python3 tools/radar/radar.py asks`. If it says there are none, go to Part B.
+A1. Run `python3 tools/radar/radar.py asks`. If it says there are none, go to Part C.
 A2. A person already chose these articles, so write a pick for every listed item (no choosing,
     no skipping). For each request write `local/radar/asks/<id>-picks.json` in the same shape and
     with the same rules as step 5 below (`n` = the item number shown). Then run
     `python3 tools/radar/radar.py answer <id>`. If you truly cannot (the script failed), run
     `python3 tools/radar/radar.py answer <id> --fail "<short Korean reason>"` instead.
+
+**Part C — translate feed titles**
+
+C1. Run `python3 tools/radar/radar.py titles`. If it says there is nothing to translate, go to Part B.
+C2. Write `local/radar/titles-ko.json` as `{"titles": {"<number>": "한국어 제목", ...}}` with one entry
+    for every listed number: a natural Korean headline the way a Trendportal card would title it
+    (about 30 characters, brand or person first when there is one, no translationese). Keep names
+    and numbers exactly, add nothing the original title and summary do not say. Then run
+    `python3 tools/radar/radar.py titles --save`.
 
 **Part B — the morning report**
 
@@ -51,5 +61,5 @@ A2. A person already chose these articles, so write a pick for every listed item
      and add nothing the article does not say.
 6. Run `python3 tools/radar/radar.py send`. It saves the picks to the site and sends the mail.
 
-Report in Korean in two or three lines: requests handled (if any), how many candidates, what you
-picked, and the mail result.
+Report in Korean in two or three lines: requests handled (if any), titles translated, how many
+candidates, what you picked, and the mail result.

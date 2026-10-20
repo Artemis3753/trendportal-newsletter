@@ -6,6 +6,7 @@
     python3 tools/radar/radar.py send [--preview]   (Claude가 쓴 picks.json → 사이트 "트란시스 특파원" 탭 + 알림 메일)
     python3 tools/radar/radar.py asks               (탭에서 들어온 정리 부탁 가져오기 + 글마다 본문)
     python3 tools/radar/radar.py answer <id> [--fail 이유]  (local/radar/asks/<id>-picks.json → 탭 리포트 칸)
+    python3 tools/radar/radar.py titles [--save]    (피드의 외국어 제목 목록 / local/radar/titles-ko.json → 탭 피드에 한국어 제목)
 
 토큰을 아끼는 나눔(10/20 사용자: "토큰 최소화 구조로"):
   · 손 노동(정보원 읽기, 날짜·중복 거르기, 링크 붙이기)은 이 스크립트가 한다
@@ -319,6 +320,29 @@ def cmd_answer(aid, fail=None):
     print(f"정리 부탁 {aid}: {len(items)}개 → {res['status']}")
 
 
+# ── 제목 번역: 피드의 외국어 제목을 우리 말투로(10/20 사용자 — 브라우저 번역은 부자연스러워서) ──────────
+
+def cmd_titles(save=False):
+    """번역할 제목을 번호 붙여 보여 주거나(save=False), Claude가 쓴 titles-ko.json을 사이트에 저장한다.
+    링크는 Claude가 베껴 쓰지 않는다 — 번호로 다시 붙인다(collect·send와 같은 원칙)."""
+    f = ROOT / "local" / "radar" / "titles.json"
+    if save:
+        todo = json.loads(f.read_text(encoding="utf-8"))
+        ko = json.loads((f.parent / "titles-ko.json").read_text(encoding="utf-8"))["titles"]
+        res = wp("titles", {"titles": {todo[int(n) - 1]["link"]: s for n, s in ko.items()}}, base=RADAR_API)
+        print(f"제목 {res['saved']}개를 피드에 저장했어요")
+        return
+    todo = wp("titles", base=RADAR_API)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(todo, ensure_ascii=False), encoding="utf-8")
+    if not todo:
+        print("번역할 제목이 없어요")
+        return
+    print(f"# 번역할 제목 {len(todo)}개 — 번호 | 정보원 | 원문 제목 — 요약 앞부분")
+    for n, c in enumerate(todo, 1):
+        print(f"{n} | {c['source']} | {c['orig']} — {c['text'][:80]}")
+
+
 def main(argv):
     if argv[:1] == ["collect"]:
         cmd_collect()
@@ -326,6 +350,8 @@ def main(argv):
         cmd_body(argv[1:])
     elif argv[:1] == ["send"]:
         cmd_send(preview="--preview" in argv)
+    elif argv[:1] == ["titles"]:
+        cmd_titles(save="--save" in argv)
     elif argv[:1] == ["asks"]:
         cmd_asks()
     elif argv[:1] == ["answer"] and argv[1:]:
