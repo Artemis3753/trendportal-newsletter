@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.11.0
+ * Version: 1.12.0
  * Author: Trendportal
  */
 
@@ -448,6 +448,56 @@ function tp_radar_folded( $tr, $link ) {
 	return ! empty( $tr[ $link ][2] );
 }
 
+/** 번역·거르기 부탁 한 번 — 버튼과 자동 부탁이 같이 쓴다. 성공하면 true, 실패하면 이유 문장 */
+function tp_radar_ask_titles() {
+	$rang = tp_radar_ring( 'titles' );
+	if ( true === $rang ) {
+		update_option( 'tp_radar_tr_at', time(), false );
+	}
+	return $rang;
+}
+
+/** 번역을 부탁했는데 아직 결과가 안 온 채 20분이 안 지났으면 '훑는 중' */
+function tp_radar_titles_busy() {
+	$asked = (int) get_option( 'tp_radar_tr_at', 0 );
+	return $asked > (int) get_option( 'tp_radar_titles_at', 0 ) && time() - $asked < 20 * MINUTE_IN_SECONDS;
+}
+
+/*
+ * 자동 부탁 — 10/21 사용자: 피드 탭을 열면 번역·거르기를 알아서 해 달라(전엔 버튼을 눌러야 했다).
+ * routine은 한 번 깨울 때마다 고정 비용이 있어서(1~2분·토큰) 열 때마다 부르면 낭비다 → 세 가지로 막는다:
+ *   ① 안 훑은 글이 TP_RADAR_AUTO_MIN개 이상일 때만(한두 개 때문에 부르지 않는다. 모자란 글은 다음 기회에 묶인다)
+ *   ② 마지막 부탁(자동·버튼 모두)에서 TP_RADAR_AUTO_GAP이 지났을 때만 — 피드 보관(30분)과 같은 간격
+ *   ③ 훑는 중이면 안 부른다
+ * 실패해도 시각을 먼저 적어서, 열쇠가 틀린 채로 탭을 열 때마다 초인종을 두드리지 않는다(실패 이유는 탭에 한 번 보여 주고, 버튼은 그대로 쓸 수 있다).
+ * 초인종이 최대 20초 걸려서 페이지 안에서 부르지 않고, 탭이 열린 뒤 이 창구를 부른다. 검사는 여기서 다시 한다 — 탭의 판단을 믿지 않는다.
+ */
+const TP_RADAR_AUTO_MIN = 5;
+const TP_RADAR_AUTO_GAP = 30 * MINUTE_IN_SECONDS;
+
+/** 지금 자동으로 부탁해도 되는 상태인가(안 훑은 글 수는 $todo_n으로 받는다) */
+function tp_radar_auto_due( $todo_n ) {
+	$last = max( (int) get_option( 'tp_radar_auto_at', 0 ), (int) get_option( 'tp_radar_tr_at', 0 ) );
+	return $todo_n >= TP_RADAR_AUTO_MIN && ! tp_radar_titles_busy() && time() - $last >= TP_RADAR_AUTO_GAP;
+}
+
+add_action(
+	'wp_ajax_tp_radar_auto',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( null, 403 );
+		}
+		check_ajax_referer( 'tp_radar_auto' );
+		$feed = get_transient( 'tp_radar_feed' );
+		if ( ! is_array( $feed ) || ! tp_radar_auto_due( count( tp_radar_unjudged( $feed ) ) ) ) {
+			wp_send_json_success( array( 'rang' => false, 'msg' => '' ) );
+		}
+		update_option( 'tp_radar_auto_at', time(), false );
+		$rang = tp_radar_ask_titles();
+		wp_send_json_success( array( 'rang' => true === $rang, 'msg' => true === $rang ? '' : '자동 번역·거르기를 부탁하지 못했어요 — ' . $rang ) );
+	}
+);
+
 add_action(
 	'admin_post_tp_radar_tr',
 	function () {
@@ -455,10 +505,7 @@ add_action(
 			wp_die( '관리자만 부탁할 수 있어요' );
 		}
 		check_admin_referer( 'tp_radar_tr' );
-		$rang = tp_radar_ring( 'titles' );
-		if ( true === $rang ) {
-			update_option( 'tp_radar_tr_at', time(), false );
-		}
+		$rang = tp_radar_ask_titles();
 		$msg = true === $rang ? '특파원에게 번역·거르기를 부탁했어요. 몇 분 뒤 저절로 바뀌어요' : $rang;
 		wp_safe_redirect( add_query_arg( array( 'view' => 'feed', 'tprd_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) ) );
 		exit;
@@ -1127,8 +1174,7 @@ function tp_radar_feed_view( $feed, $asks ) {
 		$count[ $g ] = ( $count[ $g ] ?? 0 ) + 1;
 	}
 	// 번역 부탁을 보냈는데 그 뒤로 아직 저장이 없고 20분이 안 지났으면 '번역하는 중'
-	$asked = (int) get_option( 'tp_radar_tr_at', 0 );
-	$busy  = $asked > (int) get_option( 'tp_radar_titles_at', 0 ) && time() - $asked < 20 * MINUTE_IN_SECONDS;
+	$busy = tp_radar_titles_busy();
 	?>
 <div class="tprd-filters" role="group" aria-label="갈래 거르기">
 <button type="button" data-g="" aria-pressed="true">전체 <?php echo count( $show ); ?></button>
@@ -1141,6 +1187,16 @@ function tp_radar_feed_view( $feed, $asks ) {
 <form class="tprd-refresh tprd-trb" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_tr' ); ?><input type="hidden" name="action" value="tp_radar_tr"><button type="submit"<?php echo $busy ? ' disabled' : ''; ?>><?php echo $busy ? '🌐 특파원이 훑는 중…' : '🌐 번역·거르기 부탁 ' . count( $todo ) . '개'; ?></button></form>
 		<?php if ( $busy ) : // 끝나면 저절로 바뀌게 30초마다 새로 읽는다 ?>
 <script>setTimeout(function () { location.reload(); }, 30000);</script>
+		<?php elseif ( tp_radar_auto_due( count( $todo ) ) ) : // 자동 부탁: 탭이 열린 뒤 백그라운드로. 성공하면 새로 읽어 '훑는 중' 표시로 ?>
+<script>
+fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: new URLSearchParams({ action: 'tp_radar_auto', _ajax_nonce: <?php echo wp_json_encode( wp_create_nonce( 'tp_radar_auto' ) ); ?> }) })
+	.then(function (r) { return r.json(); })
+	.then(function (res) {
+		if (!res || !res.success) return;
+		if (res.data.rang) { location.reload(); return; }
+		if (res.data.msg) { var p = document.createElement('p'); p.className = 'tprd-errs'; p.textContent = res.data.msg; document.querySelector('.tprd-filters').after(p); }
+	}).catch(function () {});
+</script>
 		<?php endif; ?>
 	<?php endif; ?>
 </div>
