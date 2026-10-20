@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.8.0
+ * Version: 1.9.0
  * Author: Trendportal
  */
 
@@ -73,6 +73,8 @@ const TP_RADAR_SOURCES = array(
 	'AdverTimes'            => array( '일', 'camp', 'rss', 'https://www.advertimes.com/feed/' ),
 	// 플랫폼·크리에이터 — "인스타그램 이렇게 변합니다" 같은 글의 출처가 이 매체들이었다
 	'Social Media Today'    => array( '미', 'plat', 'rss', 'https://www.socialmediatoday.com/feeds/news/' ),
+	// 10/20 밤 추가 — 브랜드가 SNS에서 밈을 타는 법만 다루는 뉴스레터(Rachel Karten). 주 1~2편이라 속도보다 아이디어용
+	'Link in Bio'           => array( '미', 'plat', 'rss', 'https://www.milkkarten.net/feed' ),
 	// 웹·앱·디지털 놀이 — "신기한 사이트 모음" 갈래
 	'GIGAZINE'              => array( '일', 'web', 'rss', 'https://gigazine.net/news/rss_2.0/' ),
 	'Laughing Squid'        => array( '미', 'web', 'rss', 'https://laughingsquid.com/feed/' ), // ねとらぼ 자리 — 그쪽 RSS는 2025-05에 멈춤
@@ -82,11 +84,18 @@ const TP_RADAR_SOURCES = array(
 	'오픈서베이'             => array( '한', 'trend', 'rss', 'https://blog.opensurvey.co.kr/feed/' ),
 	// 10/20 밤 추가 — 틱톡·인터넷 화제를 가장 빨리 쓰는 곳(사용자: "트렌디하고 밈을 가장 빠르게")
 	'Daily Dot'             => array( '미', 'trend', 'rss', 'https://www.dailydot.com/feed/' ),
+	// 10/20 밤 추가 — X에서 뜬 걸 누군가 정리해 온 곳(사용자: "그걸 우리가 빠르게 낚아채는 거지").
+	// ねとらぼ(RSS 멈춤) 대신 おたくま = X 화제·이상한 신상품·콜라보, Togetter 인기 = 일본 X 화제 글 모음
+	'おたくま経済新聞'       => array( '일', 'trend', 'rss', 'https://otakuma.net/feed' ),
+	'Togetter'              => array( '일', 'trend', 'rss', 'https://togetter.com/rss/hot' ),
 	// 국내 광고·팝업 — 10/20 사용자가 원한 "캡틴큐 이선민 광고" 같은 국내 화제 광고는 브랜드브리프 RSS 맨 위에 그 기사가 있었다
 	'브랜드브리프'           => array( '한', 'kr', 'rss', 'https://www.brandbrief.co.kr/rss/allArticle.xml' ),
 	'매드타임스'             => array( '한', 'kr', 'rss', 'https://www.madtimes.co.kr/rss/allArticle.xml' ),
 	// 10/20 밤 추가 — 콜라보·한정판 드롭. 한국어판이라 번역 토큰이 안 든다
 	'Hypebeast KR'          => array( '한', 'kr', 'rss', 'https://hypebeast.kr/feed' ),
+	// 10/20 밤 추가 — 화제에 숟가락 얹은 브랜드 패러디를 국내 언론이 묶어 쓴 기사를 낚는 그물.
+	// 시험 때 테슬라 로드스터 패러디 기사 8개가 잡혔다. 링크는 구글 뉴스 주소라 특파원이 본문은 못 읽는다(radar.py)
+	'구글 뉴스'              => array( '한', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%94%EC%9D%B4%EB%9F%B4+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%88+%EB%A7%88%EC%BC%80%ED%8C%85%22+OR+%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EC%98%81%EC%83%81%22+OR+%22%EA%B2%8C%EC%9E%84+%EC%BD%9C%EB%9D%BC%EB%B3%B4%22+OR+%22%EC%88%9F%EA%B0%80%EB%9D%BD+%EC%96%B9%EA%B8%B0%22%29+when%3A3d&hl=ko&gl=KR&ceid=KR:ko' ),
 	// heyPOP: /feed/는 2021년에 멈춘 기본 글 종류라 못 쓰고, 실제 기사는 'n' 글 종류
 	'heyPOP'                => array( '한', 'kr', 'wpjson', 'https://heypop.kr/wp-json/wp/v2/n?per_page=20&_fields=date,link,title,excerpt' ),
 	// 10/20 저녁에 뺀 곳(사용자: "정치·시사·사건사고, 대놓고 스포츠 뉴스, 너무 테크 기사는 필요 없어") — 그때 피드 실측:
@@ -912,6 +921,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-filters .tprd-refresh button { background: #ffe45c; border-color: #ffe45c; }
 .tprd-trb { margin-left: 0 !important; }
 .tprd-trb button { background: #ebe5ff !important; border-color: #ebe5ff !important; }
+.tprd-rule { margin: -6px 0 12px; font-size: 12px; color: var(--muted); }
 .tprd-errs { margin: -6px 0 12px; font-size: 12px; color: #b42333; }
 .tprd-feed { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
 .tprd-feed li { position: relative; background: var(--card); border-radius: 14px; box-shadow: 0 3px 12px rgba(59,47,42,.10); overflow: hidden; transition: transform .15s, box-shadow .15s; }
@@ -1105,6 +1115,7 @@ function tp_radar_feed_view( $feed, $asks ) {
 		<?php endif; ?>
 	<?php endif; ?>
 </div>
+<p class="tprd-rule">🙈 <b>특파원 거르기</b> — <b>남김</b> 재밌는 광고·캠페인, 화제에 숟가락 얹은 브랜드 패러디, 밈·X 화제, 게임·젊은 세대 마케팅, 신기한 사이트·앱, 앱 새 기능, 팝업·콜라보, 트렌드 데이터 · <b>접음</b> 대놓고 뉴스인 글(정치·사건사고, 경기 결과·부상, 업계 인사·실적·수상, 테크·AI 산업), 같은 이야기 두 번째부터</p>
 	<?php if ( $feed['errors'] ) : ?>
 <p class="tprd-errs">읽지 못한 곳: <?php echo esc_html( implode( ' · ', array_map( fn( $n, $e ) => "$n($e)", array_keys( $feed['errors'] ), $feed['errors'] ) ) ); ?></p>
 	<?php endif; ?>
@@ -1120,7 +1131,7 @@ function tp_radar_feed_view( $feed, $asks ) {
 </ul>
 	<?php if ( $fold ) : ?>
 <details class="tprd-folded">
-<summary>🙈 특파원이 접어 둔 글 <?php echo count( $fold ); ?>개 <small>정치·사건사고·테크·경기 소식처럼 우리 거리가 아닌 글 — 잘못 접혔으면 여기서 골라도 돼요</small></summary>
+<summary>🙈 특파원이 접어 둔 글 <?php echo count( $fold ); ?>개 <small>대놓고 뉴스인 글과 겹치는 이야기 — 잘못 접혔으면 여기서 골라도 돼요</small></summary>
 <ul class="tprd-feed">
 		<?php
 		foreach ( $fold as $k => $it ) {

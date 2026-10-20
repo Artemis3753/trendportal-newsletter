@@ -47,7 +47,10 @@ C2. Write `local/radar/titles-ko.json` as
       the team does not want news. Keep only lines with a fun or clever hook that people laugh at,
       share or save: brand campaigns and ads with a fun idea (like a comedian's retro liquor ad),
       viral moments, memes, odd or useful websites and apps, new app features people will notice
-      and use, pop-ups and collabs, trend data about how people live. Keep especially brands
+      and use, pop-ups and collabs, game marketing and anything else young people (teens to
+      30s) would care about, trend data about how people live, and funny or relatable posts that
+      blew up on X and that someone rounded up (Togetter, おたくま経済新聞 and the like — we want
+      to grab these fast). Keep especially brands
       riding a hot topic with their own joke — e.g. when Tesla showed its "flying" Roadster, other
       brands like Domino's and IKEA put out their own spoofs of it (a pizza edited into the car,
       and so on). The riff is ours; the hot topic itself, reported as news (Tesla's demo, specs,
@@ -60,6 +63,8 @@ C2. Write `local/radar/titles-ko.json` as
       company strategy or repositioning, awards lists, agency wins); hard tech (chips, device
       specs, AI industry, energy, security). The test: would someone send it to a friend with
       "이거 봐"? If not, or if you are unsure, hide it — the tab keeps hidden lines one click away.
+      When several lines tell the same story (often 구글 뉴스 lines, whose titles end in
+      " - <outlet>"), keep only the one with the clearest title and hide the rest.
     Then run `python3 tools/radar/radar.py titles --save`.
 
 Report in Korean in one or two lines: requests handled (if any), titles translated, lines hidden.

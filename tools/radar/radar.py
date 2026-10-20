@@ -26,6 +26,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -44,6 +45,12 @@ def get(url):
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=30) as r:
                 return r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            # 308(영구 이동)은 urllib이 따라가지 않는다 — Daily Dot이 주소 끝 /를 떼려고 308을 준다(10/20)
+            if e.code == 308 and e.headers.get("Location"):
+                url = urllib.parse.urljoin(url, e.headers["Location"])
+                continue
+            raise
         except (urllib.error.URLError, TimeoutError):
             if wait is None:
                 raise
@@ -61,9 +68,9 @@ def plain(s):
 BODY_MAX_EN = 3000
 BODY_MAX_KO = 1500
 # 기사 뒤에 붙는 구독 안내·출처·사이트 소개 — 여기서부터는 본문이 아니다
-BODY_STOP = re.compile(r"Subscribe to|newsletter and get|is a brandzine|자료 및 사진 출처|팝업 큐레이션 플랫폼|© HEYPOP", re.I)
+BODY_STOP = re.compile(r"Subscribe to|newsletter and get|is a brandzine|자료 및 사진 출처|팝업 큐레이션 플랫폼|© HEYPOP|All rights reserved|Xユーザは、Xの利用規約", re.I)
 # 본문 중간에 끼는 안내 문단 — 건너뛰기만 한다(10/20 정보원 15곳 실측: 뉴스레터 광고·행사 광고·옛 브라우저 경고·후원 배너)
-BODY_SKIP = re.compile(r"free newsletter|Register now|Internet Explorer|サーバー運営|Sign up for|Meme Of The Month|Get all the best", re.I)
+BODY_SKIP = re.compile(r"free newsletter|Register now|Internet Explorer|サーバー運営|Sign up for|Meme Of The Month|Get all the best|Hype 계정|HYPE 앱|트렌드를 앞서가고", re.I)
 # 진짜 <p> 태그만 — 예전 패턴 <p[^>]*>는 <path>(SVG)·<picture>까지 문단으로 잡아서
 # 메뉴·아이콘 코드가 다음 </p>까지 통째로 딸려 왔다(10/20 The Verge·TechCrunch·GIGAZINE에서 발견)
 PARA = re.compile(r"<p(?:\s[^>]*)?>(.*?)</p>", re.S)
@@ -75,6 +82,9 @@ def body_text(c):
     cap = BODY_MAX_EN if is_english(c) else BODY_MAX_KO
     if "youtube.com" in c["link"]:
         return "(영상 설명) " + c.get("text", "")[:cap]
+    # 구글 뉴스 링크는 원문으로 바로 넘어가지 않고 자바스크립트 화면(약 600KB)이 온다 — 읽어 봐야 쓰레기 글자뿐
+    if "news.google.com" in c["link"]:
+        return f"(구글 뉴스 링크라 본문을 못 읽어요. 제목·요약만 보고 쓰세요) {c.get('text', '')}"
     try:
         h = get(c["link"])
     except Exception as e:
@@ -98,6 +108,8 @@ def image_of(link):
     """원문 페이지의 대표 사진(og:image). 고른 거리에만 부르니 Claude 토큰과 무관하다.
     heyPOP은 3000px·800KB에 webp까지 있어서, WordPress.com 사진 변환기(Photon)로 560×234 jpg로 줄인다.
     유튜브 썸네일은 Photon이 받지 않아서(302) 그대로 쓴다."""
+    if "news.google.com" in link:
+        return ""  # 원문이 아니라 구글 뉴스 화면이라 대표 사진도 구글 로고뿐
     try:
         h = get(link)
     except Exception:
