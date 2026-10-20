@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.9.1
+ * Version: 1.10.0
  * Author: Trendportal
  */
 
@@ -154,6 +154,10 @@ const TP_RADAR_FEED_DAYS = 3; // 이보다 오래된 글은 피드에 안 보인
 // 정보원별 예외 — Link in Bio는 주 1~2편이라 3일 창에 0개일 때가 많다(10/20 사용자: "최근 2주")
 const TP_RADAR_FEED_DAYS_BY = array( 'Link in Bio' => 14 );
 const TP_RADAR_FEED_EACH = 8; // 정보원마다 최신 몇 개까지
+// "📅 7일치" 버튼 = 그때 한 번만 넓게 받기(10/20 사용자 B안). 30분 보관이 끝나면 평소 창으로 저절로 돌아간다.
+// 상한도 같이 올린다 — 8개 그대로면 글 많은 정보원은 3일 때와 똑같아서 넓힌 의미가 없다.
+const TP_RADAR_FEED_WIDE_DAYS = 7;
+const TP_RADAR_FEED_WIDE_EACH = 20;
 const TP_RADAR_UA        = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36';
 
 /** 날짜 글자 → 유닉스 시각. 매드타임스처럼 시간대가 없으면 한국 매체라 KST로 본다(radar.py when()과 같은 규칙) */
@@ -264,9 +268,9 @@ function tp_radar_multi( $reqs ) {
 
 /**
  * 피드 전체: array( 'at' => 받은 시각, 'items' => [ {source, orig, link, date, t, text} … ] 최신순, 'errors' => 이름 => 이유 ).
- * $force = 🔄 새로고침 버튼(보관본을 버리고 다시 받기).
+ * $force = 🔄 새로고침 버튼(보관본을 버리고 다시 받기). $wide = 📅 7일치 버튼(이번 한 번만 넓게).
  */
-function tp_radar_feed( $force = false ) {
+function tp_radar_feed( $force = false, $wide = false ) {
 	$cached = $force ? false : get_transient( 'tp_radar_feed' );
 	if ( is_array( $cached ) ) {
 		return $cached;
@@ -297,7 +301,8 @@ function tp_radar_feed( $force = false ) {
 			continue;
 		}
 		$skip = TP_RADAR_SKIP[ $name ] ?? '';
-		$cut  = time() - ( TP_RADAR_FEED_DAYS_BY[ $name ] ?? TP_RADAR_FEED_DAYS ) * DAY_IN_SECONDS;
+		$days = TP_RADAR_FEED_DAYS_BY[ $name ] ?? TP_RADAR_FEED_DAYS;
+		$cut  = time() - ( $wide ? max( $days, TP_RADAR_FEED_WIDE_DAYS ) : $days ) * DAY_IN_SECONDS; // Link in Bio 14일은 넓힐 때도 줄이지 않는다
 		$got  = array();
 		foreach ( tp_radar_parse( TP_RADAR_SOURCES[ $name ][2], $r->body ) as list( $orig, $link, $t, $text, $img ) ) {
 			$orig = tp_radar_plain( $orig );
@@ -315,10 +320,10 @@ function tp_radar_feed( $force = false ) {
 			);
 		}
 		usort( $got, fn( $a, $b ) => $b['t'] <=> $a['t'] );
-		$items = array_merge( $items, array_slice( $got, 0, TP_RADAR_FEED_EACH ) );
+		$items = array_merge( $items, array_slice( $got, 0, $wide ? TP_RADAR_FEED_WIDE_EACH : TP_RADAR_FEED_EACH ) );
 	}
 	usort( $items, fn( $a, $b ) => $b['t'] <=> $a['t'] );
-	$feed = array( 'at' => time(), 'items' => tp_radar_mix( $items ), 'errors' => $errors );
+	$feed = array( 'at' => time(), 'items' => tp_radar_mix( $items ), 'errors' => $errors, 'wide' => $wide );
 	set_transient( 'tp_radar_feed', $feed, TP_RADAR_FEED_TTL );
 	return $feed;
 }
@@ -600,7 +605,7 @@ add_action(
 			wp_die( '관리자만 할 수 있어요' );
 		}
 		check_admin_referer( 'tp_radar_refresh' );
-		tp_radar_feed( true );
+		tp_radar_feed( true, ! empty( $_POST['wide'] ) ); // 두 버튼이 한 폼 — 누른 버튼만 이름이 실려 온다
 		wp_safe_redirect( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=feed' ) );
 		exit;
 	}
@@ -921,6 +926,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-filters button[aria-pressed="true"] { background: var(--ink); color: #fff; }
 .tprd-filters .tprd-refresh { margin-left: auto; font-size: 12px; color: var(--muted); }
 .tprd-filters .tprd-refresh button { background: #ffe45c; border-color: #ffe45c; }
+.tprd-filters .tprd-refresh button[name="wide"] { background: #fff; }
 .tprd-trb { margin-left: 0 !important; }
 .tprd-trb button { background: #ebe5ff !important; border-color: #ebe5ff !important; }
 .tprd-rule { margin: -6px 0 12px; font-size: 12px; color: var(--muted); }
@@ -1109,7 +1115,7 @@ function tp_radar_feed_view( $feed, $asks ) {
 		<?php list( $bg, $line, $fg ) = TP_RADAR_GROUP_COLOR[ $g ]; ?>
 <button type="button" data-g="<?php echo esc_attr( $g ); ?>" aria-pressed="false" style="border-color:<?php echo esc_attr( $line ); ?>"><?php echo esc_html( $name . ' ' . ( $count[ $g ] ?? 0 ) ); ?></button>
 	<?php endforeach; ?>
-<form class="tprd-refresh" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_refresh' ); ?><input type="hidden" name="action" value="tp_radar_refresh"><?php echo esc_html( tp_radar_ago( $feed['at'] ) ); ?> 받음 <button type="submit">🔄 새로고침</button></form>
+<form class="tprd-refresh" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_refresh' ); ?><input type="hidden" name="action" value="tp_radar_refresh"><?php echo esc_html( ( empty( $feed['wide'] ) ? '' : '📅 7일치 · ' ) . tp_radar_ago( $feed['at'] ) ); ?> 받음 <button type="submit">🔄 새로고침</button> <button type="submit" name="wide" value="1" title="이번 한 번만 7일·정보원당 20개까지 받아요. 30분 뒤엔 평소(3일)로 돌아가요">📅 7일치</button></form>
 	<?php if ( $todo ) : ?>
 <form class="tprd-refresh tprd-trb" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_tr' ); ?><input type="hidden" name="action" value="tp_radar_tr"><button type="submit"<?php echo $busy ? ' disabled' : ''; ?>><?php echo $busy ? '🌐 특파원이 훑는 중…' : '🌐 번역·거르기 부탁 ' . count( $todo ) . '개'; ?></button></form>
 		<?php if ( $busy ) : // 끝나면 저절로 바뀌게 30초마다 새로 읽는다 ?>
