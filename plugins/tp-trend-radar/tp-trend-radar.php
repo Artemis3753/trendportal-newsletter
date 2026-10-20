@@ -71,7 +71,7 @@ const TP_RADAR_TR = array( '#ebe5ff', '#7a5af8', '#5b3fd0' );
  * 정보원 표 — 정보원은 여기 한 곳에만 적는다: 이름 => 나라 한 글자, 갈래, 읽는 법, 주소.
  * 탭의 실시간 피드(이 파일)와 아침 리포트(tools/radar/radar.py, REST /sources로 이 표를 받는다)가 같은 표를 쓴다.
  *
- * 고른 근거(10/20, 사용자가 추천안 선택 + 밈·스포츠 2곳 + 성현 님 원래 정보원 a:mag·r/advertising = 19곳): 인스타 892개에서 화제가 된 비율
+ * 고른 근거(10/20, 사용자가 추천안 선택 + 밈·스포츠 2곳 → 오후에 불안정한 유튜브 2·레딧 2곳을 빼서 15곳): 인스타 892개에서 화제가 된 비율
  * (하트 공개 또는 저장 1,000회+)이 밈 59%·웹·앱 54%·플랫폼 40%·트렌드 39%·스포츠 37%, 국내 브랜드 뉴스 17%.
  * 근거 보고서: TP_RADAR_REPORT. 나라는 사이트 소개·약관으로 확인한 운영사 소재지.
  * 읽는 법: rss(RSS·Atom) · reddit(소개된 사이트 주소를 링크로) · gtrends(검색어 + 관련 기사) · wpjson · youtube(채널 id).
@@ -81,18 +81,13 @@ const TP_RADAR_SOURCES = array(
 	// 해외 캠페인·스포츠 — 하트가 잘 나오는 갈래. Famous Campaigns는 우리 카드 출처 1위(46편), 런던 Speakeasy Media
 	'Famous Campaigns'      => array( '영', 'camp', 'rss', 'https://www.famouscampaigns.com/feed/' ), // www 없는 주소는 526
 	'Muse by Clio'          => array( '미', 'camp', 'rss', 'https://musebycl.io/rss.xml' ),
-	'WLDO'                  => array( '한', 'camp', 'youtube', 'UCijBTYEiKT1OJO54C6PnRqw' ), // youtube.com/@WLDO100
-	'a:mag'                 => array( '한', 'camp', 'youtube', 'UCgrtVQLRR8GIR2D1UEKXPaQ' ), // youtube.com/@aamag — 성현 님 원래 정보원(10/20 되살림)
 	'AdverTimes'            => array( '일', 'camp', 'rss', 'https://www.advertimes.com/feed/' ),
-	// 레딧 광고 게시판 — 성현 님이 원래 보던 레딧(10/20 사용자 추가). r/marketing은 요청 제한(429)이 잦아 뺐다
-	'r/advertising'         => array( '미', 'camp', 'reddit', 'https://www.reddit.com/r/advertising/top/.rss?t=day&limit=10' ),
 	'Front Office Sports'   => array( '미', 'camp', 'rss', 'https://frontofficesports.com/feed/' ), // 스포츠 비즈니스·마케팅
 	// 플랫폼·크리에이터 — "인스타그램 이렇게 변합니다" 같은 글의 출처가 이 매체들이었다
 	'Social Media Today'    => array( '미', 'plat', 'rss', 'https://www.socialmediatoday.com/feeds/news/' ),
 	'TechCrunch'            => array( '미', 'plat', 'rss', 'https://techcrunch.com/category/social/feed/' ), // 소셜 갈래만
 	'The Verge'             => array( '미', 'plat', 'rss', 'https://www.theverge.com/rss/index.xml' ),
 	// 웹·앱·디지털 놀이 — "신기한 사이트 모음" 갈래
-	'r/InternetIsBeautiful' => array( '미', 'web', 'reddit', 'https://www.reddit.com/r/InternetIsBeautiful/top/.rss?t=day&limit=10' ),
 	'GIGAZINE'              => array( '일', 'web', 'rss', 'https://gigazine.net/news/rss_2.0/' ),
 	'Laughing Squid'        => array( '미', 'web', 'rss', 'https://laughingsquid.com/feed/' ), // ねとらぼ 자리 — 그쪽 RSS는 2025-05에 멈춤
 	// 밈·트렌드 — 화제 비율 1위 갈래
@@ -103,6 +98,12 @@ const TP_RADAR_SOURCES = array(
 	'매드타임스'             => array( '한', 'trend', 'rss', 'https://www.madtimes.co.kr/rss/allArticle.xml' ),
 	// 국내 팝업 — /feed/는 2021년에 멈춘 기본 글 종류라 못 쓰고, 실제 기사는 'n' 글 종류
 	'heyPOP'                => array( '한', 'kr', 'wpjson', 'https://heypop.kr/wp-json/wp/v2/n?per_page=20&_fields=date,link,title,excerpt' ),
+	// 10/20 오후에 뺀 곳 — 지난 리포트의 알약 색 때문에만 남긴다(읽는 법 '').
+	// 사용자 원칙: "작동 안 하면 빼 버려. 정상적인 컨디션에서 양질을 검토하는 게 목표".
+	// WLDO·a:mag = 유튜브 RSS가 이 두 채널만 오후 내내 404(채널 id는 맞음, 다른 채널은 200).
+	// 레딧 = 부를 때마다 막히는 게시판이 바뀌는 요청 제한(429). 다시 넣을 땐 reader(youtube·reddit)는 그대로 있다
+	'WLDO'                  => array( '한', 'camp', '', '' ),
+	'a:mag'                 => array( '한', 'camp', '', '' ),
 );
 // 성현 님이 원래 보던 곳 중 못 넣은 곳(10/20 확인): exchange4media(Cloudflare가 프로그램 접근 403), X·틱톡(RSS 없음, 로그인 필요)
 
