@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.9.0
+ * Version: 1.9.1
  * Author: Trendportal
  */
 
@@ -151,6 +151,8 @@ function tp_radar_country( $source ) {
  */
 const TP_RADAR_FEED_TTL  = 30 * MINUTE_IN_SECONDS;
 const TP_RADAR_FEED_DAYS = 3; // 이보다 오래된 글은 피드에 안 보인다
+// 정보원별 예외 — Link in Bio는 주 1~2편이라 3일 창에 0개일 때가 많다(10/20 사용자: "최근 2주")
+const TP_RADAR_FEED_DAYS_BY = array( 'Link in Bio' => 14 );
 const TP_RADAR_FEED_EACH = 8; // 정보원마다 최신 몇 개까지
 const TP_RADAR_UA        = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36';
 
@@ -287,7 +289,6 @@ function tp_radar_feed( $force = false ) {
 		$resps = array_merge( $resps, tp_radar_multi( $again ) );
 	}
 
-	$cut    = time() - TP_RADAR_FEED_DAYS * DAY_IN_SECONDS;
 	$items  = array();
 	$errors = array();
 	foreach ( $resps as $name => $r ) {
@@ -296,6 +297,7 @@ function tp_radar_feed( $force = false ) {
 			continue;
 		}
 		$skip = TP_RADAR_SKIP[ $name ] ?? '';
+		$cut  = time() - ( TP_RADAR_FEED_DAYS_BY[ $name ] ?? TP_RADAR_FEED_DAYS ) * DAY_IN_SECONDS;
 		$got  = array();
 		foreach ( tp_radar_parse( TP_RADAR_SOURCES[ $name ][2], $r->body ) as list( $orig, $link, $t, $text, $img ) ) {
 			$orig = tp_radar_plain( $orig );
@@ -400,7 +402,7 @@ add_action(
  * → 정규식으로는 "너무 테크"를 못 가려서, 제목을 번역하는 김에 특파원이 한국어 글까지 훑어 "접기"를 같이 표시한다.
  * 지우지 않고 접는 이유: 잘못 접힌 글이 있어도 피드 맨 아래에서 찾을 수 있게(사용자 선택).
  * routine이 깨어날 때마다(정리 부탁 · 아래 "번역·거르기 부탁") 아직 안 훑은 글만 본다.
- * tp_radar_titles: 링크 => array( 한국어 제목(한국어 글은 ''), 저장 시각, 접기 true|false )  — 피드 창(3일)보다 넉넉히 7일 보관
+ * tp_radar_titles: 링크 => array( 한국어 제목(한국어 글은 ''), 저장 시각, 접기 true|false )  — 가장 긴 피드 창(Link in Bio 14일)보다 넉넉히 15일 보관
  *   접기 칸이 없는 것 = 번역만 하고 아직 안 훑은 글(10/20 저녁 전 번역분)
  */
 function tp_radar_titles() {
@@ -668,7 +670,7 @@ add_action(
 					'permission_callback' => $admin,
 					'callback'            => function ( $req ) {
 						$tr  = tp_radar_titles();
-						$cut = time() - 7 * DAY_IN_SECONDS;
+						$cut = time() - 15 * DAY_IN_SECONDS; // 가장 긴 피드 창(Link in Bio 14일)보다 길어야 같은 글을 다시 훑지 않는다
 						$tr  = array_filter( $tr, fn( $v ) => ( $v[1] ?? 0 ) > $cut );
 						$ko   = array_map( fn( $v ) => sanitize_text_field( (string) $v ), (array) $req->get_param( 'titles' ) );
 						$fold = array_flip( array_map( 'esc_url_raw', (array) $req->get_param( 'hide' ) ) );
