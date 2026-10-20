@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.23.0
+ * Version: 1.24.0
  * Author: Trendportal
  */
 
@@ -453,6 +453,57 @@ add_action(
 	}
 );
 
+// ── 저장 1,000+ 뱃지 (1.24.0, 10/20 사용자 A+B) ─────────────
+// 인스타 저장 1,000회를 넘긴 카드의 글에 태그 tp1000을 달면 사이트 카드에 "저장 1,000+" 뱃지가 뜬다(모양은 추가 CSS·TP Related Posts).
+// 저장 수는 계정 주인만 인사이트에서 보니 사람이 표시한다: 주문할 때 체크(A) 또는 나중에 넘기면 주문 목록의 버튼(B).
+// 표시 여부는 주문 메타(_tp_cn_saved)가 기준이다 — 셰프의 draft가 고칠 때마다 order.json의 태그로 통째로 덮어써서,
+// 셰프가 보고할 때마다 여기서 다시 붙인다
+const TP_CN_SAVED_TAG = 'tp1000';
+
+function tp_cn_apply_saved( $order_id ) {
+	$post_id = (int) get_post_meta( $order_id, '_tp_cn_post', true );
+	if ( ! $post_id || 'post' !== get_post_type( $post_id ) ) {
+		return;
+	}
+	$term = get_term_by( 'slug', TP_CN_SAVED_TAG, 'post_tag' );
+	if ( ! $term ) {
+		// 10/16에 시리즈를 접으면서 태그를 지웠을 수도 있어서, 없으면 같은 주소로 다시 만든다
+		$made = wp_insert_term( 'TP 1,000', 'post_tag', array( 'slug' => TP_CN_SAVED_TAG ) );
+		if ( is_wp_error( $made ) ) {
+			return;
+		}
+		$term_id = (int) $made['term_id'];
+	} else {
+		$term_id = (int) $term->term_id;
+	}
+	if ( get_post_meta( $order_id, '_tp_cn_saved', true ) ) {
+		wp_set_post_terms( $post_id, array( $term_id ), 'post_tag', true ); // true = 다른 태그는 그대로 두고 더하기
+	} else {
+		wp_remove_object_terms( $post_id, $term_id, 'post_tag' );
+	}
+}
+
+add_action(
+	'admin_post_tp_cn_saved',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 바꿀 수 있어요' );
+		}
+		$id = (int) ( $_POST['order'] ?? 0 );
+		check_admin_referer( 'tp_cn_saved_' . $id );
+		$back = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		if ( TP_CN_TYPE !== get_post_type( $id ) || ! get_post_meta( $id, '_tp_cn_post', true ) ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( '글이 만들어진 주문에만 표시할 수 있어요' ), $back ) );
+			exit;
+		}
+		$on = ! get_post_meta( $id, '_tp_cn_saved', true );
+		update_post_meta( $id, '_tp_cn_saved', $on ? 1 : 0 );
+		tp_cn_apply_saved( $id );
+		wp_safe_redirect( add_query_arg( 'tp_cn_info', rawurlencode( $on ? '🔖 저장 1,000+ 뱃지를 달았어요.' : '저장 1,000+ 뱃지를 뗐어요.' ), $back ) );
+		exit;
+	}
+);
+
 // 셰프의 질문에 답하기: 답을 남기고 셰프를 다시 부른다. 셰프는 질문할 때 맡긴 작업 기록을 되살려 이어서 만든다
 add_action(
 	'admin_post_tp_cn_answer',
@@ -669,6 +720,8 @@ add_action(
 		update_post_meta( $id, '_tp_cn_reports', array_values( array_filter( array_map( 'esc_url_raw', array_map( 'trim', $reports ) ) ) ) );
 		update_post_meta( $id, '_tp_cn_layout', $layout );
 		update_post_meta( $id, '_tp_cn_people', array_values( $people ) );
+		// 주간 총정리(뉴스레터)는 카드 한 편이 아니라 한 주 모음이라 뱃지 대상이 아니다
+		update_post_meta( $id, '_tp_cn_saved', ( ! $newsletter && ! empty( $_POST['saved'] ) ) ? 1 : 0 );
 
 		if ( ! tp_cn_ring( $id ) ) {
 			// 주문은 저장됐으니 다시 쓸 필요는 없다. 목록의 "셰프 다시 부르기"로 이어서 할 수 있게 알려 준다
@@ -731,6 +784,7 @@ function tp_cn_order( $post, $with_state = false ) {
 		// 뉴스레터 폼(1.20.0): 이번 주 소개할 제보 주소들, 셰프가 만든 뉴스레터가 있는지(본문은 무거워서 목록·REST엔 안 싣는다)
 		'reports' => get_post_meta( $id, '_tp_cn_reports', true ) ?: array(),
 		'has_newsletter' => (bool) get_post_meta( $id, '_tp_cn_newsletter', true ),
+		'saved'   => (bool) get_post_meta( $id, '_tp_cn_saved', true ),
 		'zip'     => rest_url( "tp-cardnews/v1/orders/{$id}/zip" ),
 		'post_id' => $draft ?: null,
 		// 초안이 발행됐는지(탭에 발행 버튼 대신 '글 보기'를 보이려고). 지워진 초안이면 빈 값
@@ -869,6 +923,10 @@ add_action(
 					}
 					if ( null !== $req->get_param( 'post_id' ) ) {
 						update_post_meta( $id, '_tp_cn_post', (int) $req['post_id'] );
+					}
+					// 셰프가 초안을 만들거나 고친 뒤엔 태그가 order.json 것으로 덮여 있다 → 뱃지 표시를 다시 맞춘다
+					if ( get_post_meta( $id, '_tp_cn_saved', true ) ) {
+						tp_cn_apply_saved( $id );
 					}
 					if ( null !== $req->get_param( 'title' ) ) {
 						update_post_meta( $id, '_tp_cn_title', sanitize_text_field( $req['title'] ) );
@@ -1252,6 +1310,10 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-publish { margin: 0; }
 .tpcn-publish button { padding: 5px 14px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 #b8401d; }
 .tpcn-publish button:hover { background: #ec6a43; }
+.tpcn-field label.tpcn-saved { display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+.tpcn-saved-btn { margin: 0; }
+.tpcn-saved-btn button { padding: 5px 12px; border: 1.5px solid var(--line); border-radius: 999px; background: #fff; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.tpcn-saved-btn.is-on button { background: #111; border-color: #111; color: #fff; }
 .tpcn-body details { margin-top: 8px; }
 .tpcn-body summary { cursor: pointer; color: var(--fresh); font-weight: 700; }
 .tpcn-body details ul { margin: 6px 0 0; padding-left: 18px; }
@@ -1318,7 +1380,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-no { width: 48px; height: 48px; min-width: 48px; border-radius: 50%; border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); transform: rotate(-8deg); font-size: 16px; }
 .tpcn .tpcn-chip { border: 2px solid currentColor; padding: 2px 10px; }
 .tpcn .tpcn-chip.is-pub { border-color: var(--ink); }
-.tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-revise button, .tpcn .tpcn-recall button { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+.tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-saved-btn button, .tpcn .tpcn-revise button, .tpcn .tpcn-recall button { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
 .tpcn .tpcn-check { border: 2px solid var(--ink); box-shadow: 3px 3px 0 #f2cf7c; background: #fff; }
 /* 손본 것 강조(10/18 사용자, 시안 1018-10 1 색 띠): 노란 상자·버터색 카드 위에서 확인 항목이 묻혀서,
    확인 항목은 어디서든(발행 전 상자·발행 뒤 목록·수정 기록) 한 줄씩 색 띠 + 왼쪽 굵은 선, 일반 기록은 흐린 회색으로 물린다 */
@@ -1506,6 +1568,10 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				</ul>
 			</details>
 		</div>
+		<div class="tpcn-field" id="tpcn-saved">
+			<label class="tpcn-saved"><input type="checkbox" name="saved" value="1"> 🔖 인스타 저장 1,000+ <em>선택</em></label>
+			<p class="tpcn-hint">인사이트에서 저장이 <b>1,000번 넘은</b> 카드면 체크해 주세요. 사이트 카드에 <b>저장 1,000+</b> 뱃지가 붙어요. 나중에 넘으면 주문 현황의 버튼으로 붙이면 돼요</p>
+		</div>
 		<button type="submit" class="tpcn-go" id="tpcn-go">주문 넣기</button>
 	</form>
 </section>
@@ -1583,6 +1649,14 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 						<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
 						<?php wp_nonce_field( 'tp_cn_publish_' . (int) $o['id'] ); ?>
 						<button type="submit">🚀 발행</button>
+					</form>
+					<?php endif; ?>
+					<?php if ( 'newsletter' !== $o['kind'] ) : // 발행 뒤에 1,000을 넘는 글이 많아서 발행 전·후 모두 누를 수 있게 ?>
+					<form class="tpcn-saved-btn<?php echo $o['saved'] ? ' is-on' : ''; ?>" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
+						<input type="hidden" name="action" value="tp_cn_saved">
+						<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+						<?php wp_nonce_field( 'tp_cn_saved_' . (int) $o['id'] ); ?>
+						<button type="submit" title="<?php echo $o['saved'] ? '누르면 뱃지를 떼요' : '인스타 저장이 1,000번 넘었으면 눌러 주세요'; ?>"><?php echo $o['saved'] ? '🔖 저장 1,000+ 붙음' : '🔖 저장 1,000+ 붙이기'; ?></button>
 					</form>
 					<?php endif; ?>
 				</div>
@@ -1756,6 +1830,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	const showKind = () => {
 		const iv = kind() === 'interview', ad = kind() === 'ad';
 		$('tpcn-nl').hidden = kind() !== 'newsletter';
+		$('tpcn-saved').hidden = kind() === 'newsletter';
 		$('tpcn-iv').hidden = !(iv || ad);
 		$('tpcn-layout-field').hidden = !iv;
 		$('tpcn-form').querySelector('input[name=layout]').required = iv;
