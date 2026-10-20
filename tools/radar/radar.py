@@ -2,7 +2,7 @@
 """트란시스 특파원(처음 이름 트렌드 레이더) — 매일 아침 카드뉴스 거리 모으기.
 
     python3 tools/radar/radar.py collect            (정보원 새 글 → local/radar/<오늘>/candidates.txt·.json)
-    python3 tools/radar/radar.py body <번호> ...     (고른 영어 원문 거리의 본문 — 한국어 핵심 정리 재료)
+    python3 tools/radar/radar.py body <번호> ...     (고른 거리의 본문 — 핵심 정리 재료)
     python3 tools/radar/radar.py send [--preview]   (Claude가 쓴 picks.json → 사이트 "트란시스 특파원" 탭 + 알림 메일)
 
 토큰을 아끼는 나눔(10/20 사용자: "토큰 최소화 구조로"):
@@ -12,7 +12,7 @@
 
 picks.json (Claude가 쓰는 파일):
     {"picks": [{"n": 3, "title": "한국어 제목", "note": "무엇이고, 왜 카드뉴스 거리인지 한두 문장",
-                "points": ["영어 원문일 때만: 본문을 우리 카드 말투로 녹인 핵심 정리 3~4줄"]}]}
+                "points": ["본문을 우리 카드 말투로 녹인 핵심 정리 — 한국어 원문 3~4줄, 영어 원문 5~7줄"]}]}
 
 사이트 인증은 셰프(tools/cardnews/cardnews.py)와 같다: 이 맥은 local/cardnews.env, 클라우드는 환경의 network secret.
 표준 라이브러리만 쓴다 — 클라우드 routine에서 설치 없이 돌리려고.
@@ -124,7 +124,9 @@ def cmd_collect():
             if when < cut or link in seen:
                 continue
             cands.append({"source": name, "orig": plain(title), "link": link,
-                          "date": when.astimezone(KST).date().isoformat(), "text": plain(desc)[:SNIPPET]})
+                          "date": when.astimezone(KST).date().isoformat(), "text": plain(desc)[:SNIPPET],
+                          # 유튜브 영상 설명 전체는 body가 핵심 정리 재료로 쓴다(candidates.txt엔 안 들어가 토큰과 무관)
+                          "desc": plain(desc) if kind == "youtube" else ""})
     d = day_dir()
     for i, c in enumerate(cands, 1):
         c["n"] = i
@@ -139,17 +141,25 @@ def cmd_collect():
         print("새 후보가 없어요 — 오늘은 보낼 거리가 없어요")
 
 
-BODY_MAX = 2500  # 기사 하나에서 Claude에게 넘기는 글자 수 상한 (Famous Campaigns 기사는 보통 1,000~2,000자)
-# 기사 뒤에 붙는 구독 안내·사이트 소개 — 여기서부터는 본문이 아니다
-BODY_STOP = re.compile(r"Subscribe to|newsletter and get|is a brandzine", re.I)
+# 기사 하나에서 Claude에게 넘기는 글자 수 상한. 영어 원문은 핵심 정리를 더 풍부하게 쓰니 넉넉히(10/20 사용자),
+# 한국어 원문은 독자가 원문을 바로 읽을 수 있어 짧게 — 한국어는 글자당 토큰이 더 들기도 한다
+BODY_MAX_EN = 3000
+BODY_MAX_KO = 1500
+# 기사 뒤에 붙는 구독 안내·출처·사이트 소개 — 여기서부터는 본문이 아니다
+BODY_STOP = re.compile(r"Subscribe to|newsletter and get|is a brandzine|자료 및 사진 출처|팝업 큐레이션 플랫폼|© HEYPOP", re.I)
 
 
 def cmd_body(nums):
-    """영어 원문 거리의 본문만 꺼내 보여 준다. 한국어 핵심 정리(10/20 사용자 A안)를 쓸 재료.
-    고른 영어 거리에만 부르므로 Claude가 읽는 양은 하루 2~3개 기사분이다."""
+    """고른 거리의 본문을 꺼내 보여 준다. 핵심 정리(10/20 사용자: 모든 거리에)를 쓸 재료.
+    고른 5개 안팎에만 부르고 글자 수 상한이 있어서 Claude가 읽는 양이 정해져 있다.
+    유튜브는 페이지 대신 RSS의 영상 설명(collect가 남겨 둔 desc)을 쓴다."""
     cands = {c["n"]: c for c in json.loads((day_dir() / "candidates.json").read_text(encoding="utf-8"))}
     for n in nums:
         c = cands[int(n)]
+        cap = BODY_MAX_EN if is_english(c) else BODY_MAX_KO
+        if "youtube.com" in c["link"]:
+            print(f"## {n} · {c['orig']} (영상 설명)\n" + c.get("desc", "")[:cap] + "\n")
+            continue
         try:
             h = get(c["link"])
         except Exception as e:
@@ -160,9 +170,9 @@ def cmd_body(nums):
             p = plain(p)
             if BODY_STOP.search(p):
                 break
-            if len(p) > 60:  # 짧은 줄은 메뉴·사진 설명·공유 버튼이라 뺀다
+            if len(p) > 40:  # 짧은 줄은 메뉴·사진 설명·공유 버튼이라 뺀다
                 out.append(p)
-        print(f"## {n} · {c['orig']}\n" + "\n".join(out)[:BODY_MAX] + "\n")
+        print(f"## {n} · {c['orig']}\n" + "\n".join(out)[:cap] + "\n")
 
 
 def is_english(c):
@@ -172,8 +182,9 @@ def is_english(c):
 
 def image_of(link):
     """원문 페이지의 대표 사진(og:image). 고른 거리에만 부르니 Claude 토큰과 무관하다.
-    메일에 바로 넣으면 heyPOP은 3000px·800KB에 webp까지 있어서, WordPress.com 사진 변환기(Photon)로 폭 560 jpg로 줄인다.
-    유튜브 썸네일은 Photon이 받지 않지만(302) 원래 작은 jpg라 그대로 쓴다."""
+    메일에 바로 넣으면 heyPOP은 3000px·800KB에 webp까지 있어서, WordPress.com 사진 변환기(Photon)로 560×234 jpg로 줄인다.
+    납작하게 자르는 이유(10/20 사용자: 사진은 작게, 글을 더): 메일(Gmail)은 CSS 자르기를 지워서 사진 자체를 잘라 와야 한다.
+    유튜브 썸네일은 Photon이 받지 않아서(302) 그대로 쓴다 — 메일에서만 16:9로 조금 크게 나온다."""
     try:
         h = get(link)
     except Exception:
@@ -185,7 +196,7 @@ def image_of(link):
     url = html.unescape(m.group(1))
     if "ytimg.com" in url:
         return url
-    return "https://i0.wp.com/" + re.sub(r"^https?://", "", url).split("?")[0] + "?w=560&ssl=1"
+    return "https://i0.wp.com/" + re.sub(r"^https?://", "", url).split("?")[0] + "?resize=560,234&ssl=1"
 
 
 def cmd_send(preview=False):
@@ -198,8 +209,8 @@ def cmd_send(preview=False):
         if not c:
             sys.exit(f"picks.json의 {p['n']}번은 후보에 없어요")
         points = [str(x) for x in p.get("points", [])][:5]
-        if is_english(c) and not points:
-            sys.exit(f"{p['n']}번은 영어 원문이라 points(한국어 핵심 정리)가 필요해요 — radar.py body {p['n']}")
+        if not points:
+            sys.exit(f"{p['n']}번에 points(핵심 정리)가 없어요 — radar.py body {p['n']}")
         items.append({"source": c["source"], "title": p["title"], "note": p["note"], "points": points,
                       "orig": c["orig"], "link": c["link"], "date": c["date"], "image": image_of(c["link"])})
     res = wp("days", {"date": today().isoformat(), "items": items, "preview": preview,
