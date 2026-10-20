@@ -19,6 +19,8 @@ import html
 import json
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -58,9 +60,16 @@ def day_dir():
 
 
 def get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read().decode("utf-8", "replace")
+    # 유튜브 RSS는 방금 되던 주소가 가끔 404를 낸다(10/20 실측: WLDO가 몇 분 사이에 200 → 404) → 쉬었다 두 번 더
+    for wait in (5, 15, None):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read().decode("utf-8", "replace")
+        except (urllib.error.URLError, TimeoutError):
+            if wait is None:
+                raise
+            time.sleep(wait)
 
 
 def plain(s):
