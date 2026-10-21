@@ -173,7 +173,7 @@ def cmd_answer(aid, fail=None):
 def cmd_titles(save=False):
     """아직 안 훑은 피드 글을 번호 붙여 보여 주거나(save=False), Claude가 쓴 titles-ko.json을 사이트에 저장한다.
     링크는 Claude가 베껴 쓰지 않는다 — 번호로 다시 붙인다(answer와 같은 원칙).
-    titles-ko.json: {"titles": {"번호": "한국어 제목"}, "hide": [접을 번호, ...]}"""
+    titles-ko.json: {"titles": {"번호": "한국어 제목"}, "hide": [접을 번호, ...], "warm": [사람 냄새 번호, ...]}"""
     f = ROOT / "local" / "radar" / "titles.json"
     if save:
         todo = json.loads(f.read_text(encoding="utf-8"))
@@ -181,8 +181,9 @@ def cmd_titles(save=False):
         link = lambda n: todo[int(n) - 1]["link"]  # noqa: E731
         res = wp("titles", {"titles": {link(n): s for n, s in out.get("titles", {}).items()},
                             "hide": [link(n) for n in out.get("hide", [])],
+                            "warm": [link(n) for n in out.get("warm", [])],
                             "judged": [c["link"] for c in todo]}, base=RADAR_API)
-        print(f"{res['saved']}개를 훑어 저장했어요 (접은 글 {res['folded']}개)")
+        print(f"{res['saved']}개를 훑어 저장했어요 (접은 글 {res['folded']}개, 사람 냄새 {res['warm']}개)")
         return
     todo = wp("titles", base=RADAR_API)
     f.parent.mkdir(parents=True, exist_ok=True)

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.14.2
+ * Version: 1.15.0
  * Author: Trendportal
  */
 
@@ -441,8 +441,9 @@ add_action(
  * → 정규식으로는 "너무 테크"를 못 가려서, 제목을 번역하는 김에 특파원이 한국어 글까지 훑어 "접기"를 같이 표시한다.
  * 지우지 않고 접는 이유: 잘못 접힌 글이 있어도 피드 맨 아래에서 찾을 수 있게(사용자 선택).
  * routine이 깨어날 때마다(정리 부탁 · 아래 "번역·거르기 부탁") 아직 안 훑은 글만 본다.
- * tp_radar_titles: 링크 => array( 한국어 제목(한국어 글은 ''), 저장 시각, 접기 true|false, 새 규칙으로 훑음 true )  — 가장 긴 피드 창(Link in Bio 14일)보다 넉넉히 15일 보관
+ * tp_radar_titles: 링크 => array( 한국어 제목(한국어 글은 ''), 저장 시각, 접기 true|false, 새 규칙으로 훑음 true, 사람 냄새 true|false )  — 가장 긴 피드 창(Link in Bio 14일)보다 넉넉히 15일 보관
  *   접기 칸이 없는 것 = 번역만 하고 아직 안 훑은 글(10/20 저녁 전 번역분)
+ *   다섯째 칸(10/22 사용자: "사람 냄새 필터") 자체가 없는 것 = 사람 냄새를 아직 안 본 글. true/false로 "봤다"를 남겨야 같은 글을 다시 안 보낸다
  */
 function tp_radar_titles() {
 	$t = get_option( 'tp_radar_titles', array() );
@@ -462,10 +463,15 @@ function tp_radar_unjudged( $feed ) {
 			$feed['items'],
 			function ( $it ) use ( $tr ) {
 				$t = $tr[ $it['link'] ] ?? null;
-				return ! isset( $t[2] ) || ( $t[2] && '' === $t[0] && empty( $t[3] ) && '' !== tp_radar_lang( $it['orig'] ) );
+				return ! isset( $t[2] ) || ! isset( $t[4] ) || ( $t[2] && '' === $t[0] && empty( $t[3] ) && '' !== tp_radar_lang( $it['orig'] ) );
 			}
 		)
 	);
+}
+
+/** 특파원이 "사람 냄새"로 표시한 글인가 */
+function tp_radar_warm( $tr, $link ) {
+	return ! empty( $tr[ $link ][4] );
 }
 
 /** 특파원이 접어 둔 글인가 */
@@ -773,16 +779,22 @@ add_action(
 						$tr  = array_filter( $tr, fn( $v ) => ( $v[1] ?? 0 ) > $cut );
 						$ko   = array_map( fn( $v ) => sanitize_text_field( (string) $v ), (array) $req->get_param( 'titles' ) );
 						$fold = array_flip( array_map( 'esc_url_raw', (array) $req->get_param( 'hide' ) ) );
+						$warm = array_flip( array_map( 'esc_url_raw', (array) $req->get_param( 'warm' ) ) );
 						$n    = 0;
+						$w    = 0;
 						// judged = 이번에 훑은 글 전부(접지 않은 글도 "훑었다"로 남겨야 다음에 다시 안 읽는다)
 						foreach ( array_map( 'esc_url_raw', (array) $req->get_param( 'judged' ) ) as $link ) {
 							$title         = '' !== ( $ko[ $link ] ?? '' ) ? $ko[ $link ] : ( $tr[ $link ][0] ?? '' );
-							$tr[ $link ]   = array( $title, time(), isset( $fold[ $link ] ), true ); // 넷째 칸: 접은 글도 번역하는 규칙으로 훑음
-							$n            += isset( $fold[ $link ] ) ? 1 : 0;
+							// 사람 냄새로 표시한 글은 접지 않는다 — 특파원이 둘 다 달아 와도 표시가 이긴다
+							$is_warm       = isset( $warm[ $link ] );
+							$is_fold       = isset( $fold[ $link ] ) && ! $is_warm;
+							$tr[ $link ]   = array( $title, time(), $is_fold, true, $is_warm ); // 넷째 칸: 접은 글도 번역하는 규칙으로 훑음, 다섯째 칸: 사람 냄새를 봄
+							$n            += $is_fold ? 1 : 0;
+							$w            += $is_warm ? 1 : 0;
 						}
 						update_option( 'tp_radar_titles', $tr, false );
 						update_option( 'tp_radar_titles_at', time(), false );
-						return array( 'saved' => count( (array) $req->get_param( 'judged' ) ), 'folded' => $n );
+						return array( 'saved' => count( (array) $req->get_param( 'judged' ) ), 'folded' => $n, 'warm' => $w );
 					},
 				),
 			)
@@ -1018,6 +1030,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
 .tprd-filters button { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font: 700 12.5px "IBM Plex Sans KR", sans-serif; cursor: pointer; }
 .tprd-filters button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.tprd-warm { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #ffe0e6; color: #b3123b; font-weight: 700; }
 .tprd-filters .tprd-refresh { margin-left: auto; font-size: 12px; color: var(--muted); }
 .tprd-filters .tprd-refresh button { background: #ffe45c; border-color: #ffe45c; }
 .tprd-filters .tprd-refresh button[name="wide"] { background: #fff; }
@@ -1150,13 +1163,13 @@ function tp_radar_feed_row( $k, $it, $state, $tr ) {
 	$img  = '' !== $img ? $img : tp_radar_img_cached( $it['link'] );
 	$need = false === $img;
 	?>
-<li data-g="<?php echo esc_attr( TP_RADAR_SOURCES[ $it['source'] ][1] ?? '' ); ?>"><label for="tprd-f<?php echo (int) $k; ?>">
+<li data-g="<?php echo esc_attr( TP_RADAR_SOURCES[ $it['source'] ][1] ?? '' ); ?>" data-w="<?php echo tp_radar_warm( $tr, $it['link'] ) ? '1' : '0'; ?>"><label for="tprd-f<?php echo (int) $k; ?>">
 <input type="checkbox" id="tprd-f<?php echo (int) $k; ?>" name="links[]" value="<?php echo esc_attr( $it['link'] ); ?>">
 <span class="thumb tprd-screen"<?php echo $need ? ' data-need="' . esc_attr( $it['link'] ) . '"' : ''; ?>><?php echo $img ? '<img class="ph" src="' . esc_url( $img ) . '" alt="" loading="lazy" referrerpolicy="no-referrer">' : ''; ?>
 <img class="tprd-reporter" src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">
 <span class="tprd-cap"><?php echo tp_radar_where( $it['source'] ); // phpcs:ignore -- 이미 이스케이프 ?><a class="tt" href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $ko ? $ko : $it['orig'] ); ?></a></span></span>
 <span class="bd">
-<span class="meta"><?php echo esc_html( substr( $it['date'], 5 ) . ' · ' . tp_radar_ago( $it['t'] ) ); ?> 송출
+<span class="meta"><?php echo tp_radar_warm( $tr, $it['link'] ) ? '<span class="tprd-warm">🫶 사람 냄새</span> ' : ''; ?><?php echo esc_html( substr( $it['date'], 5 ) . ' · ' . tp_radar_ago( $it['t'] ) ); ?> 송출
 		<?php if ( $st ) : ?>
 <a class="st" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report' ) . $st[1] ); ?>"><?php echo esc_html( $st[0] ); ?></a>
 		<?php endif; ?>
@@ -1196,15 +1209,18 @@ function tp_radar_feed_view( $feed, $asks ) {
 		}
 	}
 	$count = array();
+	$warm  = 0;
 	foreach ( $show as $it ) {
 		$g           = TP_RADAR_SOURCES[ $it['source'] ][1] ?? '';
 		$count[ $g ] = ( $count[ $g ] ?? 0 ) + 1;
+		$warm       += tp_radar_warm( $tr, $it['link'] ) ? 1 : 0;
 	}
 	// 번역 부탁을 보냈는데 그 뒤로 아직 저장이 없고 20분이 안 지났으면 '번역하는 중'
 	$busy = tp_radar_titles_busy();
 	?>
 <div class="tprd-filters" role="group" aria-label="갈래 거르기">
 <button type="button" data-g="" aria-pressed="true">전체 <?php echo count( $show ); ?></button>
+<button type="button" data-g="warm" aria-pressed="false" style="border-color:#e0457b">🫶 사람 냄새 <?php echo (int) $warm; ?></button>
 	<?php foreach ( TP_RADAR_GROUP_NAME as $g => $name ) : ?>
 		<?php list( $bg, $line, $fg ) = TP_RADAR_GROUP_COLOR[ $g ]; ?>
 <button type="button" data-g="<?php echo esc_attr( $g ); ?>" aria-pressed="false" style="border-color:<?php echo esc_attr( $line ); ?>"><?php echo esc_html( $name . ' ' . ( $count[ $g ] ?? 0 ) ); ?></button>
@@ -1227,7 +1243,7 @@ fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: new URLSearch
 		<?php endif; ?>
 	<?php endif; ?>
 </div>
-<p class="tprd-rule">🙈 <b>특파원 거르기</b> — <b>남김</b> 재밌는 광고·캠페인, 화제에 숟가락 얹은 브랜드 패러디, 밈·X 화제, 게임·젊은 세대 마케팅, 신기한 사이트·앱, 앱 새 기능, 팝업·콜라보, 트렌드 데이터 · <b>접음</b> 대놓고 뉴스인 글(정치·사건사고, 경기 결과·부상, 업계 인사·실적·수상, 테크·AI 산업), 같은 이야기 두 번째부터</p>
+<p class="tprd-rule">🙈 <b>특파원 거르기</b> — <b>남김</b> 🫶 사람 냄새 나는 글(필터 버튼), 재밌는 광고·캠페인, 화제에 숟가락 얹은 브랜드 패러디, 밈·X 화제, 게임·젊은 세대 마케팅, 신기한 사이트·앱, 앱 새 기능, 팝업·콜라보, 트렌드 데이터 · <b>접음</b> 대놓고 뉴스인 글(정치·사건사고, 경기 결과·부상, 업계 인사·실적·수상, 테크·AI 산업), 같은 이야기 두 번째부터</p>
 	<?php if ( $feed['errors'] ) : ?>
 <p class="tprd-errs">읽지 못한 곳: <?php echo esc_html( implode( ' · ', array_map( fn( $n, $e ) => "$n($e)", array_keys( $feed['errors'] ), $feed['errors'] ) ) ); ?></p>
 	<?php endif; ?>
@@ -1303,7 +1319,7 @@ fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: new URLSearch
 	document.querySelectorAll('.tprd-filters button[data-g]').forEach(function (b) {
 		b.addEventListener('click', function () {
 			document.querySelectorAll('.tprd-filters button[data-g]').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
-			form.querySelectorAll('.tprd-feed li').forEach(function (li) { li.hidden = b.dataset.g !== '' && li.dataset.g !== b.dataset.g; });
+			form.querySelectorAll('.tprd-feed li').forEach(function (li) { li.hidden = b.dataset.g !== '' && (b.dataset.g === 'warm' ? li.dataset.w !== '1' : li.dataset.g !== b.dataset.g); });
 		});
 	});
 })();

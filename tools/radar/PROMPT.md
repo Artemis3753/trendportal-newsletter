@@ -37,7 +37,7 @@ A4. Run `python3 tools/radar/radar.py answer <id>`. If you truly cannot (the scr
 
 C1. Run `python3 tools/radar/radar.py titles`. If it says there is nothing to look at, stop.
 C2. Write `local/radar/titles-ko.json` as
-    `{"titles": {"<number>": "한국어 제목", ...}, "hide": [<number>, ...]}`.
+    `{"titles": {"<number>": "한국어 제목", ...}, "hide": [<number>, ...], "warm": [<number>, ...]}`.
     - `titles`: one entry for every line marked `[번역]`, hidden or not (the team opens the
       hidden pile too and needs to read it): a natural Korean headline the
       way a Trendportal card would title it (about 30 characters, brand or person first when there
@@ -65,6 +65,17 @@ C2. Write `local/radar/titles-ko.json` as
       "이거 봐"? If not, or if you are unsure, hide it — the tab keeps hidden lines one click away.
       When several lines tell the same story (often 구글 뉴스 lines, whose titles end in
       " - <outlet>"), keep only the one with the clearest title and hide the rest.
+    - `warm`: the numbers of lines that have 사람 냄새 (human warmth), whether or not they were
+      hidden — the tab turns them into a filter button. Marketing or memes with a human heart are
+      what we want most. A line is warm when real, ordinary people (or a brand speaking to them like
+      one person to another) are the center and the feeling comes from them: a campaign or project
+      built from real people's words, kindness, fandom or small everyday moments; a relatable
+      everyday moment that people shared and loved (a tired parent, a funny honest reaction, a
+      small act of kindness); a brand doing something humane with a clear idea behind it.
+      Not warm: plain sad-story or "heartwarming tale" posts with no hook beyond the tear, gossip
+      and family or couple drama, celebrity PR, product or business news, corporate image ads with
+      no people in them. If a line is warm, never put it in `hide`. Be strict — a few honest
+      picks beat a long list; when unsure, leave it out.
     Then run `python3 tools/radar/radar.py titles --save`.
 
 Report in Korean in one or two lines: requests handled (if any), titles translated, lines hidden.
