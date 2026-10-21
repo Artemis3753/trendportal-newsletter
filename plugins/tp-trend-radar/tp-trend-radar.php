@@ -75,6 +75,9 @@ const TP_RADAR_SOURCES = array(
 	'Famous Campaigns'      => array( 'gb', 'camp', 'rss', 'https://www.famouscampaigns.com/feed/' ), // www 없는 주소는 526
 	'Muse by Clio'          => array( 'us', 'camp', 'rss', 'https://musebycl.io/rss.xml' ),
 	'AdverTimes'            => array( 'jp', 'camp', 'rss', 'https://www.advertimes.com/feed/' ),
+	// 10/22 추가(사용자: "사람 냄새 많이 나는 컨텐츠 올리는 사이트를 추가해도 돼") — 일본 광고 사례를 매일 소개. 스포 회피 광고·역 연애 이야기 음성 콘텐츠처럼
+	// 사람 이야기가 든 기획이 많다. 나라는 .jp 도메인과 일본어 매체라는 점으로 적었고 운영사는 못 찾았다(회사 소개 페이지 없음)
+	'Adgang'                => array( 'jp', 'camp', 'rss', 'https://adgang.jp/feed' ),
 	// 플랫폼·크리에이터 — "인스타그램 이렇게 변합니다" 같은 글의 출처가 이 매체들이었다
 	'Social Media Today'    => array( 'us', 'plat', 'rss', 'https://www.socialmediatoday.com/feeds/news/' ),
 	// 10/20 밤 추가 — 브랜드가 SNS에서 밈을 타는 법만 다루는 뉴스레터(Rachel Karten). 주 1~2편이라 속도보다 아이디어용
@@ -92,6 +95,8 @@ const TP_RADAR_SOURCES = array(
 	// ねとらぼ(RSS 멈춤) 대신 おたくま = X 화제·이상한 신상품·콜라보.
 	// Togetter 인기(일본 X 화제 글 모음)도 넣었다가 뺐다 — 사이트 서버에서 받으면 403(로컬은 200, 10/20 밤)
 	'おたくま経済新聞'       => array( 'jp', 'trend', 'rss', 'https://otakuma.net/feed' ),
+	// 10/22 추가(같은 요청) — SNS에서 반응 얻은 일반인 에피소드(육아 메모·반려동물·외국인이 본 일본). 연예인 근황 글도 섞여 있어 접기가 거른다. 운영사 株式会社Creative2(도쿄)
+	'Hint-Pot'              => array( 'jp', 'trend', 'rss', 'https://hint-pot.jp/feed' ),
 	// 10/20 추가(사용자: "한국꺼로 좁혀서") — SNS 마케터용 매거진. 월별 밈 모음·인기 릴스·브랜드 오프라인 기획, 하루 1편꼴.
 	// 국내 밈은 X·인스타·커뮤니티에서 도는데 거긴 RSS가 없거나 톤이 안 맞아서, 그걸 정리해 오는 곳으로 받는다
 	'고구마팜'               => array( 'kr', 'trend', 'rss', 'https://gogumafarm.kr/feed/' ),
@@ -176,7 +181,7 @@ function tp_radar_flag( $source, $class = 'tprd-flag' ) {
 /*
  * 10/20 사용자 A안: 탭의 "📰 실시간 피드" 칸. Claude 없이 PHP가 RSS를 읽으니 몇 번을 열어도 비용이 없다.
  * 외국어는 원제목 그대로 — 번역·요약이 필요한 글만 체크해서 "정리 부탁"(아래)으로 특파원을 부른다.
- * 17곳을 차례로 받으면 탭이 십몇 초 멈춰서 한꺼번에(병렬) 받고, 결과는 30분 보관한다.
+ * 20곳 넘게 차례로 받으면 탭이 십몇 초 멈춰서 한꺼번에(병렬) 받고, 결과는 30분 보관한다.
  */
 const TP_RADAR_FEED_TTL  = 30 * MINUTE_IN_SECONDS;
 const TP_RADAR_FEED_DAYS = 3; // 이보다 오래된 글은 피드에 안 보인다
