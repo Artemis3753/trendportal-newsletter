@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.14.1
+ * Version: 1.14.2
  * Author: Trendportal
  */
 
@@ -1032,8 +1032,9 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-feed label { display: flex; flex-direction: column; height: 100%; cursor: pointer; }
 /* overflow를 숨겨야 큰 사진이 16:10 칸을 밀어 늘리지 않는다 */
 .tprd-feed .thumb { aspect-ratio: 16 / 10; }
-.tprd-feed input { position: absolute; top: 9px; left: 9px; z-index: 2; width: 20px; height: 20px; margin: 0; accent-color: var(--live); }
-.tprd-feed .bd { display: grid; gap: 4px; padding: 8px 11px 11px; }
+/* 체크박스는 카드 오른쪽 아래 — 글이 밑으로 들어가지 않게 .bd 오른쪽을 비워 둔다 */
+.tprd-feed input { position: absolute; right: 11px; bottom: 11px; z-index: 2; width: 20px; height: 20px; margin: 0; accent-color: var(--live); }
+.tprd-feed .bd { display: grid; gap: 4px; padding: 8px 40px 11px 11px; }
 .tprd-feed .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .tprd-feed .sub { font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tprd-feed .st { padding: 0 8px; border-radius: 999px; background: var(--soft); color: var(--ink); font-weight: 700; font-size: 11px; text-decoration: none; }
