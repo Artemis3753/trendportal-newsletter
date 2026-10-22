@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.16.0
+ * Version: 1.17.0
  * Author: Trendportal
  */
 
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * 저장: 옵션(autoload 끔 — 이 탭과 REST에서만 읽는다)
  *   tp_radar_asks    정리 부탁과 그 결과(아래 "정리 부탁")
  *   tp_radar_titles  피드 제목 번역(아래 "제목 번역")
- *   tp_radar_archive 받아 둔 글 보관(아래 "지난 글")
+ *   tp_radar_archive 받아 둔 글 보관함(피드는 여기서 최근 7일을 읽는다)
  *   tp_radar_bell    초인종(routine 트리거 주소·열쇠)
  */
 
@@ -108,10 +108,10 @@ const TP_RADAR_SOURCES = array(
 	'Hypebeast KR'          => array( 'kr', 'kr', 'rss', 'https://hypebeast.kr/feed' ),
 	// 10/20 밤 추가 — 화제에 숟가락 얹은 브랜드 패러디를 국내 언론이 묶어 쓴 기사를 낚는 그물.
 	// 시험 때 테슬라 로드스터 패러디 기사 8개가 잡혔다. 링크는 구글 뉴스 주소라 특파원이 본문은 못 읽는다(radar.py)
-	'구글 뉴스'              => array( 'kr', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%94%EC%9D%B4%EB%9F%B4+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%88+%EB%A7%88%EC%BC%80%ED%8C%85%22+OR+%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EC%98%81%EC%83%81%22+OR+%22%EA%B2%8C%EC%9E%84+%EC%BD%9C%EB%9D%BC%EB%B3%B4%22+OR+%22%EC%88%9F%EA%B0%80%EB%9D%BD+%EC%96%B9%EA%B8%B0%22%29+when%3A3d&hl=ko&gl=KR&ceid=KR:ko' ),
+	'구글 뉴스'              => array( 'kr', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%94%EC%9D%B4%EB%9F%B4+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%88+%EB%A7%88%EC%BC%80%ED%8C%85%22+OR+%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EC%98%81%EC%83%81%22+OR+%22%EA%B2%8C%EC%9E%84+%EC%BD%9C%EB%9D%BC%EB%B3%B4%22+OR+%22%EC%88%9F%EA%B0%80%EB%9D%BD+%EC%96%B9%EA%B8%B0%22%29+when%3A7d&hl=ko&gl=KR&ceid=KR:ko' ),
 	// 10/20 추가 — 두 번째 그물: 국내 언론의 "온라인·SNS에서 화제" 기사 중 광고·브랜드·콜라보·신제품만(おたくま의 한국판 역할).
 	// 시험 때 3일 4개 중 2개가 캡틴큐 이선민 광고. 위 그물과 합치지 않은 이유: 정보원마다 8개 상한이라 양 적은 이쪽이 밀려난다
-	'구글 뉴스 화제'          => array( 'kr', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%EC%98%A8%EB%9D%BC%EC%9D%B8%EC%97%90%EC%84%9C+%ED%99%94%EC%A0%9C%22+OR+%22SNS%EC%97%90%EC%84%9C+%ED%99%94%EC%A0%9C%22%29+%28%EA%B4%91%EA%B3%A0+OR+%EB%B8%8C%EB%9E%9C%EB%93%9C+OR+%EC%BD%9C%EB%9D%BC%EB%B3%B4+OR+%EC%8B%A0%EC%A0%9C%ED%92%88%29+when%3A3d&hl=ko&gl=KR&ceid=KR:ko' ),
+	'구글 뉴스 화제'          => array( 'kr', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%EC%98%A8%EB%9D%BC%EC%9D%B8%EC%97%90%EC%84%9C+%ED%99%94%EC%A0%9C%22+OR+%22SNS%EC%97%90%EC%84%9C+%ED%99%94%EC%A0%9C%22%29+%28%EA%B4%91%EA%B3%A0+OR+%EB%B8%8C%EB%9E%9C%EB%93%9C+OR+%EC%BD%9C%EB%9D%BC%EB%B3%B4+OR+%EC%8B%A0%EC%A0%9C%ED%92%88%29+when%3A7d&hl=ko&gl=KR&ceid=KR:ko' ),
 	// heyPOP: /feed/는 2021년에 멈춘 기본 글 종류라 못 쓰고, 실제 기사는 'n' 글 종류
 	'heyPOP'                => array( 'kr', 'kr', 'wpjson', 'https://heypop.kr/wp-json/wp/v2/n?per_page=20&_fields=date,link,title,excerpt' ),
 	// 10/20 저녁에 뺀 곳(사용자: "정치·시사·사건사고, 대놓고 스포츠 뉴스, 너무 테크 기사는 필요 없어") — 그때 피드 실측:
@@ -185,18 +185,14 @@ function tp_radar_flag( $source, $class = 'tprd-flag' ) {
  * 20곳 넘게 차례로 받으면 탭이 십몇 초 멈춰서 한꺼번에(병렬) 받고, 결과는 30분 보관한다.
  */
 const TP_RADAR_FEED_TTL  = 30 * MINUTE_IN_SECONDS;
-const TP_RADAR_FEED_DAYS = 3; // 이보다 오래된 글은 피드에 안 보인다
-// 정보원별 예외 — Link in Bio는 주 1~2편이라 3일 창에 0개일 때가 많다(10/20 사용자: "최근 2주")
+// 10/22 사용자: "새로고침해도 7일 안에 찾은 글은 남아 있게, 지난 글 칸 없이 피드에 그냥" → 피드 = 보관함의 최근 7일.
+// 신문사 RSS는 최신 몇 십 개만 주기 때문에 새로고침 때 받은 글만 보여 주면 7일 안의 글도 밀려난다.
+// 그래서 받을 때마다 보관함(옵션)에 합쳐 두고, 피드는 보관함에서 읽는다. 보관 기간 = 화면 기간이라 지난 글 칸이 필요 없다.
+const TP_RADAR_FEED_DAYS = 7; // 이보다 오래된 글은 피드에 안 보이고 보관함에서도 지운다
+// 정보원별 예외 — Link in Bio는 주 1~2편이라 7일 창에 0개일 때가 많다(10/20 사용자: "최근 2주")
 const TP_RADAR_FEED_DAYS_BY = array( 'Link in Bio' => 14 );
-const TP_RADAR_FEED_EACH = 8; // 정보원마다 최신 몇 개까지
-// "📅 7일치" 버튼 = 그때 한 번만 넓게 받기(10/20 사용자 B안). 30분 보관이 끝나면 평소 창으로 저절로 돌아간다.
-// 상한도 같이 올린다 — 8개 그대로면 글 많은 정보원은 3일 때와 똑같아서 넓힌 의미가 없다.
-const TP_RADAR_FEED_WIDE_DAYS = 7;
-const TP_RADAR_FEED_WIDE_EACH = 20;
-// 지난 글 보관(10/22 사용자: "한번 조사한 글이 더 지속됐으면") — 받을 때마다 정보원당 20개까지 DB에 쌓고 15일 뒤 지운다.
-// 화면(3일·8개)과 따로라서 보관이 늘어도 특파원이 훑는 글(토큰)은 그대로다. 15일 = 번역·접기 기록 보관과 같다.
-const TP_RADAR_STORE_EACH = 20;
-const TP_RADAR_STORE_DAYS = 15;
+const TP_RADAR_FEED_EACH = 20; // 정보원마다 최신 몇 개까지(받을 때·보여 줄 때 모두)
+const TP_RADAR_IMG_DAYS  = 15; // 찾아 둔 대표 사진 보관 — 번역·접기 기록 보관(15일)과 같다
 const TP_RADAR_UA        = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36';
 
 /** 날짜 글자 → 유닉스 시각. 매드타임스처럼 시간대가 없으면 한국 매체라 KST로 본다(radar.py when()과 같은 규칙) */
@@ -307,9 +303,9 @@ function tp_radar_multi( $reqs ) {
 
 /**
  * 피드 전체: array( 'at' => 받은 시각, 'items' => [ {source, orig, link, date, t, text} … ] 최신순, 'errors' => 이름 => 이유 ).
- * $force = 🔄 새로고침 버튼(보관본을 버리고 다시 받기). $wide = 📅 7일치 버튼(이번 한 번만 넓게).
+ * $force = 🔄 새로고침 버튼(30분 보관본을 버리고 다시 받기). 받은 글은 보관함에 합쳐지고, 피드는 보관함의 최근 7일이다.
  */
-function tp_radar_feed( $force = false, $wide = false ) {
+function tp_radar_feed( $force = false ) {
 	$cached = $force ? false : get_transient( 'tp_radar_feed' );
 	if ( is_array( $cached ) ) {
 		return $cached;
@@ -320,10 +316,6 @@ function tp_radar_feed( $force = false, $wide = false ) {
 			continue;
 		}
 		$url = 'youtube' === $s[2] ? 'https://www.youtube.com/feeds/videos.xml?channel_id=' . $s[3] : $s[3];
-		if ( $wide ) {
-			// 구글 뉴스는 검색 주소 자체에 기간(when:3d)이 들어 있어서, 창을 넓혀도 주소를 같이 바꿔야 7일치가 온다
-			$url = str_replace( 'when%3A3d', 'when%3A' . TP_RADAR_FEED_WIDE_DAYS . 'd', $url );
-		}
 		$reqs[ $name ] = array(
 			'url'     => $url,
 			'type'    => 'GET',
@@ -337,19 +329,16 @@ function tp_radar_feed( $force = false, $wide = false ) {
 		$resps = array_merge( $resps, tp_radar_multi( $again ) );
 	}
 
-	$items  = array();
 	$store  = array();
 	$errors = array();
 	foreach ( $resps as $name => $r ) {
 		if ( ! is_object( $r ) || ! isset( $r->status_code ) || $r->status_code >= 400 ) {
 			$errors[ $name ] = is_object( $r ) && isset( $r->status_code ) ? 'HTTP ' . $r->status_code : '연결 실패';
-			continue;
+			continue; // 못 읽은 곳의 옛 글은 보관함에 그대로 남아 피드에 계속 보인다
 		}
 		$skip = TP_RADAR_SKIP[ $name ] ?? '';
-		$days = TP_RADAR_FEED_DAYS_BY[ $name ] ?? TP_RADAR_FEED_DAYS;
-		$cut  = time() - ( $wide ? max( $days, TP_RADAR_FEED_WIDE_DAYS ) : $days ) * DAY_IN_SECONDS; // Link in Bio 14일은 넓힐 때도 줄이지 않는다
+		$keep = time() - tp_radar_days( $name ) * DAY_IN_SECONDS;
 		$got  = array();
-		$keep = time() - TP_RADAR_STORE_DAYS * DAY_IN_SECONDS;
 		foreach ( tp_radar_parse( TP_RADAR_SOURCES[ $name ][2], $r->body ) as list( $orig, $link, $t, $text, $img ) ) {
 			$orig = tp_radar_plain( $orig );
 			if ( $t < $keep || '' === $link || ( $skip && preg_match( '~' . $skip . '~i', $orig ) ) ) {
@@ -366,16 +355,30 @@ function tp_radar_feed( $force = false, $wide = false ) {
 			);
 		}
 		usort( $got, fn( $a, $b ) => $b['t'] <=> $a['t'] );
-		$store = array_merge( $store, array_slice( $got, 0, TP_RADAR_STORE_EACH ) );
-		// 화면은 예전 그대로: 창(3일) 안의 글만, 정보원당 8개
-		$shown = array_filter( $got, fn( $g ) => $g['t'] >= $cut );
-		$items = array_merge( $items, array_slice( $shown, 0, $wide ? TP_RADAR_FEED_WIDE_EACH : TP_RADAR_FEED_EACH ) );
+		$store = array_merge( $store, array_slice( $got, 0, TP_RADAR_FEED_EACH ) );
 	}
-	tp_radar_archive_save( $store );
-	usort( $items, fn( $a, $b ) => $b['t'] <=> $a['t'] );
-	$feed = array( 'at' => time(), 'items' => tp_radar_mix( $items ), 'errors' => $errors, 'wide' => $wide );
+	$arc = tp_radar_archive_save( $store );
+
+	// 화면 = 보관함 중 정보원당 최신 TP_RADAR_FEED_EACH개. 정보원 표에서 빠진 곳의 글은 보관함에 남아 있어도 보여 주지 않는다
+	usort( $arc, fn( $a, $b ) => $b['t'] <=> $a['t'] );
+	$items = array();
+	$n     = array();
+	foreach ( $arc as $it ) {
+		$src = $it['source'];
+		if ( ! isset( TP_RADAR_SOURCES[ $src ] ) || ( $n[ $src ] ?? 0 ) >= TP_RADAR_FEED_EACH ) {
+			continue;
+		}
+		$n[ $src ] = ( $n[ $src ] ?? 0 ) + 1;
+		$items[]   = $it;
+	}
+	$feed = array( 'at' => time(), 'items' => tp_radar_mix( $items ), 'errors' => $errors );
 	set_transient( 'tp_radar_feed', $feed, TP_RADAR_FEED_TTL );
 	return $feed;
+}
+
+/** 정보원의 화면·보관 기간(일). 정보원별 예외가 없으면 TP_RADAR_FEED_DAYS */
+function tp_radar_days( $name ) {
+	return TP_RADAR_FEED_DAYS_BY[ $name ] ?? TP_RADAR_FEED_DAYS;
 }
 
 /** 보관해 둔 글: 링크 => 피드 글 하나(source·orig·link·t·date·text·image) */
@@ -385,29 +388,17 @@ function tp_radar_archive() {
 }
 
 /**
- * 이번에 받은 글을 보관에 합치고 15일 지난 글을 지운다. 읽지 못한 정보원의 옛 글은 그대로 남는다(합치기만 하니까).
- * 같은 글이 다시 오면 새로 받은 쪽으로 덮어 사진 주소 같은 게 최신이 되게 한다.
+ * 이번에 받은 글을 보관함에 합치고 기간(정보원별 tp_radar_days)이 지난 글을 지운다. 합치기만 하니까 읽지 못한 정보원의 옛 글은 그대로 남는다.
+ * 같은 글이 다시 오면 새로 받은 쪽으로 덮어 사진 주소 같은 게 최신이 되게 한다. 합친 결과를 돌려준다(링크 => 글).
  */
 function tp_radar_archive_save( $items ) {
 	$arc = tp_radar_archive();
 	foreach ( $items as $it ) {
 		$arc[ $it['link'] ] = $it;
 	}
-	$cut = time() - TP_RADAR_STORE_DAYS * DAY_IN_SECONDS;
-	$arc = array_filter( $arc, fn( $it ) => ( $it['t'] ?? 0 ) > $cut );
+	$arc = array_filter( $arc, fn( $it ) => ( $it['t'] ?? 0 ) > time() - tp_radar_days( $it['source'] ?? '' ) * DAY_IN_SECONDS );
 	update_option( 'tp_radar_archive', $arc, false );
-}
-
-/**
- * 지난 글 = 보관에는 있는데 지금 화면(피드)에는 없는 글, 최신순.
- * 피드 보관(30분 transient)에 같이 넣지 않는다 — 수백 개를 통째로 캐시에 올리면 캐시 크기 제한에 걸릴 수 있다.
- * 특파원이 훑는 대상(tp_radar_unjudged)은 화면 글뿐이라 여기 글은 토큰을 쓰지 않는다. 번역 기록이 있으면 보여 주고, 없으면 원제목.
- */
-function tp_radar_past( $feed ) {
-	$shown = array_flip( array_column( $feed['items'], 'link' ) );
-	$past  = array_filter( tp_radar_archive(), fn( $it ) => ! isset( $shown[ $it['link'] ] ) );
-	usort( $past, fn( $a, $b ) => $b['t'] <=> $a['t'] );
-	return $past;
+	return $arc;
 }
 
 /**
@@ -438,7 +429,7 @@ function tp_radar_mix( $items ) {
 	return $out;
 }
 
-/** 이미 찾아 둔 대표 사진(15일 보관 — 지난 글과 같다). 없으면 false, 찾았는데 사진이 없는 글이면 '' */
+/** 이미 찾아 둔 대표 사진(TP_RADAR_IMG_DAYS일 보관). 없으면 false, 찾았는데 사진이 없는 글이면 '' */
 function tp_radar_img_cached( $link ) {
 	// 키의 2 = 400px 판(옛 192px 보관본은 버린다)
 	return get_transient( 'tp_radar_img2_' . md5( $link ) );
@@ -457,7 +448,7 @@ add_action(
 		}
 		check_ajax_referer( 'tp_radar_img' );
 		$feed  = get_transient( 'tp_radar_feed' );
-		$known = array_merge( is_array( $feed ) ? wp_list_pluck( $feed['items'], 'link' ) : array(), array_keys( tp_radar_archive() ) ); // 지난 글도
+		$known = array_merge( is_array( $feed ) ? wp_list_pluck( $feed['items'], 'link' ) : array(), array_keys( tp_radar_archive() ) ); // 보관함도
 		$out   = array();
 		$reqs  = array();
 		foreach ( array_slice( array_map( 'esc_url_raw', array_map( 'wp_unslash', (array) ( $_POST['links'] ?? array() ) ) ), 0, 8 ) as $l ) {
@@ -475,7 +466,7 @@ add_action(
 			$body = is_object( $r ) && isset( $r->body ) ? (string) $r->body : '';
 			$img  = preg_match( '/<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)/i', $body, $m )
 				|| preg_match( '/<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image/i', $body, $m ) ? tp_radar_thumb( $m[1] ) : '';
-			set_transient( 'tp_radar_img2_' . md5( $l ), $img, TP_RADAR_STORE_DAYS * DAY_IN_SECONDS );
+			set_transient( 'tp_radar_img2_' . md5( $l ), $img, TP_RADAR_IMG_DAYS * DAY_IN_SECONDS );
 			$out[ $l ] = $img;
 		}
 		wp_send_json_success( $out );
@@ -699,7 +690,7 @@ add_action(
 		}
 		check_admin_referer( 'tp_radar_ask' );
 		$want = array_map( 'esc_url_raw', array_map( 'wp_unslash', (array) ( $_POST['links'] ?? array() ) ) );
-		// 글 정보는 폼이 아니라 사이트가 받아 둔 피드·보관(지난 글)에서 찾는다 — 폼으로 엉뚱한 주소를 넣어도 특파원이 읽지 않게
+		// 글 정보는 폼이 아니라 사이트가 받아 둔 피드·보관함에서 찾는다 — 폼으로 엉뚱한 주소를 넣어도 특파원이 읽지 않게
 		$pool = tp_radar_archive();
 		foreach ( tp_radar_feed()['items'] as $it ) {
 			$pool[ $it['link'] ] = $it;
@@ -758,7 +749,7 @@ add_action(
 			wp_die( '관리자만 할 수 있어요' );
 		}
 		check_admin_referer( 'tp_radar_refresh' );
-		tp_radar_feed( true, ! empty( $_POST['wide'] ) ); // 두 버튼이 한 폼 — 누른 버튼만 이름이 실려 온다
+		tp_radar_feed( true );
 		wp_safe_redirect( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=feed' ) );
 		exit;
 	}
@@ -1086,7 +1077,6 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-warm { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #ffe0e6; color: #b3123b; font-weight: 700; }
 .tprd-filters .tprd-refresh { margin-left: auto; font-size: 12px; color: var(--muted); }
 .tprd-filters .tprd-refresh button { background: #ffe45c; border-color: #ffe45c; }
-.tprd-filters .tprd-refresh button[name="wide"] { background: #fff; }
 .tprd-trb { margin-left: 0 !important; }
 .tprd-trb button { background: #ebe5ff !important; border-color: #ebe5ff !important; }
 .tprd-rule { margin: -6px 0 12px; font-size: 12px; color: var(--muted); }
@@ -1278,7 +1268,7 @@ function tp_radar_feed_view( $feed, $asks ) {
 		<?php list( $bg, $line, $fg ) = TP_RADAR_GROUP_COLOR[ $g ]; ?>
 <button type="button" data-g="<?php echo esc_attr( $g ); ?>" aria-pressed="false" style="border-color:<?php echo esc_attr( $line ); ?>"><?php echo esc_html( $name . ' ' . ( $count[ $g ] ?? 0 ) ); ?></button>
 	<?php endforeach; ?>
-<form class="tprd-refresh" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_refresh' ); ?><input type="hidden" name="action" value="tp_radar_refresh"><?php echo esc_html( ( empty( $feed['wide'] ) ? '' : '📅 7일치 · ' ) . tp_radar_ago( $feed['at'] ) ); ?> 받음 <button type="submit">🔄 새로고침</button> <button type="submit" name="wide" value="1" title="이번 한 번만 7일·정보원당 20개까지 받아요. 30분 뒤엔 평소(3일)로 돌아가요">📅 7일치</button></form>
+<form class="tprd-refresh" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_refresh' ); ?><input type="hidden" name="action" value="tp_radar_refresh"><?php echo esc_html( tp_radar_ago( $feed['at'] ) ); ?> 받음 <button type="submit" title="새 글을 받아 와요. 이미 받은 7일 안의 글은 사라지지 않아요">🔄 새로고침</button></form>
 	<?php if ( $todo ) : ?>
 <form class="tprd-refresh tprd-trb" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_tr' ); ?><input type="hidden" name="action" value="tp_radar_tr"><button type="submit"<?php echo $busy ? ' disabled' : ''; ?>><?php echo $busy ? '🌐 특파원이 훑는 중…' : '🌐 번역·거르기 부탁 ' . count( $todo ) . '개'; ?></button></form>
 		<?php if ( $busy ) : // 끝나면 저절로 바뀌게 30초마다 새로 읽는다 ?>
@@ -1320,43 +1310,6 @@ fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: new URLSearch
 		}
 		?>
 </ul>
-</details>
-	<?php endif; ?>
-	<?php
-	// 지난 글: 화면 창(3일)이 지나 피드에서 빠졌지만 보관(15일)에 남은 글. 접어 두고, 열 때 사진을 찾는다
-	$past      = tp_radar_past( $feed );
-	$past_show = array();
-	$past_fold = array();
-	foreach ( array_values( $past ) as $i => $it ) {
-		if ( tp_radar_folded( $tr, $it['link'] ) ) {
-			$past_fold[ 10000 + $i ] = $it; // 체크박스 id가 위 글과 겹치지 않게 번호를 띄운다
-		} else {
-			$past_show[ 10000 + $i ] = $it;
-		}
-	}
-	?>
-	<?php if ( $past_show || $past_fold ) : ?>
-<details class="tprd-folded tprd-past">
-<summary>📚 지난 글 <?php echo count( $past_show ); ?>개 <small>화면 창(3일)이 지나 빠졌지만 15일까지 남아 있어요 · 훑지 않은 글은 원제목 그대로예요</small></summary>
-<ul class="tprd-feed">
-		<?php
-		foreach ( $past_show as $k => $it ) {
-			tp_radar_feed_row( $k, $it, $state, $tr );
-		}
-		?>
-</ul>
-		<?php if ( $past_fold ) : ?>
-<details class="tprd-folded">
-<summary>🙈 접어 둔 지난 글 <?php echo count( $past_fold ); ?>개</summary>
-<ul class="tprd-feed">
-			<?php
-			foreach ( $past_fold as $k => $it ) {
-				tp_radar_feed_row( $k, $it, $state, $tr );
-			}
-			?>
-</ul>
-</details>
-		<?php endif; ?>
 </details>
 	<?php endif; ?>
 <div class="tprd-bar">
