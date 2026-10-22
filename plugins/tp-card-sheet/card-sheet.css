@@ -1,0 +1,154 @@
+
+/* 폰에서만 쓴다(PC는 기존 모양 그대로) */
+@media (max-width: 719px) {
+/* 눌림 반응: 누르는 즉시 줄어들고, 놓으면 튕김 없이 부드럽게 복귀. scale 속성은 카드의 떠오르는 애니메이션(transform)과 충돌하지 않는다 */
+.wp-block-post-template.is-layout-grid > li,
+.tp-chips .wp-block-categories li, .tp-chips .tp-chip-all a,
+.tp-nl-form button, .tp-reports-cta a, .tp-latest-report, .tp-latest-notice { transition: scale 0.4s cubic-bezier(0.2, 0.85, 0.25, 1), background-color 0.2s, color 0.2s; -webkit-tap-highlight-color: transparent; }
+:is(.wp-block-post-template.is-layout-grid > li, .tp-chips .wp-block-categories li, .tp-chips .tp-chip-all a, .tp-nl-form button, .tp-reports-cta a, .tp-latest-report, .tp-latest-notice):is(:active, .tp-pressed) { scale: 0.97; transition-duration: 0.1s; transition-timing-function: ease-out; }
+@media (prefers-reduced-motion: reduce) { .wp-block-post-template.is-layout-grid > li,
+.tp-chips .wp-block-categories li, .tp-chips .tp-chip-all a,
+.tp-nl-form button, .tp-reports-cta a, .tp-latest-report, .tp-latest-notice { transition: none; scale: none !important; } }
+/* 카드 어디를 눌러도 펼치므로 눌러지는 손 모양을 보여 준다(모양은 그대로) */
+.wp-block-post-template.is-layout-grid > li { cursor: pointer; }
+}
+/* 펼쳐지는 시트 */
+.tp-sheet { position: fixed; inset: 0; z-index: 100000; }
+.tp-sheet-scrim { position: absolute; inset: 0; background: rgba(10,10,12,.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); opacity: 0; }
+.tp-sheet-panel { position: absolute; background: #fff; overflow: hidden; transform-origin: 50% 50%; will-change: transform; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+.tp-sheet-scroll { position: absolute; inset: 0; overflow-y: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.tp-sheet.is-open .tp-sheet-scroll { overflow-y: auto; }
+.tp-sheet-hero { position: relative; overflow: hidden; touch-action: none; background: #222; }
+.tp-sheet-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; -webkit-user-drag: none; }
+.tp-sheet-body { padding: 20px 20px 90px; color: #111; }
+.tp-sheet-title { margin: 0 0 8px; font-size: 1.4rem; line-height: 1.3; letter-spacing: -.02em; font-weight: 800; text-wrap: balance; }
+.tp-sheet-meta { margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #757575; }
+.tp-sheet-content img { max-width: 100%; height: auto; }
+.tp-sheet-more { display: block; margin-top: 28px; padding: 15px; border-radius: 14px; background: #111; color: #fff !important; text-align: center; font-weight: 700; text-decoration: none !important; }
+.tp-sheet-close { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; z-index: 3; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(0,0,0,.35); color: #fff; font-size: 16px; line-height: 1; opacity: 0; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); cursor: pointer; }
+
+/* v4: 분류 라벨, 작성자 줄, PC 큰 패널, 시안 옵션 상자 */
+.tp-sheet-cat { position: absolute; left: 20px; top: 18px; z-index: 1; padding: .3em .85em; border-radius: 999px; background: #fff; color: #222; font-size: 12px; font-weight: 700; letter-spacing: .02em; line-height: 1.4; box-shadow: 0 1px 6px rgba(0,0,0,.28); pointer-events: none; }
+.tp-sheet-author { display: flex; align-items: center; gap: 10px; margin: 2px 0 16px; }
+.tp-sheet-author img { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+.tp-sheet-author span { display: flex; flex-direction: column; line-height: 1.3; }
+.tp-sheet-author strong { font-size: 15px; font-weight: 700; }
+.tp-sheet-author em { font-style: normal; font-size: 13px; color: #8a8a8a; }
+.tp-sheet.hide-cover .tp-cover-photo { display: none; }
+/* 맨 위 사진의 어두운 처리: 카드 썸네일을 원본과 밝기로 비교해 잰 값(전체에 검은색 약 50%, 위아래 차이 없음) */
+.tp-sheet-hero::after { content: ""; position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity .35s ease; pointer-events: none; }
+.tp-sheet-hero.has-orig::after { opacity: var(--tp-hero-dim, .4); }
+.tp-sheet.split .tp-sheet-hero { position: absolute; left: 0; top: 0; }
+.tp-sheet.split .tp-sheet-hero img { object-position: 50% 50%; }
+.tp-sheet.split .tp-sheet-body { padding: 64px 44px 90px; }
+.tp-sheet.split .tp-sheet-title { font-size: 1.7rem; margin-bottom: 12px; max-width: none; }
+.tp-sheet.split .tp-sheet-meta, .tp-sheet.split .tp-sheet-author, .tp-sheet.split .tp-sheet-content, .tp-sheet.split .tp-sheet-more { max-width: none; }
+.tp-sheet-hero img { object-position: 50% 40%; }
+/* 글자 있는 썸네일 → 글자 없는 원본으로 바뀌는 효과 3종(원본이 불러와지고 펼침이 끝나면 hero에 is-ready가 붙으며 시작) */
+@property --tp-wipe { syntax: '<percentage>'; inherits: true; initial-value: -20%; }
+.tp-sheet-hero.fx-fade img.tp-sheet-hero-orig { opacity: 0; transition: opacity .45s ease; }
+.tp-sheet-hero.fx-fade.is-ready img.tp-sheet-hero-orig { opacity: 1; }
+.tp-sheet-hero.fx-focus img { transition: opacity .85s cubic-bezier(.2,.7,.2,1), filter .85s cubic-bezier(.2,.7,.2,1), transform .85s cubic-bezier(.2,.7,.2,1); }
+.tp-sheet-hero.fx-focus img.tp-sheet-hero-orig { opacity: 0; filter: blur(12px); transform: scale(1.05); }
+.tp-sheet-hero.fx-focus.is-ready img.tp-sheet-hero-orig { opacity: 1; filter: none; transform: none; }
+.tp-sheet-hero.fx-focus.is-ready img:first-of-type { opacity: 0; filter: blur(14px); }
+.tp-sheet-hero.fx-wipe { transition: --tp-wipe .85s cubic-bezier(.55,.05,.25,1); }
+.tp-sheet-hero.fx-wipe.is-ready { --tp-wipe: 100%; }
+.tp-sheet-hero.fx-wipe img.tp-sheet-hero-orig { -webkit-mask-image: linear-gradient(90deg, #000 var(--tp-wipe), transparent calc(var(--tp-wipe) + 18%)); mask-image: linear-gradient(90deg, #000 var(--tp-wipe), transparent calc(var(--tp-wipe) + 18%)); }
+.tp-sheet-hero.fx-wipe::before { content: ""; position: absolute; z-index: 1; top: 0; bottom: 0; left: var(--tp-wipe); width: 18%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.34) 55%, transparent); mix-blend-mode: screen; pointer-events: none; }
+.tp-sheet-hero.fx-lines img.tp-sheet-hero-orig, .tp-sheet-hero.fx-dust img.tp-sheet-hero-orig { opacity: 0; transition: opacity .18s ease; }
+.tp-sheet-hero.fx-lines.is-ready img.tp-sheet-hero-orig, .tp-sheet-hero.fx-dust.is-ready img.tp-sheet-hero-orig { opacity: 1; }
+.tp-fx-layer { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; }
+.tp-fx-line { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform, opacity, filter; }
+@property --tp-rr { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
+.tp-sheet-hero.fx-ripple { transition: --tp-rr 1s cubic-bezier(.23,1,.32,1); }
+.tp-sheet-hero.fx-ripple.is-ready { --tp-rr: 140%; }
+.tp-sheet-hero.fx-ripple img.tp-sheet-hero-orig { -webkit-mask-image: radial-gradient(ellipse at var(--tp-rx, 50%) var(--tp-ry, 50%), #000 var(--tp-rr), transparent calc(var(--tp-rr) + 10%)); mask-image: radial-gradient(ellipse at var(--tp-rx, 50%) var(--tp-ry, 50%), #000 var(--tp-rr), transparent calc(var(--tp-rr) + 10%)); }
+.tp-sheet-hero.fx-ripple::before { content: ""; position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; mix-blend-mode: screen;
+  background: radial-gradient(ellipse at var(--tp-rx, 50%) var(--tp-ry, 50%), transparent calc(var(--tp-rr) - 2%), rgba(255,255,255,.42) calc(var(--tp-rr) + 3%), transparent calc(var(--tp-rr) + 9%)); }
+.tp-sheet-hero.fx-ripple.is-ready::before { opacity: 1; transition: opacity .1s; }
+/* 닫을 때는 되돌아가는 효과를 조금 빠르게 */
+.tp-sheet-hero.is-closing { transition-duration: .4s !important; }
+.tp-sheet-hero.is-closing img { transition-duration: .4s !important; }
+@media (prefers-reduced-motion: reduce) { .tp-sheet-hero, .tp-sheet-hero img, .tp-sheet-hero img.tp-sheet-hero-orig { transition: none !important; } }
+.tp-sheet.split .tp-sheet-hero { position: absolute; left: 0; top: 0; }
+.tp-sheet.split .tp-sheet-hero img { object-position: 50% 50%; }
+.tp-sheet.split .tp-sheet-body { padding: 64px 44px 90px; }
+.tp-sheet.split .tp-sheet-title { font-size: 1.7rem; margin-bottom: 12px; max-width: none; }
+.tp-sheet.split .tp-sheet-meta, .tp-sheet.split .tp-sheet-author, .tp-sheet.split .tp-sheet-content, .tp-sheet.split .tp-sheet-more { max-width: none; }
+.tp-sheet-hero img { object-position: 50% 40%; }
+@media (min-width: 720px) {
+  .tp-sheet-body { padding: 30px 44px 100px; }
+  .tp-sheet-title { font-size: 1.85rem; }
+  .tp-sheet-content { max-width: 680px; margin: 0 auto; }
+  .tp-sheet-title, .tp-sheet-meta, .tp-sheet-author { max-width: 680px; margin-left: auto; margin-right: auto; }
+  .tp-sheet-more { max-width: 680px; margin-left: auto; margin-right: auto; }
+}
+
+/* PC 배치 포맷: 글을 읽는 동안 사진이 자리를 차지하지 않도록, 사진이 글과 함께 위로 올라가 사라진다 */
+.tp-sheet.layout-blur .tp-sheet-hero, .tp-sheet.layout-band .tp-sheet-hero { background: #111; }
+.tp-sheet-blurbg { position: absolute; inset: -40px; background: center / cover; filter: blur(30px) brightness(.5) saturate(1.2); }
+.tp-sheet.layout-blur .tp-sheet-hero img, .tp-sheet.layout-head .tp-sheet-hero img, .tp-sheet.layout-band .tp-sheet-hero img { object-position: 50% 50%; }
+.tp-sheet.layout-blur .tp-sheet-hero img { object-fit: contain; }
+.tp-sheet.layout-head .tp-sheet-hero { float: left; margin-right: 28px; margin-bottom: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.tp-sheet.layout-head .tp-sheet-body { padding-top: 34px; }
+.tp-sheet.layout-head .tp-sheet-title { margin-top: 0; }
+.tp-sheet.layout-head .tp-sheet-content { clear: both; }
+.tp-sheet-band-shade { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(0deg, rgba(0,0,0,.9) 0%, rgba(0,0,0,.72) 38%, rgba(0,0,0,0) 78%); }
+.tp-sheet.layout-band .tp-sheet-headline { position: absolute; left: 44px; right: 44px; bottom: 26px; z-index: 3; color: #fff; }
+.tp-sheet.layout-band .tp-sheet-title { color: #fff; font-size: 1.9rem; margin: 0 0 10px; max-width: none; }
+.tp-sheet.layout-band .tp-sheet-author strong { color: #fff; }
+.tp-sheet.layout-band .tp-sheet-author em, .tp-sheet.layout-band .tp-sheet-meta { color: rgba(255,255,255,.75); }
+.tp-sheet.layout-band .tp-sheet-author { margin: 0; }
+
+/* 시네마 머리글: 흐린 사진 배경 띠 안에 사진 전체, 그 아래 띠에 제목 */
+.tp-sheet.layout-cine .tp-sheet-hero { background: #111; }
+.tp-sheet.layout-cine .tp-sheet-hero img { object-fit: contain; object-position: 50% 50%; height: calc(100% - var(--tp-pad, 0px)); }
+.tp-sheet.layout-cine .tp-fx-layer { bottom: auto; height: calc(100% - var(--tp-pad, 0px)); }
+.tp-sheet.layout-cine .tp-sheet-band-shade { background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,0) 38%); }
+.tp-sheet.layout-cine .tp-sheet-headline { position: absolute; left: 44px; right: 44px; bottom: 26px; z-index: 3; color: #fff; }
+.tp-sheet.layout-cine .tp-sheet-title { color: #fff; font-size: 1.8rem; margin: 0 0 10px; max-width: none; }
+.tp-sheet.layout-cine .tp-sheet-author strong { color: #fff; }
+.tp-sheet.layout-cine .tp-sheet-author em, .tp-sheet.layout-cine .tp-sheet-meta { color: rgba(255,255,255,.75); }
+.tp-sheet.layout-cine .tp-sheet-author { margin: 0; }
+/* 띠 포맷의 스마트 크롭: 자르는 위치(--tp-focal)로 사진이 부드럽게 움직인다 */
+.tp-sheet.layout-band .tp-sheet-hero img, .tp-sheet.layout-band .tp-fx-line { object-position: 50% var(--tp-focal, 50%); transition: object-position .9s cubic-bezier(.23,1,.32,1); }
+/* 사진 칸 안으로 옮겨진 제목 묶음의 작성자 로고는 "사진 칸 안 이미지는 꽉 차게" 규칙에서 빼서 40px 동그라미로 둔다 */
+.tp-sheet .tp-sheet-hero .tp-sheet-headline .tp-sheet-author img { position: static !important; inset: auto !important; width: 40px !important; height: 40px !important; object-fit: cover !important; opacity: 1 !important; filter: none !important; transform: none !important; transition: none !important; mask-image: none !important; -webkit-mask-image: none !important; }
+@media (prefers-reduced-transparency: reduce) { .tp-sheet-scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: #000; } }
+
+/* v6(D안): 본문 자리에 진짜 글 페이지를 넣는다. 안쪽 높이는 스크립트가 글 길이에 맞춰 주므로 iframe 자체는 스크롤하지 않는다 */
+.tp-sheet-body { padding: 0 !important; }
+.tp-sheet-content { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+.tp-sheet-more { display: none !important; }
+.tp-sheet-frame { display: block; width: 100%; height: 520px; border: 0; background: #fff; opacity: 0; transition: opacity .3s ease; }
+.tp-sheet-frame.is-shown { opacity: 1; }
+.tp-sheet-body > .tp-sheet-headline { padding: 20px 20px 6px; }
+@media (min-width: 720px) { .tp-sheet-body > .tp-sheet-headline { padding: 30px 44px 6px; } }
+.tp-sheet-progress { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: #333; transform-origin: 0 50%; transform: scaleX(0); z-index: 4; pointer-events: none; }
+@media (max-width: 719px) {
+  /* 폰에서는 화면 전체를 흐리는 필터와 큰 그림자가 펼치는 동안 매 프레임 다시 그려져 무겁다 → 단순한 어두운 막으로 */
+  .tp-sheet-scrim { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(10,10,12,.55) !important; }
+  .tp-sheet-panel { box-shadow: none !important; }
+}
+/* X는 사실상 뒤로 가기이므로 크고 또렷하게: 흰 바탕+그림자라 사진 위에서도 흰 글 위에서도 보인다 */
+.tp-sheet .tp-sheet-close { width: 46px !important; height: 46px !important; top: max(14px, env(safe-area-inset-top)) !important; right: 14px !important; background: #fff !important; color: #111 !important; font-size: 20px !important; font-weight: 700; box-shadow: 0 2px 12px rgba(0,0,0,.32), 0 0 0 1px rgba(0,0,0,.08); -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.tp-sheet .tp-sheet-close:active { transform: scale(.92); }
+/* 상단 꽉 채우기: 상태바 영역(안전 영역)이 생기면 사진이 그 뒤까지 이어지므로, 사진 위에 얹힌 것들을 그 아래로 내린다 */
+.tp-sheet-hero { box-sizing: content-box !important; }
+.tp-sheet .tp-sheet-cat { top: calc(env(safe-area-inset-top, 0px) + 18px) !important; }
+.tp-sheet-progress { top: env(safe-area-inset-top, 0px); }
+.tp-sheet-topshade { display: none; position: absolute; top: 0; left: 0; right: 0; height: calc(env(safe-area-inset-top, 0px) + 36px); background: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,0)); z-index: 1; pointer-events: none; }
+.tp-sheet.has-safe-top .tp-sheet-topshade { display: block; }
+.tp-sheet-loading { padding: 40px 20px; text-align: center; color: #999; font-size: 14px; }
+
+/* PC 폰 스타일: 좁은 패널 안에서는 폰과 같은 글자 크기·여백을 쓴다 */
+@media (min-width: 720px) {
+  .tp-sheet.layout-stack .tp-sheet-title { font-size: 1.4rem; }
+  .tp-sheet.layout-stack .tp-sheet-body > .tp-sheet-headline { padding: 20px 20px 6px; }
+}
+
+ /* PC 배치 옵션은 더 이상 쓰지 않는다 */
+
+.tp-sheet-hero { touch-action: pan-y !important; } /* 사진 위에서도 세로 스크롤이 먹도록(닫기 끌기는 touch 이벤트가 따로 가려낸다) */
+@media (max-width: 719px) { }
