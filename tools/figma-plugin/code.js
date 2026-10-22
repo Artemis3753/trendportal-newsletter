@@ -49,6 +49,39 @@ function solidColor(n) {
   return `#${hex(f.color.r)}${hex(f.color.g)}${hex(f.color.b)}`;
 }
 
+// 어두운 막: 글자가 잘 읽히게 사진 위·아래에 깐 "검정 → 투명" 그라데이션. 글자를 지운 카드에는 쓸모없는 검은 띠로 남는다(10/22 사용자: "어두운 그라데이션만 없어지면 돼").
+// 색이 있는 그라데이션(배경 등)은 건드리지 않도록 "검정에 가까운 색에서 투명으로" 사라지는 것만 막으로 본다
+// ---- overlay-rule-begin
+const DARK = 0.22; // r·g·b가 모두 이 값 이하면 "검정에 가깝다"
+function isDarkFadePaint(p) {
+  if (!p || p.visible === false || p.type !== 'GRADIENT_LINEAR' || !p.gradientStops || p.gradientStops.length < 2) return false;
+  const op = p.opacity === undefined ? 1 : p.opacity;
+  let strong = false, clear = false;
+  for (const st of p.gradientStops) {
+    const a = (st.color.a === undefined ? 1 : st.color.a) * op;
+    const dark = st.color.r <= DARK && st.color.g <= DARK && st.color.b <= DARK;
+    if (a > 0.05 && !dark) return false; // 눈에 보이는 색이 검정이 아니면 막이 아니다
+    if (a >= 0.35 && dark) strong = true; // 어딘가는 꽤 진한 검정이고
+    if (a <= 0.15) clear = true;          // 어딘가는 거의 투명해야(= 사라지는 막) 한다
+  }
+  return strong && clear;
+}
+const paintsOf = n => ('fills' in n && Array.isArray(n.fills)) ? n.fills : []; // figma.mixed는 배열이 아니라서 빈 목록이 된다
+// 복사본에서 어두운 막을 없앤다. 막만 칠한 레이어는 통째로 숨기고, 사진과 한 레이어에 같이 칠해져 있으면 막 칠만 뺀다.
+// 작은 장식(버튼 그림자 등)을 건드리지 않도록 카드 폭의 40%·높이의 8% 이상인 레이어만 본다. 없앤 것의 목록을 돌려준다
+function stripDarkFades(root) {
+  const removed = [];
+  root.findAll(n => n.visible !== false && n.type !== 'TEXT' && n.width >= root.width * 0.4 && n.height >= root.height * 0.08).forEach(n => {
+    const fills = paintsOf(n);
+    if (!fills.some(isDarkFadePaint)) return;
+    const rest = fills.filter(p => p.visible !== false && !isDarkFadePaint(p));
+    if (rest.length === 0) { n.visible = false; removed.push({ layer: n.name, how: 'layer' }); }
+    else { n.fills = fills.filter(p => !isDarkFadePaint(p)); removed.push({ layer: n.name, how: 'paint' }); }
+  });
+  return removed;
+}
+// ---- overlay-rule-end
+
 function readFrame(fr) {
   const nodes = [];
   fr.children.forEach(c => walk(c, nodes));
@@ -112,13 +145,14 @@ const say = text => figma.ui.postMessage({ type: 'progress', text: text });
 
 figma.ui.onmessage = async msg => {
   if (msg.type !== 'scan') return;
+  const dropDark = msg.dropDark !== false; // 기본 켬: 어두운 그라데이션(검은 띠) 지우기
   const got = pickGroup();
   if (got.error) { figma.ui.postMessage({ type: 'error', error: got.error }); return; }
   const g = got.group;
   const frames = got.frames.map(readFrame);
   const scan = {
     tool: 'transis-cardnews-reader',
-    version: 3, // 3 = 카드마다 composite(글자 뺀 카드 JPG), 사진 원본은 표지 것만, 표지 export는 JPG
+    version: 3, // 3 = 카드마다 composite(글자 뺀 카드 JPG), 사진 원본은 표지 것만, 표지 export는 JPG. overlaysHidden은 카드마다 선택적으로 붙는 참고 기록
 
     scannedAt: new Date().toISOString(),
     file: figma.fileKey || null,  // 개발용 플러그인에서만 채워진다 (manifest의 enablePrivatePluginApi)
@@ -166,6 +200,17 @@ figma.ui.onmessage = async msg => {
       const copy = fr.clone();
       try {
         copy.findAll(n => n.type === 'TEXT').forEach(t => { t.visible = false; });
+        // 글자와 같이 쓸모없어진 어두운 막도 지운다. 무엇을 지웠는지 scan.json에 남겨서 나중에 눈으로 확인할 수 있게 한다
+        // 먼저 카드 안의 그라데이션 레이어를 참고용으로 적어 둔다(검은 띠가 안 지워질 때 어떤 구조인지 알려고)
+        const seen = copy.findAll(n => n.type !== 'TEXT' && paintsOf(n).some(p => p.type && p.type.indexOf('GRADIENT') === 0));
+        if (seen.length) {
+          frames[i].gradientLayers = seen.slice(0, 8).map(n => ({ layer: n.name, type: n.type, w: Math.round(n.width), h: Math.round(n.height),
+            fills: paintsOf(n).map(p => p.type + (isDarkFadePaint(p) ? '(어두운 막)' : '')) }));
+        }
+        if (dropDark) {
+          const gone = stripDarkFades(copy);
+          if (gone.length) frames[i].overlaysHidden = gone;
+        }
         // 1080px짜리 옛 카드도 사이트 사진이 흐리지 않게 가로 2000px 이상으로
         const constraint = fr.width < 2000 ? { type: 'WIDTH', value: 2000 } : { type: 'SCALE', value: 1 };
         const bytes = await copy.exportAsync({ format: 'JPG', constraint: constraint });

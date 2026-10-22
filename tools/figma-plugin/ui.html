@@ -16,6 +16,7 @@
 <h1>카드뉴스 읽기</h1>
 <p>카드 묶음을 선택하고 읽기를 누르면, 카드 글자·글자 뺀 카드 그림·표지를 zip 하나로 내려받아요.</p>
 <div id="sel">선택한 게 없어요</div>
+<label style="display:block;margin:0 0 8px"><input type="checkbox" id="dark" checked> 어두운 그라데이션(사진 아래 검은 띠) 지우기</label>
 <button id="scan" disabled>선택한 묶음 읽기</button>
 <a class="dl" id="dl" hidden>zip 내려받기</a>
 <div id="out"></div>
@@ -90,7 +91,7 @@ $('scan').onclick = () => {
   $('scan').disabled = true;
   $('out').textContent = '읽는 중…';
   $('dl').hidden = true;
-  parent.postMessage({ pluginMessage: { type: 'scan' } }, '*');
+  parent.postMessage({ pluginMessage: { type: 'scan', dropDark: $('dark').checked } }, '*');
 };
 
 onmessage = async e => {
@@ -125,7 +126,8 @@ onmessage = async e => {
     const imgs = s.frames.reduce((n, f) => n + f.images.length, 0);
     const mb = (blob.size / 1048576).toFixed(1);
     const cuts = files.filter(f => f.name.startsWith('figma/composites/')).length;
-    $('out').textContent = `카드 ${s.frames.length}장 · 글자 ${texts}개 · 사진 레이어 ${imgs}개 · 글자 뺀 카드 ${cuts}장 + 표지 + 미리보기 · ${mb}MB`;
+    const dark = s.frames.reduce((n, f) => n + (f.overlaysHidden ? f.overlaysHidden.length : 0), 0);
+    $('out').textContent = `카드 ${s.frames.length}장 · 글자 ${texts}개 · 사진 레이어 ${imgs}개 · 글자 뺀 카드 ${cuts}장 + 표지 + 미리보기 · 어두운 막 ${dark}개 지움 · ${mb}MB`;
     $('scan').disabled = false;
   }
 };
