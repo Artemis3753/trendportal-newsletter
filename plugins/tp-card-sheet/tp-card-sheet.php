@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Card Sheet
  * Description: 폰에서 목록 카드를 누르면 그 자리에서 글이 펼쳐지는 시트(눌림 반응·끌어 닫기·뒤로 가기 포함). 시트 안은 진짜 글 페이지(iframe)라서 댓글·카톡·관련 글·구독·조회수가 그대로 동작한다. PC(폭 720px 이상)에서는 아무것도 하지 않고 카드가 원래 링크대로 글 페이지로 이동한다. 이 플러그인을 끄면 모든 것이 예전으로 돌아간다.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Trendportal
  */
 
@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'TP_CARD_SHEET_VERSION', '1.0.0' );
+define( 'TP_CARD_SHEET_VERSION', '1.0.1' );
 
 /*
  * 카드 목록이 있는 화면(홈·분류·검색)에서만 불러온다. 글 페이지에는 불필요하다.

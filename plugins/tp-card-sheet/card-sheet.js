@@ -599,6 +599,8 @@
 				'body.single-post::before { display: none !important; }' +
 				'html, body { background: #fff !important; overflow: hidden !important; height: auto !important; min-height: 0 !important; }' +
 				'main { margin-top: 0 !important; }' +
+				// 로그인한 관리자에게는 워드프레스가 관리 막대 높이(32·46px)만큼 html 위쪽에 여백을 넣는다. 막대는 숨겨도 여백은 남아 본문 위에 빈 칸이 생기므로 없앤다
+				'html { margin-top: 0 !important; }' +
 				'.wp-site-blocks { padding-top: 0 !important; }';
 			var decorated = false, coverDone = false, frameStarted = false, ro = null, tries = 0;
 			function fit(d) {
