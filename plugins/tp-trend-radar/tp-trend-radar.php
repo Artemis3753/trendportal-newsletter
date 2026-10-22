@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.17.1
+ * Version: 1.18.0
  * Author: Trendportal
  */
 
@@ -68,7 +68,7 @@ function tp_radar_lang( $orig ) {
  * 고른 근거(10/20, 사용자가 추천안 선택 + 밈·스포츠 2곳 → 오후에 불안정한 유튜브 2·레딧 2곳을 빼서 15곳): 인스타 892개에서 화제가 된 비율
  * (하트 공개 또는 저장 1,000회+)이 밈 59%·웹·앱 54%·플랫폼 40%·트렌드 39%·스포츠 37%, 국내 브랜드 뉴스 17%.
  * 근거 보고서: TP_RADAR_REPORT. 나라는 사이트 소개·약관으로 확인한 운영사 소재지.
- * 읽는 법: rss(RSS·Atom) · reddit(소개된 사이트 주소를 링크로) · gtrends(검색어 + 관련 기사) · wpjson · youtube(채널 id).
+ * 읽는 법: rss(RSS·Atom) · reddit(소개된 사이트 주소를 링크로) · gtrends(검색어 + 관련 기사) · wpjson · youtube(채널 id) · sitemap(구글 뉴스 사이트맵).
  * 읽는 법이 ''이면 읽지 않는다 — 뺀 정보원도 지난 리포트의 알약 색 때문에 남겨 둔다.
  */
 const TP_RADAR_SOURCES = array(
@@ -106,6 +106,10 @@ const TP_RADAR_SOURCES = array(
 	'매드타임스'             => array( 'kr', 'kr', 'rss', 'https://www.madtimes.co.kr/rss/allArticle.xml' ),
 	// 10/20 밤 추가 — 콜라보·한정판 드롭. 한국어판이라 번역 토큰이 안 든다
 	'Hypebeast KR'          => array( 'kr', 'kr', 'rss', 'https://hypebeast.kr/feed' ),
+	// 10/22 추가 — 하입비스트 코리아 론칭 소식도 낸 한국 스트리트·컬처 웹 매거진(운영: 한국). RSS가 없어(/feed·/rss·/rss.xml 전부 404)
+	// 구글 뉴스 사이트맵을 읽는다. 사이트맵에는 최근 2일 10개만 있지만 받을 때마다 보관함(15일)에 쌓이니 자주 열수록 길어진다.
+	// robots.txt는 /admin/만 막음. 사진은 사이트맵에 없어 탭이 화면에 보일 때 og:image로 찾는다
+	'아이즈매거진'           => array( 'kr', 'kr', 'sitemap', 'https://www.eyesmag.com/sitemap/sitemap-news.xml.gz' ),
 	// 10/20 밤 추가 — 화제에 숟가락 얹은 브랜드 패러디를 국내 언론이 묶어 쓴 기사를 낚는 그물.
 	// 시험 때 테슬라 로드스터 패러디 기사 8개가 잡혔다. 링크는 구글 뉴스 주소라 특파원이 본문은 못 읽는다(radar.py)
 	'구글 뉴스'              => array( 'kr', 'kr', 'rss', 'https://news.google.com/rss/search?q=%28%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%94%EC%9D%B4%EB%9F%B4+%EA%B4%91%EA%B3%A0%22+OR+%22%EB%B0%88+%EB%A7%88%EC%BC%80%ED%8C%85%22+OR+%22%ED%8C%A8%EB%9F%AC%EB%94%94+%EC%98%81%EC%83%81%22+OR+%22%EA%B2%8C%EC%9E%84+%EC%BD%9C%EB%9D%BC%EB%B3%B4%22+OR+%22%EC%88%9F%EA%B0%80%EB%9D%BD+%EC%96%B9%EA%B8%B0%22%29+when%3A7d&hl=ko&gl=KR&ceid=KR:ko' ),
@@ -250,10 +254,23 @@ function tp_radar_parse( $kind, $body ) {
 		}
 		return $out;
 	}
+	// .gz 주소는 서버가 Content-Encoding으로 풀어 주기도, 압축 파일 그대로 주기도 한다 → 압축 표식(1f 8b)이 남아 있으면 직접 푼다
+	if ( 'sitemap' === $kind && 0 === strpos( $body, "\x1f\x8b" ) ) {
+		$body = (string) gzdecode( $body );
+	}
 	$prev = libxml_use_internal_errors( true );
 	$x    = simplexml_load_string( $body );
 	libxml_use_internal_errors( $prev );
 	if ( ! $x ) {
+		return $out;
+	}
+	if ( 'sitemap' === $kind ) {
+		// 구글 뉴스 사이트맵: <url><loc> + <news:news> 안에 발행 시각·제목. 요약·사진은 없다
+		foreach ( $x->children( 'http://www.sitemaps.org/schemas/sitemap/0.9' )->url as $u ) {
+			$loc   = (string) $u->loc;
+			$news  = $u->children( 'http://www.google.com/schemas/sitemap-news/0.9' )->news;
+			$out[] = array( (string) $news->title, $loc, tp_radar_when( (string) $news->publication_date ), '', '' );
+		}
 		return $out;
 	}
 	// RSS 2.0
