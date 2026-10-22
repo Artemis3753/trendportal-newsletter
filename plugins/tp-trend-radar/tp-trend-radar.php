@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.18.0
+ * Version: 1.18.1
  * Author: Trendportal
  */
 
@@ -1063,7 +1063,6 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-where { display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: 4px; color: #fff; font: 400 13px/1.45 "Do Hyeon", sans-serif; }
 .tprd-cap .tt { display: block; font: 400 17px/1.3 "Do Hyeon", sans-serif; color: #fff; text-decoration: none; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tprd-cap a.tt:hover { text-decoration: underline; }
-.tprd-reporter { position: absolute; top: 8px; right: 8px; width: 38px; height: 38px; border-radius: 50%; background: #fff; padding: 1px; }
 /* 리포트 카드: 넓은 화면(16:9) + 아래 원고 */
 .tprd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px 18px; align-items: start; }
 .tprd-card { position: relative; display: flex; flex-direction: column; background: var(--card); border-radius: 16px; box-shadow: 0 4px 16px rgba(59,47,42,.10); overflow: hidden; }
@@ -1232,7 +1231,6 @@ function tp_radar_feed_row( $k, $it, $state, $tr ) {
 <li data-g="<?php echo esc_attr( TP_RADAR_SOURCES[ $it['source'] ][1] ?? '' ); ?>" data-w="<?php echo tp_radar_warm( $tr, $it['link'] ) ? '1' : '0'; ?>"><label for="tprd-f<?php echo (int) $k; ?>">
 <input type="checkbox" id="tprd-f<?php echo (int) $k; ?>" name="links[]" value="<?php echo esc_attr( $it['link'] ); ?>">
 <span class="thumb tprd-screen"<?php echo $need ? ' data-need="' . esc_attr( $it['link'] ) . '"' : ''; ?>><?php echo $img ? '<img class="ph" src="' . esc_url( $img ) . '" alt="" loading="lazy" referrerpolicy="no-referrer">' : ''; ?>
-<img class="tprd-reporter" src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">
 <span class="tprd-cap"><?php echo tp_radar_where( $it['source'] ); // phpcs:ignore -- 이미 이스케이프 ?><a class="tt" href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $ko ? $ko : $it['orig'] ); ?></a></span></span>
 <span class="bd">
 <span class="meta"><?php echo tp_radar_warm( $tr, $it['link'] ) ? '<span class="tprd-warm">🫶 사람 냄새</span> ' : ''; ?><?php echo esc_html( substr( $it['date'], 5 ) . ' · ' . tp_radar_ago( $it['t'] ) ); ?> 송출
