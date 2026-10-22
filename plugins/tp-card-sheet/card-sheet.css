@@ -156,14 +156,16 @@
 .tp-sheet-hero { touch-action: pan-y !important; } /* 사진 위에서도 세로 스크롤이 먹도록(닫기 끌기는 touch 이벤트가 따로 가려낸다) */
 @media (max-width: 719px) { }
 
-/* 목록 아래 페이지 이동(1 2 3 · 다음 페이지): 폰에서 촘촘해서 누르기 불편 → 원형 번호 + 알약 버튼, 눌리는 면 46px.
+/* 목록 아래 페이지 이동(1 2 3 · 이전/다음): 폰에서 촘촘해서 누르기 불편 → 원형 번호 + 알약 버튼, 눌리는 면 42px 이상.
+   이전·다음은 글자를 "이전"/"다음"으로 줄여서 2페이지(이전+번호+다음)도 폰 한 줄에 들어가게 한다.
    추가 CSS는 저장할 때 통째로 덮어쓰는 구조라 위험해서, 카드 시트와 같은 목록 화면에서만 불러오는 이 파일에 둔다. PC는 기존 모양 그대로 */
 @media (max-width: 719px) {
-  .wp-block-query-pagination { flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
-  .wp-block-query-pagination-numbers { display: flex; gap: 8px; }
-  .wp-block-query-pagination .page-numbers { display: grid; place-items: center; box-sizing: border-box; width: 46px; height: 46px; margin: 0; padding: 0; border-radius: 50%; background: #f1f1f1; color: #111; font-size: 18px; font-weight: 700; line-height: 1; text-decoration: none; }
+  .wp-block-query-pagination { flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; }
+  .wp-block-query-pagination-numbers { display: flex; gap: 6px; }
+  .wp-block-query-pagination .page-numbers { display: grid; place-items: center; box-sizing: border-box; width: 42px; height: 42px; margin: 0; padding: 0; border-radius: 50%; background: #f1f1f1; color: #111; font-size: 17px; font-weight: 700; line-height: 1; text-decoration: none; }
   .wp-block-query-pagination .page-numbers.current { background: #111; color: #fff; }
   .wp-block-query-pagination .page-numbers.dots { width: auto; background: none; }
-  .wp-block-query-pagination-next, .wp-block-query-pagination-previous { display: grid; place-items: center; box-sizing: border-box; height: 46px; margin: 0 0 0 6px; padding: 0 20px; border: 2px solid #111; border-radius: 999px; color: #111; font-size: 16px; font-weight: 700; line-height: 1; text-decoration: none; }
-  .wp-block-query-pagination-previous { margin: 0 6px 0 0; }
+  .wp-block-query-pagination-next, .wp-block-query-pagination-previous { display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 42px; margin: 0; padding: 0 16px; border: 2px solid #111; border-radius: 999px; color: #111; font-size: 0; font-weight: 700; line-height: 1; text-decoration: none; }
+  .wp-block-query-pagination-next::after { content: "다음"; font-size: 15px; }
+  .wp-block-query-pagination-previous::after { content: "이전"; font-size: 15px; }
 }
