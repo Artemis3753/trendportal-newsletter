@@ -27,6 +27,7 @@ Reference posts are on trendportal.kr as `/archives/<id>/`.
 - Instagram actions that do not work on the site change: `태그해주세요`, `DM 주세요` → `댓글로 남겨주세요`.
 - Series episode numbers are dropped, the series name stays: `[ 트포 인터뷰 제 8화 : … ]` → `[ 트포 인터뷰 : … ]`.
 - Fix only obvious typos. Names, brands, numbers, dates and quotes never change.
+- **Timeless wording** (10/22): the site is an archive, so a sentence that ties the post to the moment it was posted (`추석 맞이 무물을 올렸는데요`, `지금이 시험기간인 줄`) is rewritten to read without it, keeping the voice and the meaning. A keyword the post is actually about (an Olympics campaign, a Christmas ad) stays. Only that sentence changes, and each change is listed in "셰프가 손본 것" with both versions. Post 1311 is the first example.
 
 **Card text**
 - Paragraphs follow the card: a blank line on the card is a new paragraph. Do not split or join on your own.
