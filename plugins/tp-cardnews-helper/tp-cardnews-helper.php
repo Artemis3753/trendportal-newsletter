@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.25.2
+ * Version: 1.26.0
  * Author: Trendportal
  */
 
@@ -445,11 +445,121 @@ add_action(
 		if ( in_array( get_post_meta( $id, '_tp_cn_status', true ), array( 'working', 'revise', 'answered' ), true ) ) {
 			$fail( '셰프가 이 초안을 고치는 중이에요. 끝난 뒤에 발행해 주세요' );
 		}
-		$r = wp_update_post( array( 'ID' => $draft, 'post_status' => 'publish' ), true );
+		$args = array( 'ID' => $draft, 'post_status' => 'publish' );
+		if ( 'future' === get_post_status( $draft ) ) {
+			// 예약된 글을 지금 발행: 날짜가 미래로 남아 있으면 워드프레스가 다시 '예약'으로 되돌린다
+			$args['post_date']     = current_time( 'mysql' );
+			$args['post_date_gmt'] = current_time( 'mysql', true );
+			$args['edit_date']     = true;
+		}
+		$r = wp_update_post( $args, true );
 		if ( is_wp_error( $r ) ) {
 			$fail( '발행하지 못했어요: ' . $r->get_error_message() );
 		}
 		wp_safe_redirect( add_query_arg( 'tp_cn_info', '발행했어요! 사이트에 공개됐어요.', $back ) );
+		exit;
+	}
+);
+
+// ── 예약 발행 (1.26.0, 10/23 사용자) ─────────────────────────
+// 주간 글은 금요일 08:30에 인스타·뉴스레터와 같이 나가야 해서, 그 시각을 사람이 지키지 않아도 되게 한다.
+// 워드프레스 '예약'(post_status future)을 그대로 쓴다. 시각이 되면 워드프레스가 발행하고, 그때도 transition_post_status 훅이 zip을 지운다.
+/** 시각 칸의 기본값: 다가오는 금요일 08:30(사이트 시간대). 지금이 그 시각 5분 전 안쪽이면 다음 주 금요일. */
+function tp_cn_default_when() {
+	$now = new DateTimeImmutable( 'now', wp_timezone() );
+	$t   = $now->setTime( 8, 30 )->modify( '+' . ( ( 5 - (int) $now->format( 'N' ) + 7 ) % 7 ) . ' days' );
+	if ( $t->getTimestamp() < $now->getTimestamp() + 300 ) {
+		$t = $t->modify( '+7 days' );
+	}
+	return $t->format( 'Y-m-d\TH:i' );
+}
+
+/** '2026-10-23T08:30' → 예약을 건다. 돌려주는 값 = 성공하면 예약 시각의 타임스탬프, 아니면 WP_Error. */
+function tp_cn_schedule_post( $draft, $when ) {
+	if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', (string) $when ) ) {
+		return new WP_Error( 'when', '예약 날짜와 시각을 확인해 주세요' );
+	}
+	$at = date_create_immutable( $when, wp_timezone() );
+	if ( ! $at ) {
+		return new WP_Error( 'when', '예약 날짜와 시각을 확인해 주세요' );
+	}
+	if ( $at->getTimestamp() < time() + 300 ) {
+		return new WP_Error( 'when', '예약 시각은 지금부터 5분 뒤 이후로 골라 주세요' );
+	}
+	$r = wp_update_post(
+		array(
+			'ID'            => $draft,
+			'post_status'   => 'future',
+			'post_date'     => $at->format( 'Y-m-d H:i:s' ),
+			'post_date_gmt' => gmdate( 'Y-m-d H:i:s', $at->getTimestamp() ),
+			'edit_date'     => true,
+		),
+		true
+	);
+	if ( is_wp_error( $r ) ) {
+		return new WP_Error( 'save', '예약하지 못했어요: ' . $r->get_error_message() );
+	}
+	if ( 'future' !== get_post_status( $draft ) ) {
+		return new WP_Error( 'save', '예약이 걸리지 않았어요 (글 상태: ' . get_post_status( $draft ) . ')' );
+	}
+	return $at->getTimestamp();
+}
+
+add_action(
+	'admin_post_tp_cn_schedule',
+	function () {
+		$id = (int) ( $_POST['order'] ?? 0 );
+		check_admin_referer( 'tp_cn_schedule_' . $id );
+		$back  = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		$draft = (int) get_post_meta( $id, '_tp_cn_post', true );
+		$fail  = function ( $msg ) use ( $back ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( $msg ), $back ) );
+			exit;
+		};
+		if ( TP_CN_TYPE !== get_post_type( $id ) || ! $draft || 'post' !== get_post_type( $draft ) ) {
+			$fail( '예약할 초안을 찾지 못했어요' );
+		}
+		if ( ! current_user_can( 'publish_post', $draft ) ) {
+			$fail( '이 계정은 글을 발행할 권한이 없어요' );
+		}
+		if ( 'publish' === get_post_status( $draft ) ) {
+			$fail( '이미 발행된 글이에요' );
+		}
+		if ( in_array( get_post_meta( $id, '_tp_cn_status', true ), array( 'working', 'revise', 'answered' ), true ) ) {
+			$fail( '셰프가 이 초안을 고치는 중이에요. 끝난 뒤에 예약해 주세요' );
+		}
+		$ts = tp_cn_schedule_post( $draft, sanitize_text_field( wp_unslash( $_POST['when'] ?? '' ) ) );
+		if ( is_wp_error( $ts ) ) {
+			$fail( $ts->get_error_message() );
+		}
+		wp_safe_redirect( add_query_arg( 'tp_cn_info', rawurlencode( '⏰ 예약했어요! ' . wp_date( 'n월 j일 H:i', $ts ) . '에 사이트에 공개돼요.' ), $back ) );
+		exit;
+	}
+);
+
+// 예약 취소: 초안으로 돌려 둔다(예약 시각은 그대로 남아 있어도 초안이라 공개되지 않는다)
+add_action(
+	'admin_post_tp_cn_unschedule',
+	function () {
+		$id = (int) ( $_POST['order'] ?? 0 );
+		check_admin_referer( 'tp_cn_unschedule_' . $id );
+		$back  = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		$draft = (int) get_post_meta( $id, '_tp_cn_post', true );
+		$fail  = function ( $msg ) use ( $back ) {
+			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( $msg ), $back ) );
+			exit;
+		};
+		if ( TP_CN_TYPE !== get_post_type( $id ) || ! $draft || 'future' !== get_post_status( $draft ) ) {
+			$fail( '예약된 글이 아니에요' );
+		}
+		if ( ! current_user_can( 'publish_post', $draft ) ) {
+			$fail( '이 계정은 글을 발행할 권한이 없어요' );
+		}
+		$r = wp_update_post( array( 'ID' => $draft, 'post_status' => 'draft' ), true );
+		if ( is_wp_error( $r ) ) {
+			$fail( '예약을 취소하지 못했어요: ' . $r->get_error_message() );
+		}
+		wp_safe_redirect( add_query_arg( 'tp_cn_info', rawurlencode( '예약을 취소했어요. 초안으로 돌아갔어요.' ), $back ) );
 		exit;
 	}
 );
@@ -552,6 +662,9 @@ add_action(
 		}
 		$draft = get_post( (int) get_post_meta( $id, '_tp_cn_post', true ) );
 		$note  = '';
+		if ( $draft && 'future' === $draft->post_status ) {
+			$say( 'err', '예약된 글이 있어서 지울 수 없어요. 먼저 예약을 취소해 주세요 (지우면 예약된 글도 같이 지워져요)' );
+		}
 		if ( $draft && 'post' === $draft->post_type && 'publish' !== $draft->post_status ) {
 			// 셰프가 올린 사진 = 이 글이 쓰는 사진 중 파일 이름이 "order-<주문 번호>-"로 시작하는 것(cardnews.py upload가 붙이는 이름).
 			// 다른 글과 같이 쓰는 사진일 수 있는 나머지는 건드리지 않는다.
@@ -790,6 +903,7 @@ function tp_cn_order( $post, $with_state = false ) {
 		'post_id' => $draft ?: null,
 		// 초안이 발행됐는지(탭에 발행 버튼 대신 '글 보기'를 보이려고). 지워진 초안이면 빈 값
 		'post_status' => $draft ? (string) get_post_status( $draft ) : '',
+		'post_date'   => $draft ? (string) get_post_field( 'post_date', $draft ) : '', // 사이트 시각 그대로(예약 시각 표시용)
 		'title'   => get_post_meta( $id, '_tp_cn_title', true ),
 		'changes' => is_array( $changes ) ? $changes : array(),
 		'error'   => get_post_meta( $id, '_tp_cn_error', true ),
@@ -1321,6 +1435,11 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-publish { margin: 0; }
 .tpcn-publish button { padding: 5px 14px; border: 0; border-radius: 999px; background: var(--tomato); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 #b8401d; }
 .tpcn-publish button:hover { background: #ec6a43; }
+.tpcn-sched, .tpcn-unsched { margin: 0; display: inline-flex; gap: 6px; align-items: center; }
+.tpcn-sched input { padding: 3px 10px; border: 1.5px solid var(--line); border-radius: 999px; font: inherit; font-size: 12.5px; background: #fff; }
+.tpcn-sched button, .tpcn-unsched button { padding: 5px 14px; border: 0; border-radius: 999px; background: #4a6fa5; color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 #34507a; }
+.tpcn-unsched button { background: #fff; color: var(--ink); box-shadow: 0 2px 0 var(--line); }
+.tpcn-sched-on { padding: 5px 12px; border-radius: 999px; background: #e8f0fb; color: #2d4a73; font-weight: 700; font-size: 12.5px; }
 .tpcn-field label.tpcn-saved { display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
 .tpcn-saved-btn { margin: 0; }
 .tpcn-more { display: block; margin: 14px auto 0; padding: 10px 16px; max-width: 260px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; color: var(--ink); text-align: center; text-decoration: none; font-weight: 700; box-shadow: 3px 3px 0 var(--ink); }
@@ -1393,7 +1512,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-no { width: 48px; height: 48px; min-width: 48px; border-radius: 50%; border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); transform: rotate(-8deg); font-size: 16px; }
 .tpcn .tpcn-chip { border: 2px solid currentColor; padding: 2px 10px; }
 .tpcn .tpcn-chip.is-pub { border-color: var(--ink); }
-.tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-saved-btn button, .tpcn .tpcn-revise button, .tpcn .tpcn-recall button { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+.tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-sched button, .tpcn .tpcn-unsched button, .tpcn .tpcn-saved-btn button, .tpcn .tpcn-revise button, .tpcn .tpcn-recall button { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
 .tpcn .tpcn-check { border: 2px solid var(--ink); box-shadow: 3px 3px 0 #f2cf7c; background: #fff; }
 /* 손본 것 강조(10/18 사용자, 시안 1018-10 1 색 띠): 노란 상자·버터색 카드 위에서 확인 항목이 묻혀서,
    확인 항목은 어디서든(발행 전 상자·발행 뒤 목록·수정 기록) 한 줄씩 색 띠 + 왼쪽 굵은 선, 일반 기록은 흐린 회색으로 물린다 */
@@ -1616,7 +1735,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				<h3><?php // 주문 종류는 모든 주문에 붙인다(10/17 사용자). 1.8.0 전 주문은 kind가 없어 카드뉴스로 나온다 ?><?php if ( 'interview' === $o['kind'] ) : ?><span class="tpcn-tag is-iv">🎤 인터뷰 · <?php echo esc_html( TP_CN_LAYOUTS[ $o['layout'] ] ?? '형식 미정' ); ?></span><?php elseif ( 'ad' === $o['kind'] ) : ?><span class="tpcn-tag is-sponsor">📢 광고</span><?php elseif ( 'newsletter' === $o['kind'] ) : ?><span class="tpcn-tag is-nl">📮 뉴스레터</span><?php else : ?><span class="tpcn-tag">📰 카드뉴스</span><?php endif; ?><?php echo esc_html( $o['group'] ); ?><?php if ( $o['finished'] > $u['seen'] ) : ?> <span class="tpcn-fresh">방금 나왔어요</span><?php endif; ?></h3>
 				<p class="tpcn-when"><?php echo esc_html( $fmt( $o['created'] ) ); ?> 주문</p>
 			</div>
-			<span class="tpcn-chip<?php echo $pub ? ' is-pub' : ''; ?>"><?php echo esc_html( $pub ? '발행됨' : TP_CN_STATUS[ $s ] ); ?></span>
+			<span class="tpcn-chip<?php echo $pub ? ' is-pub' : ''; ?>"><?php echo esc_html( $pub ? '발행됨' : ( ( 'done' === $s && 'future' === $o['post_status'] ) ? '예약됨' : TP_CN_STATUS[ $s ] ) ); ?></span>
 			<div class="tpcn-body">
 			<?php if ( 'new' === $s ) : ?>
 				<?php if ( null === tp_cn_recall_reason( $o, $u['now'] ) ) : // 초인종이 실패했으면 "곧 가져가요"는 틀린 말이라 아래 이유만 ?>
@@ -1662,13 +1781,32 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 					<a class="main" href="<?php echo esc_url( get_permalink( (int) $o['post_id'] ) ); ?>" target="_blank" rel="noopener">✅ 발행됨 · 글 보기</a>
 					<?php else : ?>
 					<a class="main" href="<?php echo esc_url( home_url( '/?p=' . (int) $o['post_id'] . '&preview=true' ) ); ?>" target="_blank" rel="noopener">미리보기</a>
+					<?php $sched = 'future' === $o['post_status']; // 1.26.0: 예약 중인 글 ?>
+					<?php if ( $sched ) : ?>
+					<span class="tpcn-sched-on">⏰ 예약됨 · <?php echo esc_html( mysql2date( 'n월 j일 H:i', $o['post_date'] ) ); ?> 공개</span>
+					<form class="tpcn-unsched" method="post" action="<?php echo esc_url( $u['action'] ); ?>" onsubmit="return confirm('예약을 취소할까요? 초안으로 돌아가요.');">
+						<input type="hidden" name="action" value="tp_cn_unschedule">
+						<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+						<?php wp_nonce_field( 'tp_cn_unschedule_' . (int) $o['id'] ); ?>
+						<button type="submit">예약 취소</button>
+					</form>
+					<?php endif; ?>
 					<?php // 10/18 사용자: 편집기를 거치지 않고 탭에서 바로 발행. 누르기 전에 한 번 묻는다 ?>
-					<form class="tpcn-publish" method="post" action="<?php echo esc_url( $u['action'] ); ?>" onsubmit="return confirm('이 초안을 사이트에 발행할까요? 발행하면 바로 공개돼요.');">
+					<form class="tpcn-publish" method="post" action="<?php echo esc_url( $u['action'] ); ?>" onsubmit="return confirm('<?php echo $sched ? '예약을 건너뛰고 지금 발행할까요? 바로 공개돼요.' : '이 초안을 사이트에 발행할까요? 발행하면 바로 공개돼요.'; ?>');">
 						<input type="hidden" name="action" value="tp_cn_publish">
 						<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
 						<?php wp_nonce_field( 'tp_cn_publish_' . (int) $o['id'] ); ?>
-						<button type="submit">🚀 발행</button>
+						<button type="submit"><?php echo $sched ? '🚀 지금 발행' : '🚀 발행'; ?></button>
 					</form>
+					<?php if ( ! $sched ) : // 10/23 사용자: 금요일 08:30 같은 시각에 자동으로 공개. 시각 칸은 다가오는 금요일 08:30으로 채워 둔다 ?>
+					<form class="tpcn-sched" method="post" action="<?php echo esc_url( $u['action'] ); ?>" onsubmit="return confirm('선택한 시각에 사이트에 자동으로 공개할까요?');">
+						<input type="hidden" name="action" value="tp_cn_schedule">
+						<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+						<?php wp_nonce_field( 'tp_cn_schedule_' . (int) $o['id'] ); ?>
+						<input type="datetime-local" name="when" required value="<?php echo esc_attr( tp_cn_default_when() ); ?>" aria-label="예약 시각">
+						<button type="submit">⏰ 예약 발행</button>
+					</form>
+					<?php endif; ?>
 					<?php endif; ?>
 					<?php if ( 'newsletter' !== $o['kind'] ) : // 발행 뒤에 1,000을 넘는 글이 많아서 발행 전·후 모두 누를 수 있게 ?>
 					<form class="tpcn-saved-btn<?php echo $o['saved'] ? ' is-on' : ''; ?>" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
@@ -1687,7 +1825,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				<?php // 뉴스레터: 스티비 HTML 편집기에 붙여 넣을 HTML을 복사 + 메일 모양 미리보기(스크립트 막은 iframe) ?>
 				<div class="tpcn-nlbox">
 					<button type="button" class="tpcn-nl-copy" data-src="tpcn-nlsrc-<?php echo (int) $o['id']; ?>">📋 스티비 HTML 복사</button>
-					<span class="tpcn-nl-note">사이트 주간 글은 금요일 08:30, 인스타·뉴스레터와 같이 발행해 주세요</span>
+					<span class="tpcn-nl-note">사이트 주간 글은 금요일 08:30, 인스타·뉴스레터와 같이 발행해 주세요 (⏰ 예약 발행도 돼요)</span>
 					<textarea id="tpcn-nlsrc-<?php echo (int) $o['id']; ?>" hidden readonly><?php echo esc_textarea( $nl ); ?></textarea>
 					<details class="tpcn-how">
 						<summary>📮 뉴스레터 미리보기</summary>
