@@ -132,7 +132,10 @@
   .tp-sheet-panel { box-shadow: none !important; }
 }
 /* X는 사실상 뒤로 가기이므로 크고 또렷하게: 흰 바탕+그림자라 사진 위에서도 흰 글 위에서도 보인다 */
-.tp-sheet .tp-sheet-close { width: 46px !important; height: 46px !important; top: max(14px, env(safe-area-inset-top)) !important; right: 14px !important; background: #fff !important; color: #111 !important; font-size: 20px !important; font-weight: 700; box-shadow: 0 2px 12px rgba(0,0,0,.32), 0 0 0 1px rgba(0,0,0,.08); -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.tp-sheet .tp-sheet-close { width: 32px !important; height: 32px !important; top: max(14px, env(safe-area-inset-top)) !important; right: 14px !important; display: grid; place-items: center; padding: 0; background: rgba(255,255,255,.82) !important; color: #333 !important; box-shadow: none; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+/* 눈에 보이는 크기는 작아도 누르는 영역은 44px로 유지 */
+.tp-sheet .tp-sheet-close::before { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+.tp-sheet .tp-sheet-close svg { display: block; }
 .tp-sheet .tp-sheet-close:active { transform: scale(.92); }
 /* 상단 꽉 채우기: 상태바 영역(안전 영역)이 생기면 사진이 그 뒤까지 이어지므로, 사진 위에 얹힌 것들을 그 아래로 내린다 */
 .tp-sheet-hero { box-sizing: content-box !important; }
@@ -152,3 +155,15 @@
 
 .tp-sheet-hero { touch-action: pan-y !important; } /* 사진 위에서도 세로 스크롤이 먹도록(닫기 끌기는 touch 이벤트가 따로 가려낸다) */
 @media (max-width: 719px) { }
+
+/* 목록 아래 페이지 이동(1 2 3 · 다음 페이지): 폰에서 촘촘해서 누르기 불편 → 원형 번호 + 알약 버튼, 눌리는 면 46px.
+   추가 CSS는 저장할 때 통째로 덮어쓰는 구조라 위험해서, 카드 시트와 같은 목록 화면에서만 불러오는 이 파일에 둔다. PC는 기존 모양 그대로 */
+@media (max-width: 719px) {
+  .wp-block-query-pagination { flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
+  .wp-block-query-pagination-numbers { display: flex; gap: 8px; }
+  .wp-block-query-pagination .page-numbers { display: grid; place-items: center; box-sizing: border-box; width: 46px; height: 46px; margin: 0; padding: 0; border-radius: 50%; background: #f1f1f1; color: #111; font-size: 18px; font-weight: 700; line-height: 1; text-decoration: none; }
+  .wp-block-query-pagination .page-numbers.current { background: #111; color: #fff; }
+  .wp-block-query-pagination .page-numbers.dots { width: auto; background: none; }
+  .wp-block-query-pagination-next, .wp-block-query-pagination-previous { display: grid; place-items: center; box-sizing: border-box; height: 46px; margin: 0 0 0 6px; padding: 0 20px; border: 2px solid #111; border-radius: 999px; color: #111; font-size: 16px; font-weight: 700; line-height: 1; text-decoration: none; }
+  .wp-block-query-pagination-previous { margin: 0 6px 0 0; }
+}

@@ -300,7 +300,7 @@
 				'<div class="tp-sheet-body"><div class="tp-sheet-headline"><h2 class="tp-sheet-title">' + esc(it.title) + '</h2>' + byline + '</div>' +
 				'<div class="wp-block-post-content entry-content tp-sheet-content"><p>불러오는 중…</p></div>' +
 				'<a class="tp-sheet-more" href="' + esc(it.href) + '">글 전체 보기 →</a></div></div>' +
-				'<button type="button" class="tp-sheet-close" aria-label="닫기">\u2715</button></div></div>';
+				'<button type="button" class="tp-sheet-close" aria-label="닫기"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M4 4l12 12M16 4L4 16"/></svg></button></div></div>';
 			var scrim = root.querySelector('.tp-sheet-scrim');
 			var panel = root.querySelector('.tp-sheet-panel');
 			var hero = root.querySelector('.tp-sheet-hero');
@@ -601,6 +601,8 @@
 				'main { margin-top: 0 !important; }' +
 				// 로그인한 관리자에게는 워드프레스가 관리 막대 높이(32·46px)만큼 html 위쪽에 여백을 넣는다. 막대는 숨겨도 여백은 남아 본문 위에 빈 칸이 생기므로 없앤다
 				'html { margin-top: 0 !important; }' +
+				// 글 본문 묶음에는 위쪽 24px 간격이 있다(원래는 커버 아래 간격). 시트에서는 머리글 바로 아래에 붙으므로 없앤다
+				'.wp-site-blocks main > .wp-block-group { margin-top: 0 !important; }' +
 				'.wp-site-blocks { padding-top: 0 !important; }';
 			var decorated = false, coverDone = false, frameStarted = false, ro = null, tries = 0;
 			function fit(d) {
