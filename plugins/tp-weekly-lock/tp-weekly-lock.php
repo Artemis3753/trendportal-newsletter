@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Weekly Lock
  * Description: 주간 총정리 글(뉴스레터와 같은 포맷)에 카드 번호·목차·구독자 잠금을 자동으로 붙이고, 전용 글 템플릿(tp-weekly)으로 보여 주며, 편집기에 "주간 총정리 틀"을 등록한다.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: Trendportal
  */
 
@@ -200,8 +200,8 @@ function tp_wk_tones( $id ) {
 }
 
 /**
- * 잠금 안내 상자. "이미 구독 중이에요"는 확인 없이 이메일만 받는다(10/6 B안 — 무료 콘텐츠라 손해가 없고,
- * 나중에 스티비 명단 대조(C안)로 바꿀 자리).
+ * 잠금 안내 상자. "이미 구독 중이에요"는 처음(10/6 B안)엔 이메일만 받았고, 10/23부터 서버가 스티비 명단과
+ * 대조한다(C안, 아래 tp_wk_rest_verify). 설정이 없으면 예전처럼 형식만 보고 연다.
  */
 function tp_wk_gate( $rest ) {
 	return '<div class="tp-wk-gate">'
@@ -213,6 +213,8 @@ function tp_wk_gate( $rest ) {
 		. '<details class="tp-wk-gate-have"><summary>이미 구독 중이에요</summary>'
 		. '<form class="tp-wk-gate-form" novalidate><input type="email" required placeholder="구독한 이메일 주소" aria-label="구독한 이메일 주소"><button type="submit">열기</button></form>'
 		. '<p class="tp-wk-gate-note">구독할 때 쓴 이메일을 넣으면 이 기기에서 계속 열려 있어요.</p>'
+		// 구독자 명단에 없을 때 알려 주는 자리. 사이트 CSS를 건드리지 않으려고 스타일을 여기에 직접 둔다
+		. '<p class="tp-wk-gate-msg" role="alert" hidden style="margin:8px 0 0;font-size:13px;line-height:1.5;color:#c0392b"></p>'
 		. '</details></div>';
 }
 
@@ -295,13 +297,31 @@ function tp_wk_footer() {
 
 	setOpen(subscribed());
 
-	// "이미 구독 중이에요" → 이메일 형식만 확인하고 연다
+	// "이미 구독 중이에요" → 서버가 스티비 구독자 명단과 대조한다(C안, 10/23).
+	// 서버·스티비가 대답을 못 하거나 설정이 없으면 구독자가 막히지 않게 그대로 연다(열어 주기)
+	var VERIFY = <?php echo wp_json_encode( esc_url_raw( rest_url( 'tp-weekly-lock/v1/verify' ) ) ); ?>;
 	document.querySelectorAll('.tp-wk-gate-form').forEach(function (form) {
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
 			var input = form.querySelector('input[type=email]');
+			var btn = form.querySelector('button');
+			var msg = form.parentNode.querySelector('.tp-wk-gate-msg');
 			if (!input.checkValidity()) { input.reportValidity(); return; }
-			unlock();
+			if (msg) { msg.hidden = true; }
+			btn.disabled = true;
+			fetch(VERIFY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: input.value }) })
+				.then(function (r) { return r.json(); })
+				.then(function (d) {
+					btn.disabled = false;
+					if (d && d.ok) { unlock(); return; }
+					// 명단과 대조해서 없다고 한 경우에만 안내한다. 그 밖의 응답(오류 등)은 열어 준다
+					var text = d && d.reason === 'slow' ? '시도가 너무 많아요. 잠시 뒤에 다시 해 주세요.'
+						: d && d.reason === 'format' ? '이메일 주소 모양을 확인해 주세요.'
+						: d && d.mode === 'checked' ? '구독자 목록에서 이 이메일을 못 찾았어요. 구독할 때 쓴 이메일인지 확인해 주세요. 방금 구독했다면 몇 분 뒤에 다시 해 보세요.' : '';
+					if (!text) { unlock(); return; }
+					if (msg) { msg.textContent = text; msg.hidden = false; }
+				})
+				.catch(function () { btn.disabled = false; unlock(); });
 		});
 	});
 
@@ -317,6 +337,210 @@ function tp_wk_footer() {
 	<?php
 }
 add_action( 'wp_footer', 'tp_wk_footer' );
+
+/*
+ * 구독자 확인(C안, 10/23): "이미 구독 중이에요"에 넣은 이메일을 스티비 구독자 명단과 대조한다.
+ * 스탠다드 요금제에 "구독자 API"가 들어 있다. 스티비 API에는 이메일로 한 명을 찾는 조회가 없어서
+ * 구독 중인 주소 목록을 받아 서버에 sha256 해시로만 들고 있다가 대조한다(이메일 원문은 저장하지 않는다).
+ * API 키는 저장소가 공개라서 코드에 두지 않고 사이트 설정(설정 → TP 주간 잠금)에만 둔다.
+ * 키가 없거나 스티비가 대답을 못 하면 "열어 주기": 진짜 구독자를 막는 것보다 한 번 열어 주는 쪽이 싸다(10/23 결정).
+ */
+const TP_WK_OPT_KEY  = 'tp_wk_stibee_key';  // 스티비 API 키
+const TP_WK_OPT_LIST = 'tp_wk_stibee_list'; // 주소록 번호(스티비 주소창의 lists/ 뒤 숫자)
+const TP_WK_SUBS_TTL = 600;                 // 구독자 목록을 새로 받는 간격(초)
+
+/**
+ * 구독 중인 주소의 해시 집합(해시 => 1)을 돌려준다. 설정이 없거나 받지 못하면 null → 호출하는 쪽이 열어 준다.
+ * 받지 못했는데 예전에 받아 둔 목록이 있으면 그걸 쓴다(오래된 명단이 아무것도 없는 것보다 낫다).
+ */
+function tp_wk_subscribers( $force = false ) {
+	$key  = trim( (string) get_option( TP_WK_OPT_KEY, '' ) );
+	$list = trim( (string) get_option( TP_WK_OPT_LIST, '' ) );
+	if ( '' === $key || ! ctype_digit( $list ) ) {
+		return null;
+	}
+	$stale = get_option( 'tp_wk_subs_last' );
+	$stale = is_array( $stale ) && $stale ? $stale : null;
+	if ( ! $force ) {
+		$hit = get_transient( 'tp_wk_subs' );
+		if ( is_array( $hit ) ) {
+			return $hit;
+		}
+		if ( get_transient( 'tp_wk_subs_fail' ) ) { // 방금 실패했으면 1분은 다시 두드리지 않는다(분당 100회 한도)
+			return $stale;
+		}
+	}
+
+	$all   = array();
+	$error = '';
+	for ( $page = 0; $page < 30; $page++ ) { // 1000명씩 최대 3만 명까지
+		$res = wp_remote_get(
+			'https://api.stibee.com/v2/lists/' . $list . '/subscribers?statuses=subscribed&limit=1000&offset=' . ( $page * 1000 ),
+			array(
+				'timeout' => 8,
+				'headers' => array( 'AccessToken' => $key ),
+			)
+		);
+		if ( is_wp_error( $res ) ) {
+			$error = '연결하지 못했어요 (' . $res->get_error_message() . ')';
+			break;
+		}
+		$code = (int) wp_remote_retrieve_response_code( $res );
+		if ( 200 !== $code ) {
+			$error = 'HTTP ' . $code . ( 401 === $code || 403 === $code ? ' — API 키나 주소록 번호를 확인해 주세요' : '' );
+			break;
+		}
+		$rows = json_decode( wp_remote_retrieve_body( $res ), true );
+		// 문서 예시는 배열이 바로 오지만, 감싸서 오는 경우에도 읽는다
+		if ( is_array( $rows ) && ! isset( $rows[0] ) ) {
+			foreach ( array( 'items', 'Items', 'Value', 'value', 'data' ) as $wrap ) {
+				if ( isset( $rows[ $wrap ] ) && is_array( $rows[ $wrap ] ) ) {
+					$rows = $rows[ $wrap ];
+					break;
+				}
+			}
+		}
+		if ( ! is_array( $rows ) ) {
+			$error = '응답 형식을 읽지 못했어요';
+			break;
+		}
+		foreach ( $rows as $row ) {
+			if ( is_array( $row ) && ! empty( $row['email'] ) ) {
+				$all[ hash( 'sha256', strtolower( trim( $row['email'] ) ) ) ] = 1;
+			}
+		}
+		if ( count( $rows ) < 1000 ) {
+			break;
+		}
+	}
+	// 구독 중인 사람이 한 명도 없다는 응답은 형식을 잘못 읽은 것일 가능성이 커서 실패로 본다(모두를 잠그지 않게)
+	if ( '' === $error && ! $all ) {
+		$error = '구독 중인 주소가 0개로 왔어요 — 주소록 번호와 응답을 확인해 주세요';
+	}
+	if ( '' !== $error ) {
+		update_option( 'tp_wk_last_error', $error, false );
+		set_transient( 'tp_wk_subs_fail', 1, 60 );
+		return $stale;
+	}
+	delete_option( 'tp_wk_last_error' );
+	delete_transient( 'tp_wk_subs_fail' );
+	set_transient( 'tp_wk_subs', $all, TP_WK_SUBS_TTL );
+	update_option( 'tp_wk_subs_last', $all, false );
+	return $all;
+}
+
+/**
+ * POST /wp-json/tp-weekly-lock/v1/verify {email} → {ok, mode}. mode가 checked일 때만 "명단에 없음"이 진짜 판정이다.
+ * 이 주소가 구독자인지 아닌지 남이 마구 물어보지 못하게 IP당 10분에 30번까지만 받는다.
+ */
+function tp_wk_rest_verify( WP_REST_Request $req ) {
+	$email = sanitize_email( (string) $req->get_param( 'email' ) );
+	if ( ! is_email( $email ) ) {
+		return new WP_REST_Response( array( 'ok' => false, 'reason' => 'format' ), 200 );
+	}
+	$ip    = 'tp_wk_try_' . substr( hash( 'sha256', ( $_SERVER['REMOTE_ADDR'] ?? '' ) . wp_salt() ), 0, 24 );
+	$tries = (int) get_transient( $ip );
+	if ( $tries >= 30 ) {
+		return new WP_REST_Response( array( 'ok' => false, 'reason' => 'slow' ), 429 );
+	}
+	set_transient( $ip, $tries + 1, 600 );
+
+	$subs = tp_wk_subscribers();
+	if ( null === $subs ) {
+		return new WP_REST_Response( array( 'ok' => true, 'mode' => 'open' ), 200 ); // 열어 주기
+	}
+	$found = isset( $subs[ hash( 'sha256', strtolower( $email ) ) ] );
+	return new WP_REST_Response( array( 'ok' => $found, 'mode' => 'checked' ), 200 );
+}
+add_action(
+	'rest_api_init',
+	function () {
+		register_rest_route(
+			'tp-weekly-lock/v1',
+			'/verify',
+			array(
+				'methods'             => 'POST',
+				'callback'            => 'tp_wk_rest_verify',
+				'permission_callback' => '__return_true',
+			)
+		);
+	}
+);
+
+/* 설정 화면: 설정 → TP 주간 잠금. 키는 한 번 저장하면 화면에 다시 보여 주지 않는다. */
+add_action(
+	'admin_menu',
+	function () {
+		add_options_page( 'TP 주간 잠금', 'TP 주간 잠금', 'manage_options', 'tp-weekly-lock', 'tp_wk_settings_page' );
+	}
+);
+
+function tp_wk_settings_page() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$has_key = '' !== trim( (string) get_option( TP_WK_OPT_KEY, '' ) );
+	$list    = (string) get_option( TP_WK_OPT_LIST, '' );
+	$status  = '설정 안 됨 — 지금은 이메일 형식만 확인해요(예전 방식).';
+	if ( $has_key && ctype_digit( $list ) ) {
+		$subs   = tp_wk_subscribers( true ); // 화면을 열 때마다 연결을 시험한다
+		$status = ( null !== $subs && ! get_option( 'tp_wk_last_error' ) )
+			? '연결됨 · 구독 중 ' . count( $subs ) . '명'
+			: '연결 실패: ' . ( get_option( 'tp_wk_last_error' ) ?: '알 수 없음' ) . ' — 지금은 열어 주기로 동작해요.';
+	}
+	?>
+<div class="wrap">
+	<h1>TP 주간 잠금</h1>
+	<?php if ( ! empty( $_GET['saved'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification ?>
+		<div class="notice notice-success is-dismissible"><p>저장했어요.</p></div>
+	<?php endif; ?>
+	<p><b>구독자 확인(스티비 구독자 API)</b> — <?php echo esc_html( $status ); ?></p>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<input type="hidden" name="action" value="tp_wk_save">
+		<?php wp_nonce_field( 'tp_wk_save' ); ?>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="tp-wk-key">스티비 API 키</label></th>
+				<td>
+					<input type="password" id="tp-wk-key" name="key" class="regular-text" autocomplete="off" placeholder="<?php echo $has_key ? '저장됨 — 바꿀 때만 새 키를 넣어요' : '스티비 → 워크스페이스 설정 → API 키'; ?>">
+					<?php if ( $has_key ) : ?><label><input type="checkbox" name="clear" value="1"> 저장된 키 지우기</label><?php endif; ?>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="tp-wk-list">주소록 번호</label></th>
+				<td><input type="text" id="tp-wk-list" name="list" class="regular-text" inputmode="numeric" value="<?php echo esc_attr( $list ); ?>" placeholder="스티비 주소록 주소창의 lists/ 뒤 숫자"></td>
+			</tr>
+		</table>
+		<?php submit_button( '저장' ); ?>
+	</form>
+	<p class="description">키나 번호가 없거나 스티비가 대답하지 않으면, "이미 구독 중이에요"는 이메일 형식만 확인하고 열어 줘요. 구독자가 막히지 않게 하려는 거예요. 이메일은 저장하지 않고 해시만 10분 동안 들고 있어요.</p>
+</div>
+	<?php
+}
+
+add_action(
+	'admin_post_tp_wk_save',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '권한이 없어요' );
+		}
+		check_admin_referer( 'tp_wk_save' );
+		$key = isset( $_POST['key'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['key'] ) ) ) : '';
+		if ( ! empty( $_POST['clear'] ) ) {
+			delete_option( TP_WK_OPT_KEY );
+		} elseif ( '' !== $key ) {
+			update_option( TP_WK_OPT_KEY, $key, false ); // 자동으로 불러오는 옵션에 넣지 않는다
+		}
+		update_option( TP_WK_OPT_LIST, preg_replace( '/\D/', '', (string) wp_unslash( $_POST['list'] ?? '' ) ), false );
+		// 설정이 바뀌면 받아 둔 명단을 버리고 처음부터 다시 받는다
+		delete_transient( 'tp_wk_subs' );
+		delete_transient( 'tp_wk_subs_fail' );
+		delete_option( 'tp_wk_subs_last' );
+		delete_option( 'tp_wk_last_error' );
+		wp_safe_redirect( admin_url( 'options-general.php?page=tp-weekly-lock&saved=1' ) );
+		exit;
+	}
+);
 
 /**
  * 편집기 "패턴"에 주간 총정리 틀을 등록한다. 불러온 뒤 칸만 채우면 되고, 카드는 복제(⌘⇧D)해서 늘린다.
