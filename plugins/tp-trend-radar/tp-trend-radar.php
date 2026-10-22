@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.17.0
+ * Version: 1.17.1
  * Author: Trendportal
  */
 
@@ -1096,6 +1096,12 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-feed .st { padding: 0 8px; border-radius: 999px; background: var(--soft); color: var(--ink); font-weight: 700; font-size: 11px; text-decoration: none; }
 .tprd-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 0; padding: 12px 16px; border-radius: 14px; background: var(--ink); color: #fff; box-shadow: 0 8px 24px rgba(59,47,42,.25); }
 .tprd-bar span { color: #e9e2d8; font-size: 13px; }
+/* 폰에서는 막대가 카드를 너무 가려서 한 줄로 줄인다 — 버튼 옆에 안내를 붙이고 길면 두 줄까지만 */
+@media (max-width: 600px) {
+	.tprd-bar { flex-wrap: nowrap; gap: 8px; bottom: 8px; padding: 7px 10px; border-radius: 12px; }
+	.tprd-bar .tprd-btn { flex: none; padding: 4px 10px; font-size: 12px; }
+	.tprd-bar span { flex: 1; min-width: 0; font-size: 11px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}
 .tprd-bell { margin: 30px 0 0; padding: 12px 16px; border-radius: 12px; background: var(--card); box-shadow: 0 2px 10px rgba(59,47,42,.08); }
 .tprd-bell summary { cursor: pointer; font-weight: 700; }
 .tprd-folded { margin: 22px 0 0; }
