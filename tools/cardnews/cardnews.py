@@ -16,6 +16,7 @@
     python3 tools/cardnews/cardnews.py cook    <주문> [--pc]                 (build → draft → verify → shot 한 번에, 판단이 끝난 뒤)
     python3 tools/cardnews/cardnews.py shot    <주문> [--pc]                 (초안이 폰에서(--pc면 PC도) 어떻게 보이는지 찍기 → shots/)
     python3 tools/cardnews/cardnews.py visual  <주문> <카드> <위%> <아래%>   (사진 없는 카드의 그림 칸을 카드 미리보기에서 다시 자르기)
+    python3 tools/cardnews/cardnews.py reimage <글 번호> <zip> [--apply]   (이미 발행한 글의 카드 사진을 새 zip의 사진으로 바꾸기. --apply 없이는 비교만)
     python3 tools/cardnews/cardnews.py erase   <주문> <사진> <새 이름> <왼%> <오른%> <위%> <아래%> [--dark] [--crop <위%> <아래%>]
                                                                             (사진에 박힌 글자 지우기 → images/<새 이름>)
 
@@ -1054,6 +1055,20 @@ def composite_photo(d, fr, layers, dst):
     return dst.name
 
 
+def dark_edge(path):
+    """사진 위·아래 가장자리가 막으로 까맣게 죽었는지(10/22). 플러그인의 "어두운 그라데이션 지우기"를 끄고 읽었거나 옛 zip이면
+    글자 뺀 카드에 막이 남아 사이트 사진에 검은 띠가 된다. 가장자리 10%가 거의 까맣고(<25) 안쪽 띠(40~60%)보다 4배 넘게 어두우면 띠로 본다.
+    사진 자체가 어두운 경우(밤 장면)에도 걸릴 수 있어 확정이 아니라 눈으로 보라는 경고용"""
+    g = gray_grid(path)
+    mid = sum(sum(g[r]) for r in range(16, 24)) / (8 * 32)
+    found = []
+    for label, rows in (("위", range(4)), ("아래", range(36, 40))):
+        edge = sum(sum(g[r]) for r in rows) / (len(rows) * 32)
+        if edge < 25 and mid > 4 * max(edge, 1):
+            found.append(label)
+    return found
+
+
 def split_logos(fr, layers):
     """사진 레이어 → (사진, 로고). 카드 넓이의 5% 이상 = 큰 사진. 작은 그림은 중심이 큰 사진들의 칸 안에 있으면
     사진 위 꾸밈(744의 말풍선·작은 사진)이라 남기고, 칸 밖(글자 칸)에 있으면 로고·아이콘으로 본다"""
@@ -1165,6 +1180,89 @@ def erase(d, src, out, box, dark=False, crop=None):
     (d / "images").mkdir(exist_ok=True)
     cv2.imwrite(str(d / "images" / out), res, [cv2.IMWRITE_JPEG_QUALITY, 88])
     print(f"{src} → images/{out} ({res.shape[1]}×{res.shape[0]}) — 지운 자리를 눈으로 확인하세요")
+
+
+def gray_grid(path, w=32, h=40):
+    """사진을 w×h 흑백 격자로 줄여 행 목록으로 돌려준다 — 두 사진이 같은 장면인지·아래가 얼마나 어두운지 값싸게 비교하려고"""
+    need_ffmpeg()
+    raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(path), "-vf", f"scale={w}:{h},format=gray", "-f", "rawvideo", "-"],
+                         check=True, capture_output=True).stdout
+    return [list(raw[r * w:(r + 1) * w]) for r in range(h)]
+
+
+def reimage(post_id, zip_path, apply=False):
+    """이미 발행한 글의 카드 사진을 새 zip(어두운 막을 지운 플러그인으로 다시 읽은 것)의 사진으로 바꾼다(10/22).
+    글 번호·주소·조회수·본문은 그대로 두고 <img> 주소와 미디어 번호만 바꾼다. 막 말고는 같은 사진이어야 해서,
+    카드 사진(NN.jpg)만 대상으로 하고 새 사진이 옛 사진과 같은 장면인지(비율·모양 상관)를 먼저 본다.
+    셰프가 손으로 다듬은 사진(NNc.jpg·visual·video·cover)은 건드리지 않고 목록으로 알린다. --apply 없이는 비교 결과만 보여 준다"""
+    d = ORDERS / f"reimage-{post_id}"
+    if d.exists():
+        shutil.rmtree(d)
+    d.mkdir(parents=True)
+    with zipfile.ZipFile(zip_path) as zf:
+        bad = [n for n in zf.namelist() if n.startswith("/") or ".." in Path(n).parts]
+        if bad:
+            sys.exit(f"zip 안 파일 이름이 이상해요: {bad[0]}")
+        zf.extractall(d)
+    save(d, "order.json", {"kind": "archive"})
+    fetch(d)  # 새 사진(images/NN.jpg)을 만든다. 글자·캡션 경고는 이 일에 상관없다
+    raw = wp(f"posts/{post_id}?context=edit")["content"]["raw"]
+    (d / "backup-content.html").write_text(raw, encoding="utf-8")
+    (d / "old").mkdir(exist_ok=True)
+    out, todo, skipped = raw, [], []
+    for m in re.finditer(r'<img src="(https://[^"]+/([^/"]+))"[^>]*?wp-image-(\d+)', raw):
+        url, name, mid = m.group(1), m.group(2), m.group(3)
+        short = re.sub(r"^order-\d+-", "", name)
+        if not re.fullmatch(r"\d\d\.jpg", short):
+            skipped.append(name)
+            continue
+        new = d / "images" / short
+        if not new.exists():
+            skipped.append(f"{name} (새 zip에 같은 번호 사진 없음)")
+            continue
+        old = d / "old" / name
+        old.write_bytes(wp(url, raw=True))
+        a, b = jpeg_size(old), jpeg_size(new)
+        if not a or not b or abs(a[0] / a[1] - b[0] / b[1]) > 0.01:
+            skipped.append(f"{name} (비율이 달라요 {a} → {b})")
+            continue
+        ga, gb = gray_grid(old), gray_grid(new)
+        # 같은 장면인지 = 줄마다 잰 상관계수의 평균. 어두운 막은 줄마다 밝기를 곱해서 깎을 뿐 가로 모양은 그대로라서,
+        # 줄 안에서 비교하면 막이 있어도 같은 사진은 1에 가깝다(격자 전체를 섞어 재면 위아래 막이 둘 다 있는 카드는 다른 사진처럼 나온다 — 1135의 2번).
+        # 옛 사진이 거의 까만 줄(막 맨 아래)은 정보가 없으니 뺀다
+        def row_corr(ra, rb):
+            ma, mb = sum(ra) / len(ra), sum(rb) / len(rb)
+            va, vb = sum((x - ma) ** 2 for x in ra), sum((y - mb) ** 2 for y in rb)
+            return sum((x - ma) * (y - mb) for x, y in zip(ra, rb)) / (va * vb) ** 0.5 if va > 0 and vb > 0 else None
+        rows = [row_corr(ra, rb) for ra, rb in zip(ga, gb) if sum(ra) / len(ra) >= 12]
+        rows = [c for c in rows if c is not None]
+        if len(rows) < 12:
+            skipped.append(f"{name} (옛 사진이 거의 까매서 같은 장면인지 못 봐요)")
+            continue
+        corr = sum(rows) / len(rows)
+        same = corr > 0.85
+        edge = lambda g, rs: sum(sum(g[r]) for r in rs) / (len(rs) * 32)  # 가장자리 10% 평균 밝기
+        bot_a, bot_b, top_a, top_b = edge(ga, range(36, 40)), edge(gb, range(36, 40)), edge(ga, range(4)), edge(gb, range(4))
+        print(f"{name}: 같은 장면 상관 {corr:.2f} · 아래 밝기 {bot_a:.0f} → {bot_b:.0f} · 위 밝기 {top_a:.0f} → {top_b:.0f} · {'ok' if same else '다른 장면?'}")
+        if same and (bot_b > bot_a + 8 or top_b > top_a + 8):
+            todo.append((url, mid, short))
+        elif same:
+            skipped.append(f"{name} (위아래가 어둡지 않아 그대로 둠)")
+        else:
+            skipped.append(f"{name} (옛 사진과 다른 장면으로 보여요)")
+    print(f"바꿀 사진 {len(todo)}장: {[t[2] for t in todo]}")
+    if skipped:
+        print("건드리지 않은 것:", *skipped, sep="\n· ")
+    if not apply or not todo:
+        print("(--apply 없이 비교만 했어요)" if not apply else "")
+        return
+    for url, mid, short in todo:
+        got = upload(d, short, "")
+        out = out.replace(url, got["url"]).replace(f"wp-image-{mid}", f"wp-image-{got['id']}").replace(f'{{"id":{mid},', f'{{"id":{got["id"]},')
+        print(f"올림 {short} → 미디어 {got['id']}")
+    wp(f"posts/{post_id}", {"content": out})  # 상태는 안 보낸다 — 발행된 채로 둔다
+    live = wp(f"posts/{post_id}?context=edit")["content"]["raw"]
+    print("글 고침 완료" if live == out else "⚠️ 올린 본문과 다시 읽은 본문이 달라요 — 확인 필요")
 
 
 def raws(d, prefix):
@@ -1327,6 +1425,10 @@ def fetch(d):
                 fn = composite_photo(d, fr, layers, d / "images" / f"{n:02d}.jpg")
                 # 사진 위에 얹은 글자 상자(851의 2번 "추가로 …")는 글자 뺀 그림에서 글자만 사라져 빈 상자로 남는다(10/18).
                 # 사람은 글자째 살렸다 — 어느 쪽이 맞는지는 카드를 봐야 해서 짚기만 한다
+                dark = dark_edge(d / "images" / fn) if fn else []
+                if dark:
+                    warn.append(f"{n}번 사진 {'·'.join(dark)}가장자리가 어두운 막으로 까매요 — 피그마 플러그인에서 '어두운 그라데이션 지우기'를 켜고 다시 읽기"
+                                f"(밤 장면처럼 원래 어두운 사진이면 그대로 두기)")
                 inside = texts_over_photo(fr, layers) if fn else []
                 if inside:
                     warn.append(f"{n}번 사진 칸 안 글자 {inside}가 사진에서 빠져 빈 상자로 보일 수 있어요 — 카드 미리보기와 비교, "
@@ -1808,6 +1910,8 @@ def main(argv):
         return cook(order_dir(argv[1]), "--pc" in argv)
     if argv[:1] == ["visual"] and len(argv) == 5:
         return visual(order_dir(argv[1]), int(argv[2]), float(argv[3]), float(argv[4]))
+    if argv[:1] == ["reimage"] and len(argv) in (3, 4):
+        return reimage(int(argv[1]), argv[2], "--apply" in argv)
     if argv[:1] == ["erase"] and len(argv) >= 8:
         crop = tuple(float(v) for v in argv[argv.index("--crop") + 1:argv.index("--crop") + 3]) if "--crop" in argv else None
         return erase(order_dir(argv[1]), argv[2], argv[3], tuple(float(v) for v in argv[4:8]), "--dark" in argv, crop)

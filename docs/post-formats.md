@@ -47,6 +47,7 @@ Reference posts are on trendportal.kr as `/archives/<id>/`.
 Make the post look as close to the original cards as our resources allow, and still read well on a phone and on PC.
 
 - Look at the card previews first (`figma/sheet.jpg` has them all in one image; `figma/cards/*.jpg` one by one for details) and the font, colour and alignment in `figma/scan.json`.
+- Card photos must not have a black band at the top or bottom. That band is the dark gradient that sits under the card text; the Figma plugin hides it when "어두운 그라데이션 지우기" is checked (the default) and records what it hid in `scan.json` (`overlaysHidden`). If fetch warns about a dark edge, read the group again with the box checked; leave the photo alone only when it is really a night scene. A post that was already published with bands is fixed with `cardnews.py reimage <post> <new zip>` (`--apply` to write; without it only compares). It replaces plain `NN.jpg` card photos only, and leaves hand-cropped ones (`visual`, `video`, `sharp`) alone.
 - If an existing format fits, use it. If the cards need something new, new CSS goes only under a new class (`tp-fmt-…`), so it cannot touch other posts.
 - Fonts: use the ones the site already has (all SIL OFL 1.1): Pretendard, Gowun Batang, Manrope, Orbitron. A new font only when it is truly needed **and** its licence explicitly allows web use. If unsure, do not use it.
 - Body text stays centred. Card photos: 16px side margins and 14px corners on phones, 480px wide on PC.
