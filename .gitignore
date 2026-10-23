@@ -5,3 +5,5 @@ docs/GPT-운영-지침서.md
 docs/스티비-뉴스레터-조립-안내서.md
 local/
 docs/1015-웹사이트-보완점
+
+__pycache__/
