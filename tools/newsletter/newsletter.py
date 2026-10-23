@@ -170,11 +170,11 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
     cs = cards["cards"]
     by_no = {x["no"]: x for x in nl["cards"]}
     parts = []
-    # 머리: 웰컴메일과 같은 모양 + 오른쪽엔 WEEKLY만. 호수(주차)는 바로 아래 날짜줄에 이미 있어서 여기까지 쓰면 한 화면에 두 번 보인다(10/23 성현 님 피드백)
+    # 머리: 로고 + 이름만. 오른쪽에 있던 'WEEKLY · 호수'는 바로 아래 날짜줄과 겹쳐서 호수를 뺐고(10/23 성현 님 피드백), 이어서 WEEKLY도 없앴다(사용자)
     parts.append(f'<div style="padding:28px {GUTTER} 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'
                  f'<td style="width:46px;"><img src="{LOGO}" alt="트렌드포털" width="36" height="36" style="display:block;border-radius:8px;"></td>'
                  f'<td style="font-size:13px;font-weight:800;letter-spacing:0.5px;">TRENDPORTAL</td>'
-                 f'<td style="text-align:right;font-size:11px;color:#888;letter-spacing:1px;font-weight:800;">WEEKLY</td></tr></table></div>')
+                 f'</tr></table></div>')
     parts.append(f'<div style="padding:40px {GUTTER} 0;"><p style="{S["issue"]}">{e(dateline(order["issue"]))}</p>'
                  f'<h1 style="{S["h1"]}">이번 주 일어난<br>마케팅 이슈 총정리</h1></div>')
     letter = "".join(f'<p style="{S["letter_p"]}">{cardnews.marked(p, S["hl"])}</p>' for p in nl["letter"])

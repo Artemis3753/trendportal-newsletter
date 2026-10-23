@@ -32,7 +32,7 @@ The site keeps the short 💡 and the newsletter always carries the long, resear
 
 ## Where the issue (week) label appears
 
-Feedback on the first issue (10/23, from a team member): "10월 4주차" showed up four times in one mail (subject, header, date line, first sentence of the letter). Now it appears **twice**: the subject, and the date line under the header (`2026년 10월 4주차 · 금요일 발행`). The header's right side says only `WEEKLY`, and **the letter never names the week or the month**; it opens with the content. The site's weekly post is unchanged.
+Feedback on the first issue (10/23, from a team member): "10월 4주차" showed up four times in one mail (subject, header, date line, first sentence of the letter). Now it appears **twice**: the subject, and the date line under the header (`2026년 10월 4주차 · 금요일 발행`). The header's right side is empty (the `WEEKLY` label was removed too, 10/23), and **the letter never names the week or the month**; it opens with the content. The site's weekly post is unchanged.
 
 ## Layout and tools
 
