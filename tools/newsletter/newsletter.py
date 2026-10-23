@@ -170,11 +170,11 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
     cs = cards["cards"]
     by_no = {x["no"]: x for x in nl["cards"]}
     parts = []
-    # 머리: 웰컴메일과 같은 모양 + 오른쪽에 호수
+    # 머리: 웰컴메일과 같은 모양 + 오른쪽엔 WEEKLY만. 호수(주차)는 바로 아래 날짜줄에 이미 있어서 여기까지 쓰면 한 화면에 두 번 보인다(10/23 성현 님 피드백)
     parts.append(f'<div style="padding:28px {GUTTER} 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'
                  f'<td style="width:46px;"><img src="{LOGO}" alt="트렌드포털" width="36" height="36" style="display:block;border-radius:8px;"></td>'
                  f'<td style="font-size:13px;font-weight:800;letter-spacing:0.5px;">TRENDPORTAL</td>'
-                 f'<td style="text-align:right;font-size:11px;color:#888;letter-spacing:1px;font-weight:800;">WEEKLY · {e(order["issue"])}</td></tr></table></div>')
+                 f'<td style="text-align:right;font-size:11px;color:#888;letter-spacing:1px;font-weight:800;">WEEKLY</td></tr></table></div>')
     parts.append(f'<div style="padding:40px {GUTTER} 0;"><p style="{S["issue"]}">{e(dateline(order["issue"]))}</p>'
                  f'<h1 style="{S["h1"]}">이번 주 일어난<br>마케팅 이슈 총정리</h1></div>')
     letter = "".join(f'<p style="{S["letter_p"]}">{cardnews.marked(p, S["hl"])}</p>' for p in nl["letter"])
@@ -220,9 +220,18 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
     parts.append(f'<div style="padding:0 {GUTTER};"><p style="margin:0 0 10px;font-size:16px;font-weight:800;">여러분의 이번 주 픽은?</p>{cl}'
                  f'<p style="margin:0 0 14px;"><a href="https://trendportal.kr/report/" style="{S["btn"]}">제보하러 가기</a></p>'
                  f'<p style="margin:28px 0 0;font-size:15px;line-height:1.8;">매주 금요일, 국내외에서 실제로 터진 마케팅만 골라 보내 드릴게요.<br>그럼 다음 주 금요일에 만나요!<br><b>트렌드포털 주인장</b> 드림</p></div>')
-    # 푸터: 광고성 메일이라 발신자 정보와 수신거부 링크가 꼭 있어야 한다. $%…%$ 는 스티비가 발송할 때 채우는 자리
-    # 발신자 정보는 공개 저장소에 적을 수 없어서 사이트에 둔 것을 읽는다(sender 참고). 비어 있으면 빨간 글씨로 남겨 붙여 넣기 전에 보이게 한다
-    who = "<br>".join(e(x) for x in sender) or '<span style="color:#c00;">(발신자 정보 없음 — 사이트 tp_cn_sender를 채울 것)</span>'
+    # 푸터(10/23 사용자): 광고가 안 들어가는 호가 기본이라 이름·전화·주소 대신 '©·문의 메일·수신거부'만 둔다(Trend A Word 식).
+    # 광고가 든 호(newsletter.json "ad": true)는 발신자 정보(이름·연락처)가 필요해서 그 줄들로 바꾼다. 줄은 공개 저장소에 적을 수 없어 사이트에 둔 것을 읽는다(sender 함수).
+    # 광고 호인데 줄을 못 읽었으면 짧은 푸터로 조용히 나가면 안 되니 빨간 자리 표시로 붙여 넣기 전에 눈에 띄게 한다
+    # $%…%$ 는 스티비가 발송할 때 채우는 자리
+    year = "20" + order["issue"][:2] if re.match(r"\d{2}\.", order["issue"]) else ""
+    if sender:
+        who = "<br>".join(e(x) for x in sender)
+    elif nl.get("ad"):
+        who = '<span style="color:#c00;">(광고 호인데 발신자 정보 없음 — 사이트 tp_cn_sender를 채울 것)</span>'
+    else:
+        who = (f'<b style="color:#666;">© {year} 트렌드포털</b><br>'
+               '뉴스레터 관련 문의: <a href="mailto:contact@trendportal.kr" style="color:#999;">contact@trendportal.kr</a>')
     parts.append(f'<div style="{S["foot"]}">{who}<br>'
                  f'<a href="$%permalink%$" style="color:#999;">웹에서 보기</a> · <a href="https://www.instagram.com/trend__portal/" style="color:#999;">인스타그램</a> · '
                  f'<a href="https://trendportal.kr" style="color:#999;">trendportal.kr</a><br>'
@@ -238,7 +247,9 @@ def build(d):
     result = cardnews.load(d, "result.json", {})
     # 우리 영상은 메일에서 재생이 안 돼서 사이트 주간 글로 보낸다(사이트 초안을 만든 뒤에만 주소가 있다)
     post_url = f"https://trendportal.kr/?p={result['post_id']}" if result.get("post_id") else None
-    lines = sender()
+    # 기본 푸터엔 발신자 정보가 없으니 사이트에서 읽지 않는다. 광고 호("ad": true)만 읽어서 푸터를 바꾼다(10/23 사용자 A안)
+    ad = bool(nl.get("ad"))
+    lines = sender() if ad else []
     mail = mail_html(order, cards, nl, table, post_url, lines)
     doc = (f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
            f'<title>트렌드포털 위클리 {e(order["issue"])}</title></head><body style="{S["page"]}">{mail}</body></html>')
@@ -248,7 +259,8 @@ def build(d):
     empty = [x["no"] for x in nl["cards"] if not x.get("point")]
     nosrc = [x["no"] for x in nl["cards"] if x.get("point") and not x.get("sources")]
     print(f"{out / 'stibee.html'} ({len(doc.encode()) // 1024}KB, 카드 {len(cards['cards'])}장)")
-    for msg in ([] if lines else ["푸터 발신자 정보가 비었어요 — 광고성 메일엔 꼭 있어야 해요"]) + ([f"주목 포인트가 빈 카드: {empty}"] if empty else []) +([f"출처 없는 주목 포인트: {nosrc} — 리서치한 사실엔 출처를 단다"] if nosrc else []) \
+    for msg in (["광고 호: 푸터에 발신자 정보를 넣었는지, 스티비 제목 맨 앞에 (광고)를 붙였는지 확인 — 발신자 정보가 비었으면 푸터에 빨간 글씨가 보여요"] if ad else []) \
+            + ([f"주목 포인트가 빈 카드: {empty}"] if empty else []) +([f"출처 없는 주목 포인트: {nosrc} — 리서치한 사실엔 출처를 단다"] if nosrc else []) \
             + ([] if post_url or not any(c.get("clip") for c in cards["cards"]) else ["우리 영상 카드의 '사이트에서 영상 보기' 링크는 사이트 초안을 만든 뒤 다시 build"]):
         print("· " + msg)
 

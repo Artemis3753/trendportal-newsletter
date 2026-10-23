@@ -30,6 +30,10 @@ Claude writes the whole issue: letter, editor picks, every card, notices, closin
 
 The site keeps the short 💡 and the newsletter always carries the long, researched one. This split is fixed (decided 10/19): never send the site's short version to Stibee.
 
+## Where the issue (week) label appears
+
+Feedback on the first issue (10/23, from a team member): "10월 4주차" showed up four times in one mail (subject, header, date line, first sentence of the letter). Now it appears **twice**: the subject, and the date line under the header (`2026년 10월 4주차 · 금요일 발행`). The header's right side says only `WEEKLY`, and **the letter never names the week or the month**; it opens with the content. The site's weekly post is unchanged.
+
 ## Layout and tools
 
 Design: the mock newsletter `1006-4` (approved 10/18). The site's weekly post and the newsletter are made from **one order folder** (`local/cardnews/<order>/`, `"kind": "weekly"`): `cardnews.py fetch` reads the zip into `cards.json` (titles, photos, sources, card text, letter and picks from the caption), which both use. Only the newsletter's own writing goes into `newsletter.json`.
@@ -57,6 +61,8 @@ Format fixed after the first Stibee test mail (10/20, Gmail on iPhone). Keep the
 - Paste `out/stibee.html` into Stibee's HTML editor. A mail made in the HTML editor cannot be saved as a Stibee template, which is fine: the builder is the template.
 - `$%permalink%$`, `$%unsubscribe%$` and the like are filled in by Stibee when it sends; a browser preview shows them as text.
 - Stibee does not add the address book's footer (sender name, address, phone, unsubscribe) to a mail made in the HTML editor (test mail, 10/20), so our HTML carries its own. An ad mail must show who sent it, and this repository is public, so the builder reads those lines from the site (`GET tp-cardnews/v1/sender`, set with a `POST` of `{"lines": [...]}`) instead of the code. Keep them the same as the address book's "이메일 푸터 정보". If they are missing, `build` warns and the footer shows a red placeholder.
+- **Footer decision (10/23): an issue with no ad gets a short footer, in the style of Trend A Word: `© <year> 트렌드포털`, the newsletter contact `contact@trendportal.kr`, the links, and the unsubscribe link. No personal name, phone number or address.** A team member asked to drop the phone number and address, and the owner agreed to follow this reference. An issue that carries an ad is switched with `"ad": true` in `newsletter.json` (decided 10/23): `build` then reads the sender lines (name and contact) from the site's `tp_cn_sender`, puts them in the footer instead, and reminds you to start the Stibee subject with `(광고)`. If the lines cannot be read, the footer shows a red placeholder rather than quietly going out short. Set the flag only when the team says the issue has an ad or sponsored part; when unsure, ask.
+  - Risk we accepted: the law (정보통신망법 제50조 제4항) asks for the sender's name and contact only on "영리목적의 광고성 정보", and does not define that term. KISA's guide, as quoted by secondary sources, reads it widely (information about the sender's own goods or services, a business's free newsletter, links to the sender's own site), so "no ad in the issue" may not be enough on its own. Not checked: the guide's own text on newsletters (the copy we found is a scanned image from 2017). Stibee itself does not force the footer.
 - The welcome mail (`1006-2c`, a local file) is a Stibee automatic email on the address book's "subscriber added" trigger, sent at once; it reaches only people who subscribe after it is started. Its footer lines are written in the file, since that folder is not in the repository.
 - Stibee has no automatic "latest site posts" block, so links to the site are written into each issue.
 
