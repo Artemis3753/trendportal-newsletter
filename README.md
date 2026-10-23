@@ -26,12 +26,21 @@ The reasoning, the alternatives and the numbers are in [`docs/PRD.md`](docs/PRD.
 
 The editors are not developers, so the tools run from the WordPress admin screen and from scheduled Claude Code routines in the cloud.
 
-| Tool | What it does |
+**Transis (트란시스)** is the name of the assistant behind them. It has three jobs: the schedule (일정표), the trend feed (특파원, "correspondent") and the card-news helper (카드뉴스 도우미).
+
+| Job | What it does |
 |---|---|
 | **Card-news helper** (`tools/cardnews/`, `tools/figma-plugin/`, plugin `tp-cardnews-helper`) | A Figma plugin exports the cards. An editor uploads the zip and the Instagram caption as an order in an admin tab. A routine turns the order into a **private draft** and a newsletter HTML file. A person reviews, publishes or schedules it. |
-| **Newsletter builder** (`tools/newsletter/`) | Builds the email HTML from the same order, with its own footer because Stibee adds none to mail made in its HTML editor. A person pastes it into Stibee and schedules it. |
-| **Trend feed** (`tools/radar/`, plugin `tp-trend-radar`) | Gathers new posts from external sources into one feed in the admin. The editors tick what they like and a routine writes a Korean summary. |
-| **Transis** (`transis/`) | Reads the team's work inbox, read-only, keeps a schedule in a Google Sheet through Apps Script, and sends a daily reminder email and phone notification. |
+| **Newsletter builder** (`tools/newsletter/`, part of the card-news helper) | Builds the email HTML from the same order, with its own footer because Stibee adds none to mail made in its HTML editor. A person pastes it into Stibee and schedules it. |
+| **Trend feed, "correspondent"** (`tools/radar/`, plugin `tp-trend-radar`) | Gathers new posts from external sources into one feed in the admin. The editors tick what they like and a routine writes a Korean summary. |
+| **Schedule** (`transis/`) | Reads the team's work inbox, read-only, keeps a schedule in a Google Sheet through Apps Script, and sends a daily reminder email and phone notification. |
+
+#### One design for all three
+
+- **Claude makes the judgment calls and scripts do the fixed work.** For the schedule, Claude reads the mail and decides what is an appointment, and `transis.py` sends that to the sheet, picks what is due and builds the reminder email. For the trend feed, Claude writes only the Korean title and summary; the link, original title and date are re-attached by number, so the model never retypes them, and fewer tokens are spent. In the card-news helper, one command (`cook`) runs build, draft, verify and screenshot once the judgment calls are made.
+- **The Transis and trend feed scripts use only Python's standard library**, so a cloud routine can run them with nothing to install.
+- **Slow or failing services are expected.** The schedule's Apps Script web app sometimes answers 404 or 500 for a few minutes, so the script retries by itself.
+- **Big jobs are cut into batches.** A full inbox scan reads 60 threads per run and picks up where it stopped, because reading 400 at once once stopped midway (2026-10-14). A full re-scan every 30 days catches anything the daily runs missed.
 
 The routines are given narrow permissions and written to expect hostile input:
 
@@ -42,7 +51,7 @@ The routines are given narrow permissions and written to expect hostile input:
 
 ### How it was built
 
-The requirements, the decisions above and the review of every change are mine. Claude Code drafted much of the code, and most commits carry a `Co-Authored-By` trailer for that reason.
+The requirements and the decisions above are mine, and I check the results by hand on a phone and a desktop. Claude Code drafted much of the code, and most commits carry a `Co-Authored-By` trailer for that reason.
 
 ## Status
 
