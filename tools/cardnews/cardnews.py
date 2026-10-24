@@ -23,7 +23,8 @@
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
                  featured(대표 이미지), cover_photo(아카이빙 글자 없는 커버), categories, tags,
-                 cover_clip·cover_poster(표지가 영상인 새 포맷, 10/25 — 글자가 영상에 박혀 있어 cover_photo 대신 쓴다)
+                 cover_clip·cover_poster·cover_card_clip(표지가 영상인 새 포맷, 10/25 — 글자가 영상에 박혀 있어 cover_photo 대신 쓴다.
+                 card_clip = 홈 목록 카드 위에서 움직일 작은 영상, 글 메타 tp_card_clip으로 TP Card Clip 플러그인에 넘긴다)
     cards.json   카드 글자·사진 이름 (fetch 단계 결과 — 아직은 손으로/임시 스크립트로 만든다)
                  글자 속 줄바꿈은 "\\n"으로 적는다 (<br>로 바뀜)
     notes.json   Claude가 쓰는 칸만: 카드별 alt·💡(주간), cover_alt, poster_alt
@@ -770,6 +771,22 @@ def link_label(link, card):
     return f"{site}에서 영상 보기" + (f" ({card['src']})" if card.get("src") else "")
 
 
+# 홈 카드용 작은 영상(10/25 사용자: 5~8초): 앞 8초, 4:5 가운데 자르기 480x600, 비트레이트 상한으로 크기를 눌러 둔다(약 350KB 이하).
+# 본문 영상(720p, 길이 전체)을 홈에 그대로 쓰면 목록이 너무 무거워서 따로 만든다
+CARD_CLIP_SECONDS = 8
+
+
+def make_card_clip(src, dst, seconds=CARD_CLIP_SECONDS):
+    need_ffmpeg()
+    vf = "crop='trunc(min(iw,ih*0.8)/2)*2':'trunc(min(ih,iw/0.8)/2)*2',scale=480:600:flags=lanczos,fps=24"
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-t", str(seconds), "-an", "-vf", vf,
+                        "-c:v", "libx264", "-preset", "slow", "-crf", "28", "-maxrate", "350k", "-bufsize", "700k",
+                        "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst)], capture_output=True)
+    if r.returncode:
+        sys.exit(f"{src.name}을 홈 카드용 영상으로 못 바꿨어요: {r.stderr.decode('utf-8', 'replace')[-300:]}")
+    return dst.name
+
+
 def cover_video(d, order, f):
     """표지(1번 카드)가 영상인 새 포맷(10/25 사용자): 글자가 영상에 박혀 있어서 영상 파일만 있으면 된다.
     사이트 영상(소리 뺀 H.264 720p) + 재생 전 포스터 + 대표 이미지(목록·공유 미리보기)를 모두 그 영상에서 만든다.
@@ -779,6 +796,7 @@ def cover_video(d, order, f):
         return ["1번(표지)은 영상 파일만 받아요 — 파일이 없거나 사진이에요"]
     order["cover_clip"] = make_clip(src, d / "images" / "01-clip.mp4")
     order["cover_poster"] = video_frame(src, d / "images" / "01-poster.jpg", scale=SCALE_720)
+    order["cover_card_clip"] = make_card_clip(src, d / "images" / "01-card.mp4")
     # 대표 이미지는 포스터와 같은 장면(같은 thumbnail 선택)을 원래 크기로
     order["featured"] = video_frame(src, d / "images" / "featured.jpg")
     order.pop("cover_photo", None)
@@ -1489,7 +1507,7 @@ def fetch(d):
         cards.append(card)
 
     # 표지가 영상인 새 포맷(10/25): 탭 영상 카드 칸에 1번 + 영상 파일. 글자가 영상에 박혀 있어 사진·export가 필요 없다
-    for k in ("cover_clip", "cover_poster"):
+    for k in ("cover_clip", "cover_poster", "cover_card_clip"):
         order.pop(k, None)
     if 1 in files and weekly:
         warn.append("주간 총정리는 표지 영상을 안 써요 — 1번 영상 파일은 무시했어요")
@@ -1629,6 +1647,10 @@ def publish(d):
     featured = order.get("featured")
     if featured and featured not in table and featured not in missing:
         missing.append(featured)
+    # 홈 카드용 작은 영상도 본문에 없어서 따로 챙긴다
+    card_clip = order.get("cover_card_clip")
+    if card_clip and card_clip not in table and card_clip not in missing:
+        missing.append(card_clip)
     alt = alts(d)
     for fn in missing:
         # 하나 올릴 때마다 media.json에 적는다 — 중간에 끊겨도 다시 돌리면 이어서 올린다
@@ -1649,6 +1671,9 @@ def publish(d):
     }
     if featured:
         post["featured_media"] = table[featured]["id"]
+    if card_clip:
+        # 홈 목록 카드 위에서 움직일 작은 영상 — TP Card Clip 플러그인이 이 메타를 읽는다(플러그인이 없으면 무시돼서 그냥 정지 사진)
+        post["meta"] = {"tp_card_clip": table[card_clip]["id"]}
     result = load(d, "result.json", {})
     if result.get("post_id"):
         # 이미 만든 초안이 있으면 새로 만들지 않고 그 초안을 고친다.
