@@ -22,7 +22,8 @@
 
 주문 폴더:
     order.json   주문서: kind(weekly|archive), issue(주간 호수) 또는 title(아카이빙 제목),
-                 featured(대표 이미지), cover_photo(아카이빙 글자 없는 커버), categories, tags
+                 featured(대표 이미지), cover_photo(아카이빙 글자 없는 커버), categories, tags,
+                 cover_clip·cover_poster(표지가 영상인 새 포맷, 10/25 — 글자가 영상에 박혀 있어 cover_photo 대신 쓴다)
     cards.json   카드 글자·사진 이름 (fetch 단계 결과 — 아직은 손으로/임시 스크립트로 만든다)
                  글자 속 줄바꿈은 "\\n"으로 적는다 (<br>로 바뀜)
     notes.json   Claude가 쓰는 칸만: 카드별 alt·💡(주간), cover_alt, poster_alt
@@ -213,11 +214,12 @@ def video_link(v, cls=None):
     return para(f'▶ <a href="{attr(v["url"])}" target="_blank" rel="noreferrer noopener">{esc(v["label"])}</a>', cls)
 
 
-def clip_block(media, fn, poster):
+def clip_block(media, fn, poster, cls=None):
     # 우리가 가진 영상(소리 뺀 것): 버튼 없이 자동 재생·반복, 아이폰도 자동 재생되게 playsinline
     mid, url = media.get(fn)
     _, purl = media.get(poster)
-    return (f'<!-- wp:video {{"id":{mid}}} --><figure class="wp-block-video"><video autoplay loop muted '
+    extra = f',"className":"{cls}"' if cls else ""
+    return (f'<!-- wp:video {{"id":{mid}{extra}}} --><figure class="wp-block-video{" " + cls if cls else ""}"><video autoplay loop muted '
             f'poster="{purl}" preload="auto" src="{url}" playsinline></video></figure><!-- /wp:video -->')
 
 
@@ -363,14 +365,23 @@ def profile_cards(media, people, sponsored=False):
     return out
 
 
+def cover_block(order, notes, media):
+    if order.get("cover_clip"):
+        # 표지가 영상인 새 포맷(10/25): 글자가 영상에 박혀 있어서 글 머리 회색 커버는 제목만 두고,
+        # 영상은 본문 맨 위에서 자동 재생한다. TP Cover Photo는 사진(tp-cover-photo)만 커버로 옮기므로 영상은 건드리지 않는다
+        return clip_block(media, order["cover_clip"], order["cover_poster"], cls="tp-cover-clip")
+    if order.get("cover_photo"):
+        # TP Cover Photo가 이 이름표(tp-cover-photo) 사진을 글 머리 커버로 옮긴다
+        return image_block(media, order["cover_photo"], notes.get("cover_alt", ""),
+                           size="large", cls="tp-cover-photo", link_none=True)
+    return ""
+
+
 def build_archive(order, cards, notes, media):
     if len(notes["cards"]) != len(cards["cards"]):
         sys.exit(f"카드 {len(cards['cards'])}장인데 notes는 {len(notes['cards'])}장이에요")
-    out = ""
-    if order.get("cover_photo"):
-        # TP Cover Photo가 이 이름표(tp-cover-photo) 사진을 글 머리 커버로 옮긴다
-        out += image_block(media, order["cover_photo"], notes.get("cover_alt", ""),
-                           size="large", cls="tp-cover-photo", link_none=True)
+    cover = cover_block(order, notes, media)
+    out = cover
     intro = [para(esc(p)) for p in cards["intro"]]
     # 인터뷰 프로필 카드: 시작 카드는 첫 줄 "[ 트포 인터뷰 : … ]" 바로 아래(광고 글 439의 [광고] 줄 자리와 같다), 끝 카드는 맨 끝
     # 패널형은 대상을 판 안 얼굴로 쓰니 프로필 카드를 따로 안 넣는다(panel_cards 참고)
@@ -426,8 +437,6 @@ def build_archive(order, cards, notes, media):
         # 셰프가 새 디자인을 만든 글: 커버 뒤 본문 전체를 이름표 하나로 감싼다.
         # `css` 명령은 이 이름표로 시작하는 규칙만 받아서, 새 CSS가 다른 글에 닿지 않는다(10/17 사용자: 새 규칙은 새 class 안에만)
         cls = design_class(order)
-        cover = image_block(media, order["cover_photo"], notes.get("cover_alt", ""), size="large",
-                            cls="tp-cover-photo", link_none=True) if order.get("cover_photo") else ""
         out = cover + group(cls, out[len(cover):])
     return out
 
@@ -761,6 +770,25 @@ def link_label(link, card):
     return f"{site}에서 영상 보기" + (f" ({card['src']})" if card.get("src") else "")
 
 
+def cover_video(d, order, f):
+    """표지(1번 카드)가 영상인 새 포맷(10/25 사용자): 글자가 영상에 박혀 있어서 영상 파일만 있으면 된다.
+    사이트 영상(소리 뺀 H.264 720p) + 재생 전 포스터 + 대표 이미지(목록·공유 미리보기)를 모두 그 영상에서 만든다.
+    글자 없는 커버 사진이 따로 없으니 cover_photo는 비운다. 돌려주는 값 = 경고 목록."""
+    src = d / f["path"]
+    if f["kind"] != "video" or not src.exists():
+        return ["1번(표지)은 영상 파일만 받아요 — 파일이 없거나 사진이에요"]
+    order["cover_clip"] = make_clip(src, d / "images" / "01-clip.mp4")
+    order["cover_poster"] = video_frame(src, d / "images" / "01-poster.jpg", scale=SCALE_720)
+    # 대표 이미지는 포스터와 같은 장면(같은 thumbnail 선택)을 원래 크기로
+    order["featured"] = video_frame(src, d / "images" / "featured.jpg")
+    order.pop("cover_photo", None)
+    warn = ["1번(표지)은 영상이에요 — 사이트 맨 위에서 자동 재생하고, 영상 장면 하나가 대표 이미지예요 (이상하면 `still <주문> 1 <초>`)"]
+    mb = (d / "images" / order["cover_clip"]).stat().st_size / 1048576
+    if mb > 15:
+        warn.append(f"1번 표지 영상이 {mb:.0f}MB예요 — 폰에서 늦게 뜰 수 있으니 짧게 잘라도 될지 확인")
+    return warn
+
+
 def video_card(d, n, card, fr, url, f):
     """영상 카드 한 장을 채운다. 돌려주는 값 = 경고 목록."""
     warn = []
@@ -811,6 +839,15 @@ def still(d, n, at):
     f = order.get("files", {}).get(str(n))
     if not f or f["kind"] != "video":
         sys.exit(f"{n}번 카드엔 영상 파일이 없어요 (탭 영상 카드 칸에 파일을 넣은 카드만 돼요)")
+    if n == 1:
+        # 표지 영상: 포스터와 대표 이미지를 같은 장면으로 같이 바꾼다. 새 이름이라야 draft가 다시 올린다(아래와 같은 이유)
+        tag = f"{at:g}s".replace(".", "_")
+        src = d / f["path"]
+        order["cover_poster"] = video_frame(src, d / "images" / f"01-poster-{tag}.jpg", at=at, scale=SCALE_720)
+        order["featured"] = video_frame(src, d / "images" / f"featured-{tag}.jpg", at=at)
+        save(d, "order.json", order)
+        print(f"1번 → {order['cover_poster']} (대표 이미지 {order['featured']})")
+        return
     card = next((c for c in cards["cards"] if c.get("no") == n), None)
     if card is None:
         sys.exit(f"cards.json에 {n}번 카드가 없어요")
@@ -1451,19 +1488,27 @@ def fetch(d):
                 warn.append(f"{n}번 사진이 없어요 — 카드 미리보기(figma/cards/)를 보고 판단해 주세요")
         cards.append(card)
 
-    # 표지: 표지에 쓰인 사진 중 진짜 사진 = 글자 없는 커버, export = 글자 있는 표지(대표 이미지)
-    cover_raws = [p for p in (scan_image(d, e) for e in frames[0]) if p] if frames else []
-    cover_raws = cover_raws or raws(d, "cover")
-    if cover_raws:
-        order["cover_photo"] = to_web(pick_photo(cover_raws), d / "images" / "cover.jpg")
+    # 표지가 영상인 새 포맷(10/25): 탭 영상 카드 칸에 1번 + 영상 파일. 글자가 영상에 박혀 있어 사진·export가 필요 없다
+    for k in ("cover_clip", "cover_poster"):
+        order.pop(k, None)
+    if 1 in files and weekly:
+        warn.append("주간 총정리는 표지 영상을 안 써요 — 1번 영상 파일은 무시했어요")
+    if 1 in files and not weekly:
+        warn += cover_video(d, order, files[1])
     else:
-        warn.append("표지 사진 원본이 없어요 (플러그인 zip의 figma/images/, 또는 MCP figma/cover-raw-*)")
-    # 글자 있는 표지: 플러그인 3판은 JPG, 그 전 zip·MCP는 PNG
-    cover_export = next((p for p in (d / "figma" / "cover-export.jpg", d / "figma" / "cover-export.png") if p.exists()), None)
-    if cover_export:
-        order["featured"] = to_web(cover_export, d / "images" / "featured.jpg")
-    else:
-        warn.append("figma/cover-export.jpg 가 없어요 (플러그인 zip, 또는 표지 프레임 download_assets의 export)")
+        # 표지: 표지에 쓰인 사진 중 진짜 사진 = 글자 없는 커버, export = 글자 있는 표지(대표 이미지)
+        cover_raws = [p for p in (scan_image(d, e) for e in frames[0]) if p] if frames else []
+        cover_raws = cover_raws or raws(d, "cover")
+        if cover_raws:
+            order["cover_photo"] = to_web(pick_photo(cover_raws), d / "images" / "cover.jpg")
+        else:
+            warn.append("표지 사진 원본이 없어요 (플러그인 zip의 figma/images/, 또는 MCP figma/cover-raw-*)")
+        # 글자 있는 표지: 플러그인 3판은 JPG, 그 전 zip·MCP는 PNG
+        cover_export = next((p for p in (d / "figma" / "cover-export.jpg", d / "figma" / "cover-export.png") if p.exists()), None)
+        if cover_export:
+            order["featured"] = to_web(cover_export, d / "images" / "featured.jpg")
+        else:
+            warn.append("figma/cover-export.jpg 가 없어요 (플러그인 zip, 또는 표지 프레임 download_assets의 export)")
 
     if weekly:
         letter, picks, w = read_weekly_caption(d)
@@ -1485,6 +1530,11 @@ def fetch(d):
     cover_text = " ".join(t.get("name", "") for t in frames[0].iter("text")) if frames else ""
     if intro and "\n" not in intro[0] and squash(intro[0]) and squash(intro[0]) in squash(cover_text):
         warn.append(f"캡션 첫 줄은 표지 제목과 같아서 뺐어요: {intro[0]}")
+        intro = intro[1:]
+    if order.get("cover_clip") and intro and "\n" not in intro[0] and len(intro[0]) <= 60 and not intro[0].lstrip().startswith("["):
+        # 표지가 영상이면 표지 글자를 읽을 수 없으니 비교 대신, 짧은 한 줄 첫 문단은 글 제목(post-formats 규칙)으로 보고 뺀다.
+        # 영상 글자와 같은지는 셰프가 포스터를 보고 확인한다
+        warn.append(f"캡션 첫 줄은 글 제목(표지 영상 글자)으로 보고 뺐어요: {intro[0]} — 제목 후보로 쓰고, 영상 글자와 다르면 캡션 문단으로 되돌리기")
         intro = intro[1:]
     save(d, "cards.json", {"intro": intro, "cards": cards, "outro": outro})
     save(d, "order.json", order)
@@ -1538,6 +1588,8 @@ def alts(d):
     out = {}
     if order.get("cover_photo"):
         out[order["cover_photo"]] = notes.get("cover_alt", "")
+    if order.get("cover_poster"):
+        out[order["cover_poster"]] = notes.get("cover_alt", "")  # 표지 영상 포스터 = 표지 사진 자리
     if order.get("featured"):
         out.setdefault(order["featured"], notes.get("featured_alt", ""))
     for c, n in zip(cards["cards"], notes["cards"]):

@@ -39,6 +39,8 @@ Reference posts are on trendportal.kr as `/archives/<id>/`.
 
 **Cover**: the post header shows the title only (grey grain area). The cover photo without text is the first block (`tp-cover-photo`); the cover with its text is the featured image for lists and link previews. The cover is not repeated in the body.
 
+**Cover video** (from 10/25, a new Instagram format where card 1 is a video with the title burned in): the order's 영상 카드 row for card 1 has only the video file. The first body block is our own muted, looping clip (`wp:video`, class `tp-cover-clip`) with a poster; there is no `tp-cover-photo`, so the header stays grey with the title only. The featured image is a frame from the same video (the poster's scene). The caption's first short line is the post title and is left out, as with a cover photo. The weekly roundup does not use a cover video.
+
 **Alt text**: in Korean, what is actually visible: people, objects, place, the brand when it is visible.
 
 **Publishing**: a person reviews and publishes. The Kakao share button is added by the template. Do not remove the `.sharedaddy { display: none }` CSS line.

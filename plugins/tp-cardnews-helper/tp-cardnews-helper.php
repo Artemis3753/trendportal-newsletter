@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.26.0
+ * Version: 1.27.0
  * Author: Trendportal
  */
 
@@ -149,10 +149,14 @@ function tp_cn_parse_video_rows( $cards, $urls, $files ) {
 		if ( '' === $raw && ! $file ) {
 			continue; // 빈 줄 (카드 번호만 적은 줄도 넣을 게 없으니 넘긴다)
 		}
-		if ( ! preg_match( '/^\d{1,2}$/', $card ) || (int) $card < 2 ) {
-			return new WP_Error( 'tp_cn_video', '영상 카드 줄에 카드 번호를 적어 주세요 (표지가 1번이라 2번부터)' );
+		if ( ! preg_match( '/^\d{1,2}$/', $card ) || (int) $card < 1 ) {
+			return new WP_Error( 'tp_cn_video', '영상 카드 줄에 카드 번호를 적어 주세요 (표지가 1번)' );
 		}
 		$no = (string) (int) $card;
+		// 1.27.0(10/25): 표지(1번)가 영상인 새 포맷 — 글자가 영상에 박혀 있어서 영상 파일만 받는다. 원본 주소·사진은 쓸 데가 없다
+		if ( '1' === $no && ( '' !== $raw || ! $file ) ) {
+			return new WP_Error( 'tp_cn_video', '1번(표지)은 영상 파일만 넣어 주세요 — 글자가 영상에 들어 있는 표지 영상이에요. 주소는 필요 없어요' );
+		}
 		if ( isset( $out['videos'][ $no ] ) || isset( $out['files'][ $no ] ) ) {
 			return new WP_Error( 'tp_cn_video', "{$no}번 카드가 영상 카드 칸에 두 번 있어요" );
 		}
@@ -170,6 +174,9 @@ function tp_cn_parse_video_rows( $cards, $urls, $files ) {
 			$kind = TP_CN_FILE_TYPES[ $ext ] ?? '';
 			if ( ! $kind || tp_cn_sniff( $file['tmp_name'] ) !== $kind ) {
 				return new WP_Error( 'tp_cn_video', "{$no}번 파일은 영상(mp4·mov·m4v·webm)이나 사진(jpg·png·webp)만 받아요" );
+			}
+			if ( '1' === $no && 'video' !== $kind ) {
+				return new WP_Error( 'tp_cn_video', '1번(표지)은 영상 파일(mp4·mov·m4v·webm)만 받아요' );
 			}
 			$out['files'][ $no ] = array(
 				'tmp'  => $file['tmp_name'],
@@ -1663,7 +1670,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 			<div class="tpcn-vrows" id="tpcn-vrows">
 				<?php // 줄 번호(i)를 이름에 박아 둔다 — 파일을 안 고른 줄이 있어도 번호·파일·주소가 같은 줄끼리 짝지어지게 ?>
 				<div class="tpcn-vrow">
-					<input type="number" name="vcard[0]" min="2" max="99" placeholder="카드" aria-label="카드 번호">
+					<input type="number" name="vcard[0]" min="1" max="99" placeholder="카드" aria-label="카드 번호">
 					<label class="tpcn-vfile"><input type="file" name="vfile[0]" accept="video/mp4,video/quicktime,video/x-m4v,video/webm,image/jpeg,image/png,image/webp" title=""><span>🎬 파일 고르기</span></label>
 					<input type="url" name="vurl[0]" placeholder="원본 영상 주소 (남의 영상일 때)" aria-label="원본 영상 주소">
 					<button type="button" class="tpcn-vdel" aria-label="이 줄 지우기">×</button>
@@ -1676,6 +1683,8 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				<summary>자세히 보기</summary>
 				<ul>
 					<li><b>카드 번호</b> = 피그마 프레임 이름 끝 숫자예요. 예: <code>트렌드포털 802-4</code> → <b>4</b> (표지가 1번이라, 카드뉴스를 넘겨 보는 순서와 같아요)</li>
+					<?php // 1.27.0(10/25): 1번 카드가 영상인 새 카드뉴스 포맷(글자가 영상에 박혀 있음) ?>
+					<li><b>1번 = 표지 영상</b>: 표지가 영상이고 글자가 영상에 들어 있으면 <b>카드 1 + 영상 파일 하나</b>만 넣으세요 (주소는 비워 두기). 글 맨 위에서 소리 없이 자동 재생되고, 영상 장면이 목록·공유 미리보기 사진이 돼요</li>
 					<li><b>주소</b> = 원래 영상이 올라간 곳의 주소. 인스타 릴스·게시물, 유튜브(일반·youtu.be·쇼츠), X를 받아요. <code>?igsh=…</code> 같은 꼬리는 알아서 떼요</li>
 					<li><b>주소 + 영상 파일</b>: 셰프가 영상에서 잘 나온 장면을 골라 정지 화면으로 써요 (인스타 정지 화면보다 선명). 영상 자체는 사이트에 안 올려요</li>
 					<li><b>주소 + 사진 파일</b>: 그 사진(직접 캡처한 장면)을 정지 화면으로 써요</li>
