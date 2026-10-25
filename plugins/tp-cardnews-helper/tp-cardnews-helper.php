@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.28.1
+ * Version: 1.29.0
  * Author: Trendportal
  */
 
@@ -1434,6 +1434,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .s-done { --s: var(--done); --s-soft: var(--done-soft); }
 .s-question, .s-answered { --s: #d6336c; --s-soft: #fde2ec; }
 .tpcn-q { padding: 8px 10px; border-radius: 10px; background: var(--s-soft); }
+.tpcn-body .tpcn-memo { padding: 8px 10px; border-radius: 10px; background: var(--bg); border: 1px dashed var(--line-strong); color: var(--muted); }
 .tpcn-answer button { background: #d6336c; }
 .s-failed { --s: var(--failed); --s-soft: var(--failed-soft); }
 .tpcn-body { grid-column: 2 / -1; font-size: 13px; }
@@ -1719,13 +1720,13 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 			</details>
 		</div>
 		<div class="tpcn-field">
-			<label for="tpcn-memo">메모 <em>선택</em></label>
+			<label for="tpcn-memo">추가 디테일 주문사항 <em>선택</em></label>
 			<textarea id="tpcn-memo" name="memo" rows="2" placeholder="예: 카드 배경처럼 어둡게 물들여서 / 제목에 '팝업' 넣어 주세요"></textarea>
 			<?php // 10/17 사용자: 메모로 무엇까지 시킬 수 있는지 화면에서 알 수 있게. 형식 이름은 docs/post-formats.md와 같게 ?>
 			<details class="tpcn-how" open>
-				<summary>메모로 할 수 있는 것</summary>
+				<summary>추가 디테일 주문사항으로 할 수 있는 것</summary>
 				<ul>
-					<li><b>인터뷰</b>는 메모 대신 맨 위 <b>🎤 인터뷰</b>를 눌러 형식·대상을 골라 주세요</li>
+					<li><b>인터뷰</b>는 여기 말고 맨 위 <b>🎤 인터뷰</b>를 눌러 형식·대상을 골라 주세요</li>
 					<li><b>디자인</b>: <code>카드 배경처럼 어둡게 물들여서</code>처럼 적으면 이 글에만 CSS를 입혀요. 셰프는 화면을 못 보니 미리보기로 확인해 주세요</li>
 					<li><b>제목·카테고리</b>: <code>제목에 '팝업' 넣어 주세요</code>, <code>카테고리는 브랜드</code></li>
 					<li><b>카드에 없는 사실</b>: 인스타 계정, 바른 이름처럼 셰프가 알 수 없는 것</li>
@@ -1767,6 +1768,9 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 			</div>
 			<span class="tpcn-chip<?php echo $pub ? ' is-pub' : ''; ?>"><?php echo esc_html( $pub ? '발행됨' : ( ( 'done' === $s && 'future' === $o['post_status'] ) ? '예약됨' : TP_CN_STATUS[ $s ] ) ); ?></span>
 			<div class="tpcn-body">
+			<?php if ( '' !== trim( (string) $o['memo'] ) ) : // 10/25 사용자: 처음 주문할 때 쓴 메모도 내역에 남긴다. 어느 상태든 맨 위에 ?>
+				<p class="tpcn-memo">📝 <b>추가 디테일 주문사항</b><br><?php echo nl2br( esc_html( $o['memo'] ) ); ?></p>
+			<?php endif; ?>
 			<?php if ( 'new' === $s ) : ?>
 				<?php if ( null === tp_cn_recall_reason( $o, $u['now'] ) ) : // 초인종이 실패했으면 "곧 가져가요"는 틀린 말이라 아래 이유만 ?>
 				<p>셰프 트란시스가 곧 주문서를 가져가요.</p>
