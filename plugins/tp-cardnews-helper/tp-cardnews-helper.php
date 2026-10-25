@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.28.0
+ * Version: 1.28.1
  * Author: Trendportal
  */
 
@@ -1535,6 +1535,12 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-chip { border: 2px solid currentColor; padding: 2px 10px; }
 .tpcn .tpcn-chip.is-pub { border-color: var(--ink); }
 .tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-sched button, .tpcn .tpcn-unsched button, .tpcn .tpcn-saved-btn button, .tpcn .tpcn-revise button, .tpcn .tpcn-recall button { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+/* 버튼 줄 균형(10/25 사용자): 링크·버튼·날짜 칸이 제각각 높이라 들쭉날쭉했다. 링크는 flex 기본값(stretch) 때문에 날짜 칸 높이만큼 늘어나 있었다.
+   그래서 세로 가운데 정렬 + 모두 같은 높이(36px)로 맞추고, 그림자(3px)가 옆 버튼에 닿지 않게 간격을 넓힌다 */
+.tpcn .tpcn-links { align-items: center; gap: 10px 12px; }
+.tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-sched button, .tpcn .tpcn-unsched button, .tpcn .tpcn-saved-btn button { box-sizing: border-box; height: 36px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; white-space: nowrap; }
+.tpcn .tpcn-sched { gap: 8px; }
+.tpcn .tpcn-sched input { box-sizing: border-box; height: 36px; padding: 0 14px; font-size: 13px; }
 .tpcn .tpcn-check { border: 2px solid var(--ink); box-shadow: 3px 3px 0 #f2cf7c; background: #fff; }
 /* 손본 것 강조(10/18 사용자, 시안 1018-10 1 색 띠): 노란 상자·버터색 카드 위에서 확인 항목이 묻혀서,
    확인 항목은 어디서든(발행 전 상자·발행 뒤 목록·수정 기록) 한 줄씩 색 띠 + 왼쪽 굵은 선, 일반 기록은 흐린 회색으로 물린다 */
