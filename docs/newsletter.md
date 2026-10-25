@@ -21,9 +21,10 @@ Claude writes the whole issue: letter, editor picks, every card, notices, closin
 
 ## 💡 주목 포인트 in the newsletter
 
-- **Go beyond the card.** For each card, research the background, numbers, similar cases and why it is happening now, and write the insight from that. The card is the starting point, not the limit.
-- **Length is fine.** Several paragraphs per card is expected; spending more searches and tokens for quality is approved.
+- **Go beyond the card.** For each card, research the background, numbers, similar cases and why it is happening now, and write the insight from that. The card is the starting point, not the limit. Never restate the card's or the caption's own sentences in other words: the 💡 starts where they stop. For a video card the helper cannot watch the video, so it works from the caption, the card text, the still and the pages it opens.
+- **Length is fine.** Three to five paragraphs per card is expected; spending more searches, page reads and tokens for quality is approved (site owner, 10/25: the Stibee issue must be rich and must not contain a falsehood).
 - **Facts need sources.** Write only what a source supports, and list the sources for each card (`sources`, shown as 참고 links under the box). If something cannot be confirmed, leave it out or flag it for review; do not guess.
+- **Read the page, not the snippet.** A number, date, name, price or quote goes in only if it was read on a page that was opened (`WebFetch`); a search snippet alone is not enough. A reason a brand did something is written as fact only if a source says it; otherwise it is worded as a reading or left out. What the card says is attributed to the card.
 - **No copying.** Summarize and link; never paste article sentences or use article photos.
 - Tone: the same plain `~다` sentences as the site's 💡. The letter, picks, notices and closing speak to the reader in `~요`.
 - **Highlight only what matters (10/19).** Wrap a key phrase in `**…**` and it shows bold with a yellow marker, the same as on the site. One or two per card (at most one per paragraph), and at most one in the letter. A phrase, not a whole sentence. Unmarked text has no highlight.

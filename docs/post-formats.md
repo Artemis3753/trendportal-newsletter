@@ -147,5 +147,6 @@ The memo in the order tab and "고쳐 주세요" come from the site team. Throug
 - a category or title
 - design changes for this post (new CSS stays under its own `tp-fmt-…` class)
 - facts the cards do not have: an Instagram account, a corrected name
+- more flesh on the post, in any wording (`살을 붙여줘`, `배경 설명 추가`, `캡션을 중복으로 쓰지 말고 연장해서 더 디테일하게, 소제목·소본문 추가`, a short subheading and paragraph for each item the cards only name): the new part starts where the caption stops and never restates it (when the same words appear twice, one is dropped and the change list says which); the helper researches the web (pages are opened and read, not just search snippets), writes only what a source supports, ends the added section with a small `참고 : 매체명, …` line (`tp-source` style, each outlet linked), and lists what it added in the order's change list as `보강: …` (`tp-source` is also the card source line `© …`; this one starts with `참고 :`)
 
 The helper follows them inside the order's own draft. Facts on the cards still change only when the request gives the corrected fact.
