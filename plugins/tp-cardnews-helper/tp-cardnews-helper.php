@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.27.1
+ * Version: 1.28.0
  * Author: Trendportal
  */
 
@@ -405,22 +405,36 @@ add_action(
 			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( $msg ), $back ) );
 			exit;
 		};
-		$text = trim( sanitize_textarea_field( wp_unslash( $_POST['feedback'] ?? '' ) ) );
-		if ( TP_CN_TYPE !== get_post_type( $id ) || 'done' !== get_post_meta( $id, '_tp_cn_status', true ) ) {
-			$fail( '완성된 주문만 고칠 수 있어요' );
+		$text   = trim( sanitize_textarea_field( wp_unslash( $_POST['feedback'] ?? '' ) ) );
+		$status = TP_CN_TYPE === get_post_type( $id ) ? get_post_meta( $id, '_tp_cn_status', true ) : '';
+		if ( 'done' !== $status && 'failed' !== $status ) {
+			$fail( '완성되거나 멈춘 주문만 고칠 수 있어요' );
 		}
 		if ( '' === $text ) {
 			$fail( '무엇을 고칠지 적어 주세요' );
 		}
-		if ( ! get_post_meta( $id, '_tp_cn_state', true ) ) {
-			// 1.4.0 전에 완성된 주문은 작업 기록이 없어서 이어서 고칠 수 없다
-			$fail( '이 주문은 작업 기록이 없어서 고칠 수 없어요. 편집기에서 직접 고치거나 새로 주문해 주세요' );
+		$has_state = (bool) get_post_meta( $id, '_tp_cn_state', true );
+		if ( 'done' === $status || $has_state ) {
+			if ( ! $has_state ) {
+				// 1.4.0 전에 완성된 주문은 작업 기록이 없어서 이어서 고칠 수 없다
+				$fail( '이 주문은 작업 기록이 없어서 고칠 수 없어요. 편집기에서 직접 고치거나 새로 주문해 주세요' );
+			}
+			// 수정하다 멈춘 주문(1.28.0)이면 처음 요청을 지우지 않고 이어 붙인다 — 멈춘 이유에 답하는 글이라 앞 요청이 같이 있어야 뜻이 통한다
+			$before = 'failed' === $status ? (string) get_post_meta( $id, '_tp_cn_feedback', true ) : '';
+			update_post_meta( $id, '_tp_cn_feedback', '' === $before ? $text : $before . "\n(추가) " . $text );
+			update_post_meta( $id, '_tp_cn_status', 'revise' );
+		} elseif ( get_post_meta( $id, '_tp_cn_zip', true ) ) {
+			// 처음 요리에서 멈췄다면 고칠 초안(작업 기록)이 아직 없다. 셰프는 zip을 다시 풀어 처음부터 하되, 사람이 쓴 말은 메모 칸으로 넘긴다
+			// (메모는 이 글 하나만 움직이는 지시라서 셰프 지시문이 이미 그렇게 읽는다)
+			$memo = (string) get_post_meta( $id, '_tp_cn_memo', true );
+			update_post_meta( $id, '_tp_cn_memo', '' === $memo ? $text : $memo . "\n(주방이 멈춘 뒤 추가) " . $text );
+			update_post_meta( $id, '_tp_cn_status', 'new' );
+		} else {
+			$fail( '이 주문은 zip도 작업 기록도 없어서 다시 요리할 수 없어요. 새로 주문해 주세요' );
 		}
-		update_post_meta( $id, '_tp_cn_feedback', $text );
-		update_post_meta( $id, '_tp_cn_status', 'revise' );
 		delete_post_meta( $id, '_tp_cn_error' );
 		if ( ! tp_cn_ring( $id ) ) {
-			$fail( '수정 요청은 받았는데 셰프를 깨우지 못했어요. ' . get_post_meta( $id, '_tp_cn_bell_err', true ) );
+			$fail( '요청은 받았는데 셰프를 깨우지 못했어요. ' . get_post_meta( $id, '_tp_cn_bell_err', true ) );
 		}
 		wp_safe_redirect( add_query_arg( 'tp_cn_rev', $id, $back ) );
 		exit;
@@ -921,6 +935,7 @@ function tp_cn_order( $post, $with_state = false ) {
 		'bell_err' => get_post_meta( $id, '_tp_cn_bell_err', true ),
 		'started'  => (int) get_post_meta( $id, '_tp_cn_working_at', true ),
 		'has_zip'  => (bool) get_post_meta( $id, '_tp_cn_zip', true ),
+		'has_state' => (bool) get_post_meta( $id, '_tp_cn_state', true ),
 		// 수정 요청: 지금 들어온 요청, 지난 수정들(요청 + 셰프가 손본 것), 셰프가 이어받을 작업 기록(파일 이름 → 내용)
 		'feedback' => get_post_meta( $id, '_tp_cn_feedback', true ),
 		'question' => get_post_meta( $id, '_tp_cn_question', true ),
@@ -1201,8 +1216,8 @@ function tp_cn_page() {
 	} elseif ( isset( $_GET['tp_cn_ok'] ) && 'new' === get_post_meta( (int) $_GET['tp_cn_ok'], '_tp_cn_status', true ) ) {
 		// 아직 접수 상태일 때만. 요리가 시작·끝난 뒤엔 목록이 상태를 말해 주니 "곧 시작해요"가 남아 있으면 헷갈린다
 		$msg = array( 'ok', '주문 받았어요! 셰프 트란시스가 곧 요리를 시작해요.' );
-	} elseif ( isset( $_GET['tp_cn_rev'] ) && 'revise' === get_post_meta( (int) $_GET['tp_cn_rev'], '_tp_cn_status', true ) ) {
-		$msg = array( 'ok', '수정 요청 받았어요! 셰프 트란시스가 같은 초안을 고쳐 둘게요.' );
+	} elseif ( isset( $_GET['tp_cn_rev'] ) && in_array( get_post_meta( (int) $_GET['tp_cn_rev'], '_tp_cn_status', true ), array( 'revise', 'new' ), true ) ) {
+		$msg = array( 'ok', '요청 받았어요! 셰프 트란시스가 다시 요리해 둘게요.' );
 	}
 	// 지난 주문 더 보기(1.25.0, 10/20 사용자): 처음엔 최근 30개만 그리고, 누를 때마다 30개씩 더.
 	// 숫자만 키우지 않은 이유: 뉴스레터 주문은 메일 HTML을 통째로 품고 있어서 주문이 쌓일수록 탭을 열 때마다 무거워진다.
@@ -1779,6 +1794,15 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 					<a href="<?php echo esc_url( home_url( '/?p=' . (int) $o['post_id'] . '&preview=true' ) ); ?>" target="_blank" rel="noopener">지난 초안 미리보기</a>
 					<a href="<?php echo esc_url( admin_url( 'post.php?post=' . (int) $o['post_id'] . '&action=edit' ) ); ?>">편집기에서 열기</a>
 				</div>
+				<?php endif; ?>
+				<?php if ( $o['has_zip'] || $o['has_state'] ) : // 1.28.0: 멈춘 이유를 읽고 바로 답하기. 다시 요리할 재료(zip·작업 기록)가 없으면 말해도 소용없어서 칸을 안 둔다 ?>
+				<form class="tpcn-revise" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
+					<input type="hidden" name="action" value="tp_cn_revise">
+					<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
+					<?php wp_nonce_field( 'tp_cn_revise_' . (int) $o['id'] ); ?>
+					<textarea name="feedback" rows="2" required placeholder="셰프에게 한마디 — 예: 3번 사진은 그냥 빼고 만들어 줘 / 제목은 원본 그대로 써 줘"></textarea>
+					<button type="submit">✏️ 말하고 다시 요리</button>
+				</form>
 				<?php endif; ?>
 			<?php else : ?>
 				<?php if ( $o['title'] ) : ?>
