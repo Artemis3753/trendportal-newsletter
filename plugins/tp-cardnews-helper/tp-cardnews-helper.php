@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.29.0
+ * Version: 1.29.1
  * Author: Trendportal
  */
 
@@ -1551,6 +1551,10 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-body ul.tpcn-changes li.lv1 { padding-left: 10px; color: #9a8f86; }
 .tpcn .tpcn-body ul.tpcn-changes li.lv1::before { content: "· "; }
 .tpcn .tpcn-revise textarea { border: 2px solid var(--ink); border-radius: 14px; background: #fff; }
+/* 추가 디테일 주문사항(10/25 사용자 "조금 더 티나게"): 흐린 점선 상자라 카드 제목·버튼 사이에서 묻혔다.
+   포스트잇처럼 진한 노란 바탕 + 갈색 테두리·블록 그림자로 띄우고, 글자도 본문 색·한 단계 크게. 발행 카드(버터색) 위에서도 갈리도록 노랑을 더 진하게 */
+.tpcn .tpcn-body .tpcn-memo { margin: 8px 4px 12px 0; padding: 10px 14px 11px; border: 2px solid var(--ink); border-radius: 12px; background: #ffe27a; box-shadow: 3px 3px 0 var(--ink); color: var(--ink); font-size: 14px; line-height: 1.55; }
+.tpcn .tpcn-body .tpcn-memo b { color: #b8421c; font-size: 12.5px; letter-spacing: .02em; }
 </style>
 
 <div class="tpcn-towel" aria-hidden="true"></div>
