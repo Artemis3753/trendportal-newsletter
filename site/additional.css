@@ -965,10 +965,29 @@ body:has(.tp-copy-stage) { overflow-x: clip; }
   content: "\C800\C7A5  1,000+";
   position: absolute; top: 8px; left: 8px; z-index: 1;
   padding: 3px 6px 3px 19px; border-radius: 4px;
-  background: #111 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 3h12v18l-6-4.5L6 21z' fill='%23fff'/%3E%3C/svg%3E") no-repeat 6px 50% / 10px 10px;
+  background: #111 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 3h12v18l-6-4.5L6 21z' fill='%23ffd43b'/%3E%3C/svg%3E") no-repeat 6px 50% / 10px 10px;
   color: #fff; font-size: 11px; font-weight: 800; line-height: 1.2; letter-spacing: .01em; white-space: nowrap;
   pointer-events: none;
 }
+
+/* ---------- Likes 1,000+ badge (10/26) ---------- */
+/* Same black badge as the saves one, for posts tagged tplike1000 (liked 1,000+ times on Instagram).
+   A post can wear both (10/26): this badge uses the other pseudo-element (::before on list cards, ::after on related cards),
+   so the two never replace each other, and when both tags are present it sits one row lower.
+   The icon is a red heart, against the yellow bookmark of the saves badge, so the two read apart even without the words */
+.wp-block-post.tag-tplike1000 .wp-block-post-featured-image,
+.tp-related-card.tag-tplike1000 { position: relative; }
+.wp-block-post.tag-tplike1000 .wp-block-post-featured-image::before,
+.tp-related-card.tag-tplike1000::after {
+  content: "\C88B\C544\C694  1,000+";
+  position: absolute; top: 8px; left: 8px; z-index: 1;
+  padding: 3px 6px 3px 19px; border-radius: 4px;
+  background: #111 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' fill='%23ff2d4f'/%3E%3C/svg%3E") no-repeat 6px 50% / 10px 10px;
+  color: #fff; font-size: 11px; font-weight: 800; line-height: 1.2; letter-spacing: .01em; white-space: nowrap;
+  pointer-events: none;
+}
+.wp-block-post.tag-tp1000.tag-tplike1000 .wp-block-post-featured-image::before,
+.tp-related-card.tag-tp1000.tag-tplike1000::after { top: 32px; }
 
 /* ---------- Newsletter ---------- */
 .tp-nl-wrap { background: #f4f4f4; padding: 3.5rem 1.5rem !important; margin-top: 0 !important; }
