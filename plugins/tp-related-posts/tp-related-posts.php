@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Related Posts
  * Description: 글 끝(카톡 공유와 댓글 사이)에 "다른 글도 볼까요?" 카드 줄을 붙인다. 일반 글은 같은 카테고리 최신 글부터, 모자라면 전체 최신 글로 채우고, 주간 총정리 글에는 지난 총정리를 보여 준다. 모양은 추가 CSS(.tp-related).
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Trendportal
  */
 
@@ -131,12 +131,13 @@ function tp_rp_card( $id, $weekly ) {
 		)
 	);
 
-	// 저장 1,000+ 뱃지(10/20): 목록 카드는 워드프레스가 붙이는 tag-tp1000 class로 뱃지를 그린다. 여기도 같은 이름을 붙여 CSS 한 줄로 같이 그린다
-	$saved = has_tag( 'tp1000', $id ) ? ' tag-tp1000' : '';
+	// 저장·좋아요 1,000+ 뱃지(10/20, 좋아요 10/26): 목록 카드는 워드프레스가 붙이는 tag-tp1000·tag-tplike1000 class로 뱃지를 그린다.
+	// 여기도 같은 이름을 붙여 CSS 한 줄로 같이 그린다. 한 글에 둘 다 달 수 있다
+	$badges = ( has_tag( 'tp1000', $id ) ? ' tag-tp1000' : '' ) . ( has_tag( 'tplike1000', $id ) ? ' tag-tplike1000' : '' );
 
 	return sprintf(
 		'<a class="tp-related-card%s" href="%s">%s<span class="tp-related-label">%s</span><span class="tp-related-title">%s</span></a>',
-		$saved,
+		$badges,
 		esc_url( get_permalink( $id ) ),
 		$img,
 		esc_html( $label ),

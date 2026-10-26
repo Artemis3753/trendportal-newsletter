@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.29.1
+ * Version: 1.30.0
  * Author: Trendportal
  */
 
@@ -585,22 +585,43 @@ add_action(
 	}
 );
 
-// ── 저장 1,000+ 뱃지 (1.24.0, 10/20 사용자 A+B) ─────────────
-// 인스타 저장 1,000회를 넘긴 카드의 글에 태그 tp1000을 달면 사이트 카드에 "저장 1,000+" 뱃지가 뜬다(모양은 추가 CSS·TP Related Posts).
-// 저장 수는 계정 주인만 인사이트에서 보니 사람이 표시한다: 주문할 때 체크(A) 또는 나중에 넘기면 주문 목록의 버튼(B).
-// 표시 여부는 주문 메타(_tp_cn_saved)가 기준이다 — 셰프의 draft가 고칠 때마다 order.json의 태그로 통째로 덮어써서,
-// 셰프가 보고할 때마다 여기서 다시 붙인다
-const TP_CN_SAVED_TAG = 'tp1000';
+// ── 저장·좋아요 1,000+ 뱃지 (저장 1.24.0 10/20 사용자 A+B, 좋아요 10/26 추가) ─────────────
+// 인스타 저장 1,000회를 넘긴 카드의 글에 태그 tp1000을, 좋아요 1,000회를 넘긴 글에 tplike1000을 달면
+// 사이트 카드에 "저장 1,000+" / "좋아요 1,000+" 뱃지가 뜬다(모양은 추가 CSS·TP Related Posts).
+// 한 글에 둘 다 달 수 있다(10/26 사용자 결정): 저장이 1,000을 넘는 글은 좋아요도 넘는 일이 흔할 것이라, 택일로 막지 않았다.
+// 수치는 계정 주인만 인사이트에서 보니 사람이 표시한다: 주문할 때 체크(A) 또는 나중에 넘기면 주문 목록의 버튼(B).
+// 표시 여부는 주문 메타가 기준이다 — 셰프의 draft가 고칠 때마다 order.json의 태그로 통째로 덮어써서,
+// 셰프가 보고할 때마다 여기서 다시 붙인다. 뱃지 종류는 이 표 한 곳에서만 늘리고 줄인다(키 = 폼 체크 칸 이름)
+const TP_CN_BADGES = array(
+	'saved' => array(
+		'meta'  => '_tp_cn_saved',
+		'slug'  => 'tp1000',
+		'name'  => 'TP 1,000',
+		'label' => '저장',
+		'icon'  => '🔖',
+		'hint'  => '인스타 저장이 1,000번 넘었으면 눌러 주세요',
+	),
+	'liked' => array(
+		'meta'  => '_tp_cn_liked',
+		'slug'  => 'tplike1000',
+		'name'  => 'TP 좋아요 1,000',
+		'label' => '좋아요',
+		'icon'  => '❤️',
+		'hint'  => '인스타 좋아요가 1,000번 넘었으면 눌러 주세요',
+	),
+);
 
-function tp_cn_apply_saved( $order_id ) {
+// 뱃지 하나를 주문 메타에 맞춰 글에 붙이거나 뗀다(다른 뱃지·다른 태그는 건드리지 않는다)
+function tp_cn_apply_badge( $order_id, $key ) {
+	$badge   = TP_CN_BADGES[ $key ];
 	$post_id = (int) get_post_meta( $order_id, '_tp_cn_post', true );
 	if ( ! $post_id || 'post' !== get_post_type( $post_id ) ) {
 		return;
 	}
-	$term = get_term_by( 'slug', TP_CN_SAVED_TAG, 'post_tag' );
+	$term = get_term_by( 'slug', $badge['slug'], 'post_tag' );
 	if ( ! $term ) {
-		// 10/16에 시리즈를 접으면서 태그를 지웠을 수도 있어서, 없으면 같은 주소로 다시 만든다
-		$made = wp_insert_term( 'TP 1,000', 'post_tag', array( 'slug' => TP_CN_SAVED_TAG ) );
+		// 태그를 지웠을 수도 있어서(10/16 시리즈를 접을 때 tp1000이 그랬다), 없으면 같은 주소로 다시 만든다
+		$made = wp_insert_term( $badge['name'], 'post_tag', array( 'slug' => $badge['slug'] ) );
 		if ( is_wp_error( $made ) ) {
 			return;
 		}
@@ -608,30 +629,44 @@ function tp_cn_apply_saved( $order_id ) {
 	} else {
 		$term_id = (int) $term->term_id;
 	}
-	if ( get_post_meta( $order_id, '_tp_cn_saved', true ) ) {
+	if ( get_post_meta( $order_id, $badge['meta'], true ) ) {
 		wp_set_post_terms( $post_id, array( $term_id ), 'post_tag', true ); // true = 다른 태그는 그대로 두고 더하기
 	} else {
 		wp_remove_object_terms( $post_id, $term_id, 'post_tag' );
 	}
 }
 
+// 셰프가 보고한 뒤: 켜져 있는 뱃지만 다시 붙인다(꺼진 뱃지까지 떼면 관리자 화면에서 손으로 단 같은 태그가 사라질 수 있다)
+function tp_cn_reapply_badges( $order_id ) {
+	foreach ( TP_CN_BADGES as $key => $badge ) {
+		if ( get_post_meta( $order_id, $badge['meta'], true ) ) {
+			tp_cn_apply_badge( $order_id, $key );
+		}
+	}
+}
+
 add_action(
-	'admin_post_tp_cn_saved',
+	'admin_post_tp_cn_badge',
 	function () {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( '관리자만 바꿀 수 있어요' );
 		}
-		$id = (int) ( $_POST['order'] ?? 0 );
-		check_admin_referer( 'tp_cn_saved_' . $id );
-		$back = admin_url( 'admin.php?page=' . TP_CN_SLUG );
+		$id  = (int) ( $_POST['order'] ?? 0 );
+		$key = (string) ( $_POST['badge'] ?? '' );
+		if ( ! isset( TP_CN_BADGES[ $key ] ) ) {
+			wp_die( '알 수 없는 뱃지예요' );
+		}
+		check_admin_referer( 'tp_cn_badge_' . $id . '_' . $key );
+		$badge = TP_CN_BADGES[ $key ];
+		$back  = admin_url( 'admin.php?page=' . TP_CN_SLUG );
 		if ( TP_CN_TYPE !== get_post_type( $id ) || ! get_post_meta( $id, '_tp_cn_post', true ) ) {
 			wp_safe_redirect( add_query_arg( 'tp_cn_err', rawurlencode( '글이 만들어진 주문에만 표시할 수 있어요' ), $back ) );
 			exit;
 		}
-		$on = ! get_post_meta( $id, '_tp_cn_saved', true );
-		update_post_meta( $id, '_tp_cn_saved', $on ? 1 : 0 );
-		tp_cn_apply_saved( $id );
-		wp_safe_redirect( add_query_arg( 'tp_cn_info', rawurlencode( $on ? '🔖 저장 1,000+ 뱃지를 달았어요.' : '저장 1,000+ 뱃지를 뗐어요.' ), $back ) );
+		$on = ! get_post_meta( $id, $badge['meta'], true );
+		update_post_meta( $id, $badge['meta'], $on ? 1 : 0 );
+		tp_cn_apply_badge( $id, $key );
+		wp_safe_redirect( add_query_arg( 'tp_cn_info', rawurlencode( $on ? "{$badge['icon']} {$badge['label']} 1,000+ 뱃지를 달았어요." : "{$badge['label']} 1,000+ 뱃지를 뗐어요." ), $back ) );
 		exit;
 	}
 );
@@ -856,7 +891,9 @@ add_action(
 		update_post_meta( $id, '_tp_cn_layout', $layout );
 		update_post_meta( $id, '_tp_cn_people', array_values( $people ) );
 		// 주간 총정리(뉴스레터)는 카드 한 편이 아니라 한 주 모음이라 뱃지 대상이 아니다
-		update_post_meta( $id, '_tp_cn_saved', ( ! $newsletter && ! empty( $_POST['saved'] ) ) ? 1 : 0 );
+		foreach ( TP_CN_BADGES as $key => $badge ) {
+			update_post_meta( $id, $badge['meta'], ( ! $newsletter && ! empty( $_POST[ $key ] ) ) ? 1 : 0 );
+		}
 
 		if ( ! tp_cn_ring( $id ) ) {
 			// 주문은 저장됐으니 다시 쓸 필요는 없다. 목록의 "셰프 다시 부르기"로 이어서 할 수 있게 알려 준다
@@ -920,6 +957,7 @@ function tp_cn_order( $post, $with_state = false ) {
 		'reports' => get_post_meta( $id, '_tp_cn_reports', true ) ?: array(),
 		'has_newsletter' => (bool) get_post_meta( $id, '_tp_cn_newsletter', true ),
 		'saved'   => (bool) get_post_meta( $id, '_tp_cn_saved', true ),
+		'liked'   => (bool) get_post_meta( $id, '_tp_cn_liked', true ),
 		'zip'     => rest_url( "tp-cardnews/v1/orders/{$id}/zip" ),
 		'post_id' => $draft ?: null,
 		// 초안이 발행됐는지(탭에 발행 버튼 대신 '글 보기'를 보이려고). 지워진 초안이면 빈 값
@@ -1062,9 +1100,7 @@ add_action(
 						update_post_meta( $id, '_tp_cn_post', (int) $req['post_id'] );
 					}
 					// 셰프가 초안을 만들거나 고친 뒤엔 태그가 order.json 것으로 덮여 있다 → 뱃지 표시를 다시 맞춘다
-					if ( get_post_meta( $id, '_tp_cn_saved', true ) ) {
-						tp_cn_apply_saved( $id );
-					}
+					tp_cn_reapply_badges( $id );
 					if ( null !== $req->get_param( 'title' ) ) {
 						update_post_meta( $id, '_tp_cn_title', sanitize_text_field( $req['title'] ) );
 					}
@@ -1542,6 +1578,16 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-links a, .tpcn .tpcn-publish button, .tpcn .tpcn-sched button, .tpcn .tpcn-unsched button, .tpcn .tpcn-saved-btn button { box-sizing: border-box; height: 36px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; white-space: nowrap; }
 .tpcn .tpcn-sched { gap: 8px; }
 .tpcn .tpcn-sched input { box-sizing: border-box; height: 36px; padding: 0 14px; font-size: 13px; }
+/* 기능별 두 줄(10/26 사용자 "구성 조화롭게 기능별로 정렬"): 줄 앞에 기능 이름표를 같은 너비로 두어 두 줄의 첫 버튼이 세로로 맞는다.
+   예약은 날짜 칸과 버튼이 한 쌍이라 한 알약으로 묶고, 켜진 뱃지는 사이트 딱지 색(저장 노랑·좋아요 분홍)을 입힌다 */
+.tpcn .tpcn-row { margin-top: 10px; }
+.tpcn .tpcn-row + .tpcn-row { margin-top: 14px; }
+.tpcn .tpcn-rowlabel { flex: none; width: 34px; color: var(--muted); font-size: 11.5px; font-weight: 800; letter-spacing: .04em; }
+.tpcn .tpcn-sched { box-sizing: border-box; gap: 0; height: 36px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; box-shadow: 3px 3px 0 var(--ink); overflow: hidden; }
+.tpcn .tpcn-sched input { height: 100%; border: 0; border-radius: 0; background: transparent; }
+.tpcn .tpcn-sched button { height: 100%; border: 0; border-left: 2px solid var(--ink); border-radius: 0; box-shadow: none; }
+.tpcn .tpcn-saved-btn.is-saved.is-on button { background: #ffd43b; border-color: var(--ink); color: var(--ink); }
+.tpcn .tpcn-saved-btn.is-liked.is-on button { background: #ffd1da; border-color: var(--ink); color: #8f1237; }
 .tpcn .tpcn-check { border: 2px solid var(--ink); box-shadow: 3px 3px 0 #f2cf7c; background: #fff; }
 /* 손본 것 강조(10/18 사용자, 시안 1018-10 1 색 띠): 노란 상자·버터색 카드 위에서 확인 항목이 묻혀서,
    확인 항목은 어디서든(발행 전 상자·발행 뒤 목록·수정 기록) 한 줄씩 색 띠 + 왼쪽 굵은 선, 일반 기록은 흐린 회색으로 물린다 */
@@ -1740,8 +1786,10 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 			</details>
 		</div>
 		<div class="tpcn-field" id="tpcn-saved">
-			<label class="tpcn-saved"><input type="checkbox" name="saved" value="1"> 🔖 인스타 저장 1,000+ <em>선택</em></label>
-			<p class="tpcn-hint">인사이트에서 저장이 <b>1,000번 넘은</b> 카드면 체크해 주세요. 사이트 카드에 <b>저장 1,000+</b> 뱃지가 붙어요. 나중에 넘으면 주문 현황의 버튼으로 붙이면 돼요</p>
+			<?php foreach ( TP_CN_BADGES as $key => $badge ) : ?>
+			<label class="tpcn-saved"><input type="checkbox" name="<?php echo esc_attr( $key ); ?>" value="1"> <?php echo esc_html( $badge['icon'] ); ?> 인스타 <?php echo esc_html( $badge['label'] ); ?> 1,000+ <em>선택</em></label>
+			<?php endforeach; ?>
+			<p class="tpcn-hint">인사이트에서 저장이나 좋아요가 <b>1,000번 넘은</b> 카드면 체크해 주세요(둘 다 체크해도 돼요). 사이트 카드에 <b>저장 1,000+</b>·<b>좋아요 1,000+</b> 뱃지가 붙어요. 나중에 넘으면 주문 현황의 버튼으로 붙이면 돼요</p>
 		</div>
 		<button type="submit" class="tpcn-go" id="tpcn-go">주문 넣기</button>
 	</form>
@@ -1823,7 +1871,9 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				<p class="tpcn-title"><?php echo esc_html( $o['title'] ); ?></p>
 				<?php endif; ?>
 				<?php if ( $o['post_id'] ) : ?>
-				<div class="tpcn-links">
+					<?php // 10/26 사용자: 버튼을 기능별로 두 줄로 나눈다 — 발행 줄(미리보기·발행·예약)과 뱃지 줄(저장·좋아요) ?>
+					<div class="tpcn-links tpcn-row">
+						<span class="tpcn-rowlabel">발행</span>
 					<?php if ( 'publish' === $o['post_status'] ) : ?>
 					<a class="main" href="<?php echo esc_url( get_permalink( (int) $o['post_id'] ) ); ?>" target="_blank" rel="noopener">✅ 발행됨 · 글 보기</a>
 					<?php else : ?>
@@ -1855,15 +1905,21 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 					</form>
 					<?php endif; ?>
 					<?php endif; ?>
+					</div>
 					<?php if ( 'newsletter' !== $o['kind'] ) : // 발행 뒤에 1,000을 넘는 글이 많아서 발행 전·후 모두 누를 수 있게 ?>
-					<form class="tpcn-saved-btn<?php echo $o['saved'] ? ' is-on' : ''; ?>" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
-						<input type="hidden" name="action" value="tp_cn_saved">
+					<div class="tpcn-links tpcn-row">
+						<span class="tpcn-rowlabel">뱃지</span>
+					<?php foreach ( TP_CN_BADGES as $key => $badge ) : ?>
+					<form class="tpcn-saved-btn is-<?php echo esc_attr( $key ); ?><?php echo $o[ $key ] ? ' is-on' : ''; ?>" method="post" action="<?php echo esc_url( $u['action'] ); ?>">
+						<input type="hidden" name="action" value="tp_cn_badge">
+						<input type="hidden" name="badge" value="<?php echo esc_attr( $key ); ?>">
 						<input type="hidden" name="order" value="<?php echo (int) $o['id']; ?>">
-						<?php wp_nonce_field( 'tp_cn_saved_' . (int) $o['id'] ); ?>
-						<button type="submit" title="<?php echo $o['saved'] ? '누르면 뱃지를 떼요' : '인스타 저장이 1,000번 넘었으면 눌러 주세요'; ?>"><?php echo $o['saved'] ? '🔖 저장 1,000+ 붙음' : '🔖 저장 1,000+ 붙이기'; ?></button>
+						<?php wp_nonce_field( 'tp_cn_badge_' . (int) $o['id'] . '_' . $key ); ?>
+						<button type="submit" title="<?php echo $o[ $key ] ? '누르면 뱃지를 떼요' : esc_attr( $badge['hint'] ); ?>"><?php echo esc_html( $badge['icon'] . ' ' . $badge['label'] . ' 1,000+ ' . ( $o[ $key ] ? '붙음' : '붙이기' ) ); ?></button>
 					</form>
+					<?php endforeach; ?>
+					</div>
 					<?php endif; ?>
-				</div>
 				<?php endif; ?>
 				<?php
 				if ( 'newsletter' === $o['kind'] && $o['has_newsletter'] ) :
