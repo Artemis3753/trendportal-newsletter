@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Admin Menu
- * Description: wp-admin 왼쪽 메뉴를 "내 홈 · 통계 · 트란시스 일정표 · 카드뉴스 도우미 · 트란시스 특파원" 순으로 맨 위에 모으고, 나머지 항목은 구분선 아래로 보낸다. 트란시스 일정표 탭(일정표를 관리자 화면 안에 띄움)도 여기서 만든다.
- * Version: 1.0.0
+ * Description: wp-admin 왼쪽 메뉴를 "내 홈 · 통계 · 트란시스 일정표 · 카드뉴스 도우미 · 트란시스 특파원" 순으로 맨 위에 모으고, 그 아래 구분선 다음에 자주 쓰는 "디자인 · 플러그인"을 두고, 또 구분선 다음에 나머지 항목을 둔다. 트란시스 일정표 탭(일정표를 관리자 화면 안에 띄움)도 여기서 만든다.
+ * Version: 1.1.0
  * Author: Trendportal
  */
 
@@ -11,7 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 const TP_AM_SLUG      = 'tp-transis-schedule';
-const TP_AM_SEPARATOR = 'separator-tp-admin-menu';
+const TP_AM_SEPARATOR  = 'separator-tp-admin-menu';
+const TP_AM_SEPARATOR2 = 'separator-tp-admin-menu-2';
 
 /*
  * 일정표 주소는 TP Transis Frame이 쓰는 설정값(tp_transis_frame)을 그대로 읽는다.
@@ -32,9 +33,10 @@ add_action(
 		}
 		add_menu_page( '트란시스 일정표', '트란시스 일정표', 'manage_options', TP_AM_SLUG, 'tp_am_schedule_page', 'dashicons-calendar-alt', 3.05 );
 
-		// 위쪽 묶음과 나머지 사이를 가르는 구분선. 코어의 separator1과 같은 모양(wp-menu-separator)이다
+		// 묶음 사이를 가르는 구분선 둘. 코어의 separator1과 같은 모양(wp-menu-separator)이다
 		global $menu;
 		$menu[] = array( '', 'read', TP_AM_SEPARATOR, '', 'wp-menu-separator' );
+		$menu[] = array( '', 'read', TP_AM_SEPARATOR2, '', 'wp-menu-separator' );
 	},
 	999
 );
@@ -102,8 +104,14 @@ add_filter(
 			defined( 'TP_CN_SLUG' ) ? TP_CN_SLUG : null,
 			defined( 'TP_RADAR_SLUG' ) ? TP_RADAR_SLUG : null,
 		);
-		$head   = array_values( array_unique( array_filter( $head ) ) );
-		$head[] = TP_AM_SEPARATOR;
-		return array_merge( $head, array_diff( $order, $head ) );
+		// 자주 쓰는 둘(디자인·플러그인)은 특파원 아래 구분선 다음에 따로 묶는다. 사이트 주소가 낀 바깥 링크일 수도 있어 슬러그 모양도 함께 본다
+		$often = array(
+			tp_am_find( array( '디자인', 'Appearance' ), '#(^themes\.php|wordpress\.com/themes(/|$))#' ),
+			tp_am_find( array( '플러그인', 'Plugins' ), '#(^plugins\.php|wordpress\.com/plugins(/|$))#' ),
+		);
+		$head  = array_values( array_unique( array_filter( $head ) ) );
+		$often = array_values( array_unique( array_filter( $often ) ) );
+		$all   = array_merge( $head, array( TP_AM_SEPARATOR ), $often, array( TP_AM_SEPARATOR2 ) );
+		return array_merge( $all, array_diff( $order, $all ) );
 	}
 );
