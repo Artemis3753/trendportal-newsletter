@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.30.0
+ * Version: 1.30.1
  * Author: Trendportal
  */
 
@@ -1750,8 +1750,8 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 			</div>
 			<button type="button" class="tpcn-vadd" id="tpcn-vadd">+ 한 줄 더</button>
 			<p class="tpcn-hint"><b>주소가 있으면</b> 남의 영상 → 정지 화면 + ▶ 링크 · <b>주소 없이 영상만</b> 넣으면 우리가 찍은 영상 → 사이트에서 바로 재생</p>
-			<?php // 10/17 사용자: 쓰는 법을 도우미 화면에서도 알 수 있게. 10/18: 들어오면 펼쳐진 채로 두고, 필요 없으면 접는다 ?>
-			<details class="tpcn-how" open>
+			<?php // 10/17 사용자: 쓰는 법을 도우미 화면에서도 알 수 있게. 10/18: 들어오면 펼쳐진 채로 두고, 필요 없으면 접는다 → 10/26 사용자: 화면이 길어져서 기본은 접어 둔다 ?>
+			<details class="tpcn-how">
 				<summary>자세히 보기</summary>
 				<ul>
 					<li><b>카드 번호</b> = 피그마 프레임 이름 끝 숫자예요. 예: <code>트렌드포털 802-4</code> → <b>4</b> (표지가 1번이라, 카드뉴스를 넘겨 보는 순서와 같아요)</li>
@@ -1772,8 +1772,8 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		<div class="tpcn-field">
 			<label for="tpcn-memo">추가 디테일 주문사항 <em>선택</em></label>
 			<textarea id="tpcn-memo" name="memo" rows="2" placeholder="예: 카드 배경처럼 어둡게 물들여서 / 제목에 '팝업' 넣어 주세요"></textarea>
-			<?php // 10/17 사용자: 메모로 무엇까지 시킬 수 있는지 화면에서 알 수 있게. 형식 이름은 docs/post-formats.md와 같게 ?>
-			<details class="tpcn-how" open>
+			<?php // 10/17 사용자: 메모로 무엇까지 시킬 수 있는지 화면에서 알 수 있게. 형식 이름은 docs/post-formats.md와 같게. 10/26: 기본은 접어 둔다 ?>
+			<details class="tpcn-how">
 				<summary>추가 디테일 주문사항으로 할 수 있는 것</summary>
 				<ul>
 					<li><b>인터뷰</b>는 여기 말고 맨 위 <b>🎤 인터뷰</b>를 눌러 형식·대상을 골라 주세요</li>
