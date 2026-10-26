@@ -341,6 +341,37 @@ body { word-break: keep-all; overflow-wrap: break-word; }
   .wp-block-post-template.is-layout-grid > li { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.85); }
 }
 
+/* Phones: two-column poster grid (mockup B, 10/25). Drops the grey stage and the glass cards;
+   the 4:5 cover leads, category + title + date sit under it. Desktop keeps the glass grid above */
+@media (max-width: 781px) {
+  .wp-block-post-template.is-layout-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 22px 12px !important;
+    width: 100%;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 0 !important;
+    border-radius: 0;
+    background: none;
+  }
+  .wp-block-post-template.is-layout-grid > li {
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  .wp-block-post-template.is-layout-grid .wp-block-post-featured-image { border-radius: 14px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
+  .wp-block-post-template.is-layout-grid > li > .wp-block-group { padding: 10px 2px 0 !important; }
+  .wp-block-post-template.is-layout-grid .wp-block-post-title { font-size: 0.875rem !important; line-height: 1.35 !important; margin: 2px 0 4px !important; font-weight: 800; }
+  .wp-block-post-template.is-layout-grid .wp-block-post-terms { font-size: 0.6875rem !important; font-weight: 700; }
+  .wp-block-post-template.is-layout-grid .wp-block-post-terms a { color: #2f6bff; text-decoration: none; }
+  .wp-block-post-template.is-layout-grid .wp-block-post-date { font-size: 0.6875rem !important; }
+}
+
 /* ---------- Home: series sections (weekly, tp1000) ---------- */
 /* The weekly titles all start "이번 주 일어난 마케팅 이슈 총정리 (…)", so TP Card Tone splits them:
    the week in bold (.tp-sr-week, NEW on the latest) and the shared name in grey (.tp-sr-name). Titles without "(…)" stay as they are */
