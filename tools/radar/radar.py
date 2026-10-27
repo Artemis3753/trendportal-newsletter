@@ -37,7 +37,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cardnews"))
-from cardnews import wp  # noqa: E402  재시도·인증을 셰프와 똑같이 쓰려고
+from cardnews import png_info, wp  # noqa: E402  재시도·인증과 사진 크기 읽기를 셰프와 똑같이 쓰려고
 
 ROOT = Path(__file__).resolve().parents[2]
 RADAR_API = "https://trendportal.kr/wp-json/tp-radar/v1/"
@@ -173,6 +173,78 @@ def download_photo(link, folder):
     return "", why
 
 
+# 본문 사진이 아닐 이름(로고·아이콘·광고 배너·프로필 사진 …) — 이름만으로 거를 수 있는 것만. 나머지는 크기·모양으로 거른다
+NOT_PHOTO = re.compile(r"logo|icon|avatar|gravatar|sprite|emoji|banner|button|badge|favicon|placeholder|spinner|loading|pixel|\.svg|\.gif|data:", re.I)
+PHOTO_MAX = 5      # 한 기사에서 카드에 붙일 사진 상한(10/28 사용자)
+PHOTO_LOOK = 12    # 후보를 이만큼까지만 받아 본다 — 기사 하나에 요청이 너무 많아지지 않게
+
+
+def size_key(url):
+    # 워드프레스가 만든 줄인 사진(-776x550)과 원본을 같은 사진으로 묶는다
+    return re.sub(r"-\d+x\d+(?=\.\w+$)", "", url.split("?")[0])
+
+
+def article_photo_urls(link):
+    """기사 페이지 본문에 실제로 들어 있는 사진 주소(문서 순서, 중복 뺌). 사진이 아닐 이름은 여기서 뺀다.
+    img의 src·지연 불러오기 속성·큰 사진으로 걸린 링크(a href)를 본다"""
+    try:
+        h = get(link)
+    except Exception:
+        return []
+    # 본문 구간만 본다: 첫 본문 문단 조금 앞부터, 구독 안내·출처 같은 끝 표시(BODY_STOP) 또는 마지막 본문 문단까지.
+    # 광고 배너·"다른 글" 썸네일은 그 뒤에 있다(10/28 Famous Campaigns·Laughing Squid·고구마팜 실측).
+    # 한 페이지에 <article>이 열세 개씩 있는 사이트가 있어서 그 태그로는 본문을 못 찾는다
+    paras = [m for m in PARA.finditer(h) if len(plain(m.group(1))) > 40 and not BODY_SKIP.search(plain(m.group(1)))]
+    if not paras:
+        return []  # 본문 문단을 못 찾는 페이지(자바스크립트 화면)는 어디까지가 본문인지 몰라서 줍지 않는다
+    stop = BODY_STOP.search(h, paras[0].start())
+    h = h[max(0, paras[0].start() - 1500):(stop.start() if stop else paras[-1].end())]
+    found = re.findall(r'(?:src|data-src|data-lazy-src|data-orig-file)=["\']([^"\']+)["\']', h)
+    found += re.findall(r'<a[^>]+href=["\']([^"\']+\.(?:jpe?g|png|webp)[^"\']*)["\']', h, re.I)
+    out, seen = [], set()
+    for u in found:
+        u = urllib.parse.urljoin(link, html.unescape(u.strip()))
+        if not u.startswith("http") or NOT_PHOTO.search(u) or not re.search(r"\.(jpe?g|png|webp)(\?|$)", u, re.I):
+            continue
+        if size_key(u) not in seen:
+            seen.add(size_key(u))
+            out.append(u)
+    return out
+
+
+def download_article_photos(link, folder, cover_url_keys):
+    """기사 본문 사진을 folder/images/p1·p2…로 받아 [(파일 이름, 가로, 세로)]를 돌려준다(최대 PHOTO_MAX장).
+    대표 사진과 같은 사진, 너무 작거나(광고·아이콘) 가로로 아주 긴(배너) 그림은 버린다.
+    유튜브·구글 뉴스는 본문 사진이 없다"""
+    if "youtube.com" in link or "news.google.com" in link:
+        return []
+    kept = []
+    for u in article_photo_urls(link)[:PHOTO_LOOK]:
+        if size_key(u) in cover_url_keys or len(kept) >= PHOTO_MAX:
+            continue
+        # Photon으로 폭 1000px로 줄여 받고(카드 한 장에 충분), 막히면 원본
+        for t in ("https://i0.wp.com/" + re.sub(r"^https?://", "", size_key(u)) + "?w=1000&ssl=1", u):
+            try:
+                data, ctype = get_bytes(t)
+            except Exception:
+                continue
+            ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(ctype.split(";")[0].strip())
+            if ext and len(data) >= 15000:
+                break
+        else:
+            continue
+        name = f"p{len(kept) + 1}.{ext}"
+        (folder / "images").mkdir(parents=True, exist_ok=True)
+        path = folder / "images" / name
+        path.write_bytes(data)
+        w, h = (png_info(path)[:2] if ext != "webp" else (0, 0))  # webp는 크기를 안 읽는다 — 바이트 수로만 거른다
+        if ext != "webp" and (w < 500 or h < 300 or not 0.5 <= w / h <= 2.0):
+            path.unlink()
+            continue
+        kept.append((name, w, h))
+    return kept
+
+
 # ── 모의 글 부탁: 탭의 실시간 피드에서 사람이 고른 글을 카드뉴스 형식의 임시글로(10/28 사용자) ──────────
 
 def asks_dir():
@@ -199,12 +271,17 @@ def cmd_asks():
             d = mock_dir(a["id"], n)
             d.mkdir(parents=True, exist_ok=True)
             photo, why = download_photo(c["link"], d)
+            cover_keys = {size_key(u) for u in photo_candidates(c["link"])[0]}
+            extra = download_article_photos(c["link"], d, cover_keys)
             order = {"kind": "archive", "title": "", "categories": [], "tags": []}
             if photo:
                 order.update(cover_photo=photo, featured=photo)  # 기사 사진이 한 장뿐이라 표지·대표가 같은 사진이다
             (d / "order.json").write_text(json.dumps(order, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(f"## {n} · {c['source']} · {c['orig']}\n주문 폴더: {d.relative_to(ROOT)} · "
                   + (f"대표 사진: images/{photo}" if photo else f"대표 사진을 못 받았어요: {why} (사진 없는 글로 만들어요)")
+                  + ("\n기사 본문 사진 %d장(카드에 붙일 수 있어요, 열어서 보고 고르세요): " % len(extra)
+                     + ", ".join(f"images/{n}({w}x{h})" if w else f"images/{n}" for n, w, h in extra)
+                     if extra else "\n기사 본문 사진은 없어요(표지 사진만 있어요)")
                   + "\n" + body_text(c) + "\n")
 
 
@@ -230,8 +307,11 @@ def cmd_answer(aid, fail=None):
             items.append({**base, "error": "임시글을 만들지 못했어요. 특파원 다시 부르기를 눌러 보세요"})
             continue
         changes = list(read_json(d / "changes.json", []))
-        must = ([f"꼭 확인: 표지 사진은 {c['source']} 기사의 사진이에요. 발행 전에 사용 권리를 확인하거나 직접 구한 사진으로 바꿔 주세요"]
-                if order.get("cover_photo") else [])
+        cards = read_json(d / "cards.json", {}).get("cards", [])
+        n_card = len({x["image"] for x in cards if x.get("image")})
+        must = ([f"꼭 확인: 표지 사진" + (f"과 카드 사진 {n_card}장" if n_card else "") + f"은 {c['source']} 기사의 사진이에요. "
+                 "발행 전에 사용 권리를 확인하거나 직접 구한 사진으로 바꿔 주세요"]
+                if order.get("cover_photo") or n_card else [])
         info = ["확인 필요: 인스타 카드뉴스 없이 기사에서 만든 모의 글이에요. 발행해도 되는 글인지 한 번 봐 주세요"]
         items.append({**base, "title": order.get("title", ""), "post_id": result["post_id"], "preview": result["preview"],
                       "edit": result["edit"], "changes": must + info + changes})

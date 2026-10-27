@@ -118,8 +118,8 @@ Built from the Thursday Figma zip, together with the newsletter (`docs/newslette
 ### Mock post from the trend feed (10/28) — standard format, no Instagram cardnews behind it
 Made by the trend correspondent's mock routine (`tools/radar/PROMPT-mock.md`, Claude Opus) from one ticked feed article, as a private draft, and published only after a person reviews it. It uses the **standard** format and the same builder as every other post, so the rules above apply (title, category, card text voice, `© source`, no CSS of its own). What differs:
 - The cards are written from the article, not read from Figma. Three to six cards, only what the article says; names, numbers and dates exactly as the article has them.
-- One photo: the article's main photo is the cover (`tp-cover-photo`) and the featured image. The cards have no photos of their own.
-- The photo is someone else's. Every mock post carries `꼭 확인:` (check the right to use the photo, or replace it) and `확인 필요:` (there is no Instagram cardnews behind it), added by `radar.py answer`.
+- Photos: the article's main photo is the cover (`tp-cover-photo`) and the featured image. The article's own body photos (up to five, found between its first paragraph and its ending notice, so no ads or other stories' thumbnails) may go on the card they show, each at most once; a card with no fitting photo stays text only.
+- The photos are someone else's. Every mock post carries `꼭 확인:` (check the right to use the cover and card photos, or replace them) and `확인 필요:` (there is no Instagram cardnews behind it), added by `radar.py answer`.
 - The site is an archive of our Instagram cardnews: a person decides whether a mock post is published at all.
 
 ## Reference posts
