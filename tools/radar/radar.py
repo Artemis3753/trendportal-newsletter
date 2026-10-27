@@ -44,13 +44,19 @@ RADAR_API = "https://trendportal.kr/wp-json/tp-radar/v1/"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
 
 
+PAGES = {}  # 이미 받은 페이지 — 본문 읽기와 사진 찾기가 같은 기사를 연달아 두 번 부르면 클라우드에서 두 번째가 막혔을 수 있다(10/28)
+
+
 def get(url):
+    if url in PAGES:
+        return PAGES[url]
     # 기사 페이지가 잠깐 흔들리면(연결 끊김·시간 초과) 쉬었다 두 번 더
     for wait in (5, 15, None):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=30) as r:
-                return r.read().decode("utf-8", "replace")
+                PAGES[url] = r.read().decode("utf-8", "replace")
+                return PAGES[url]
         except urllib.error.HTTPError as e:
             # 308(영구 이동)은 urllib이 따라가지 않는다 — Daily Dot이 주소 끝 /를 떼려고 308을 준다(10/20)
             if e.code == 308 and e.headers.get("Location"):
@@ -110,18 +116,23 @@ def is_english(c):
     return not re.search(r"[가-힣]", c["orig"])
 
 
-def og_image(link):
-    """원문 페이지의 대표 사진 주소(og:image). 고른 글에만 부르니 Claude 토큰과 무관하다. 못 찾으면 ''.
-    구글 뉴스 링크는 원문이 아니라 구글 뉴스 화면이라 대표 사진도 구글 로고뿐이다"""
+def photo_candidates(link):
+    """원문 페이지의 대표 사진 주소 후보(og:image, twitter:image 순, 중복 뺌). 고른 글에만 부르니 Claude 토큰과 무관하다.
+    구글 뉴스 링크는 원문이 아니라 구글 뉴스 화면이라 대표 사진도 구글 로고뿐이다.
+    못 찾으면 ([], 이유) — 이유는 asks가 화면에 보여 줘서, 클라우드에서 왜 사진이 빠졌는지 다음엔 로그에 남는다"""
     if "news.google.com" in link:
-        return ""
+        return [], "구글 뉴스 링크라 원문 사진이 없어요"
     try:
         h = get(link)
-    except Exception:
-        return ""
-    m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', h)
-         or re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', h))
-    return html.unescape(m.group(1)) if m else ""
+    except Exception as e:
+        return [], f"기사 페이지를 못 읽었어요({type(e).__name__})"
+    urls = []
+    for tag in re.findall(r"<meta[^>]+(?:property|name)=[\"']?(?:og:image|twitter:image)[\"']?[^>]*>", h, re.I):
+        m = re.search(r"content=[\"']([^\"']+)", tag, re.I)
+        u = html.unescape(m.group(1)) if m else ""
+        if u.startswith("http") and u not in urls:
+            urls.append(u)
+    return urls, "" if urls else "기사에 대표 사진(og:image)이 없어요"
 
 
 def get_bytes(url):
@@ -137,25 +148,29 @@ def get_bytes(url):
 
 
 def download_photo(link, folder):
-    """기사 대표 사진을 folder/images/cover.<확장자>로 받아 파일 이름을 돌려준다. 못 받으면 ''.
-    WordPress.com 사진 변환기(Photon)로 폭 1400px로 줄여 받는다 — 원본이 3000px·800KB인 곳(heyPOP)이 있어서.
+    """기사 대표 사진을 folder/images/cover.<확장자>로 받아 (파일 이름, 이유)를 돌려준다. 못 받으면 ('', 이유).
+    WordPress.com 사진 변환기(Photon)로 폭 1400px로 줄여 받고, 변환기가 막히면 원본 주소로 다시 받는다 —
+    원본이 3000px·800KB인 곳(heyPOP)이 있어서 먼저 줄여 보는 것이다.
     유튜브 썸네일은 Photon이 받지 않아서(302) 그대로 받는다"""
-    url = og_image(link)
-    if not url:
-        return ""
-    if "ytimg.com" not in url:
-        url = "https://i0.wp.com/" + re.sub(r"^https?://", "", url).split("?")[0] + "?w=1400&ssl=1"
-    try:
-        data, ctype = get_bytes(url)
-    except Exception:
-        return ""
-    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(ctype.split(";")[0].strip())
-    if not ext or len(data) < 2000:  # 이미지가 아니거나(오류 화면) 너무 작으면(추적 픽셀) 쓰지 않는다
-        return ""
-    (folder / "images").mkdir(parents=True, exist_ok=True)
-    name = f"cover.{ext}"
-    (folder / "images" / name).write_bytes(data)
-    return name
+    urls, why = photo_candidates(link)
+    for url in urls:
+        tries = [url] if "ytimg.com" in url else [
+            "https://i0.wp.com/" + re.sub(r"^https?://", "", url).split("?")[0] + "?w=1400&ssl=1", url]
+        for t in tries:
+            try:
+                data, ctype = get_bytes(t)
+            except Exception as e:
+                why = f"사진을 못 받았어요({type(e).__name__}: {t[:60]})"
+                continue
+            ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(ctype.split(";")[0].strip())
+            if not ext or len(data) < 2000:  # 이미지가 아니거나(오류 화면) 너무 작으면(추적 픽셀) 쓰지 않는다
+                why = f"사진이 아니거나 너무 작아요({ctype}, {len(data)}바이트: {t[:60]})"
+                continue
+            (folder / "images").mkdir(parents=True, exist_ok=True)
+            name = f"cover.{ext}"
+            (folder / "images" / name).write_bytes(data)
+            return name, ""
+    return "", why
 
 
 # ── 모의 글 부탁: 탭의 실시간 피드에서 사람이 고른 글을 카드뉴스 형식의 임시글로(10/28 사용자) ──────────
@@ -183,13 +198,13 @@ def cmd_asks():
         for n, c in enumerate(a["items"], 1):
             d = mock_dir(a["id"], n)
             d.mkdir(parents=True, exist_ok=True)
-            photo = download_photo(c["link"], d)
+            photo, why = download_photo(c["link"], d)
             order = {"kind": "archive", "title": "", "categories": [], "tags": []}
             if photo:
                 order.update(cover_photo=photo, featured=photo)  # 기사 사진이 한 장뿐이라 표지·대표가 같은 사진이다
             (d / "order.json").write_text(json.dumps(order, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(f"## {n} · {c['source']} · {c['orig']}\n주문 폴더: {d.relative_to(ROOT)} · "
-                  + (f"대표 사진: images/{photo}" if photo else "대표 사진을 못 받았어요(사진 없는 글로 만들어요)")
+                  + (f"대표 사진: images/{photo}" if photo else f"대표 사진을 못 받았어요: {why} (사진 없는 글로 만들어요)")
                   + "\n" + body_text(c) + "\n")
 
 
