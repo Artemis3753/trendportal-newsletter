@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
-"""트란시스 특파원(처음 이름 트렌드 레이더) — 탭에서 체크한 글을 리포트로 정리하고, 피드 제목을 번역하며 우리 거리가 아닌 글을 접는다.
+"""트란시스 특파원(처음 이름 트렌드 레이더) — 탭에서 체크한 글을 카드뉴스 형식의 비공개 임시글(모의 글)로 만들고, 피드 제목을 번역하며 우리 거리가 아닌 글을 접는다.
 
-    python3 tools/radar/radar.py asks               (탭에서 들어온 정리 부탁 가져오기 + 글마다 본문)
-    python3 tools/radar/radar.py answer <id> [--fail 이유]  (local/radar/asks/<id>-picks.json → 탭 리포트 칸)
+    python3 tools/radar/radar.py asks               (탭에서 들어온 모의 글 부탁 가져오기 → 글마다 본문을 보여 주고 주문 폴더·사진 준비)
+    python3 tools/cardnews/cardnews.py cook local/radar/mock/<부탁id>-<번호>   (셰프의 build → draft → verify → shot을 그대로)
+    python3 tools/radar/radar.py answer <id> [--fail 이유]  (만든 임시글 링크·확인할 것 → 탭 모의 글 칸)
     python3 tools/radar/radar.py titles [--save]    (아직 안 훑은 피드 글 / local/radar/titles-ko.json → 탭 피드에 한국어 제목·접기)
 
 1.6.0(10/20 사용자): 매일 아침 리포트(collect·body·send)와 알림 메일은 범위에서 뺐다 — 필요할 때 탭에 들어와 고르는 도구라서.
-정보원 읽기는 사이트(플러그인의 실시간 피드)가 하고, 이 스크립트는 사람이 고른 글의 본문만 읽는다.
+2.0.0(10/28 사용자): 글자 요약 리포트(picks·points) 대신 카드뉴스 형식의 임시글. 글 만들기·사진 올리기·원문 대조는 셰프 코드(cardnews.py)를
+그대로 쓴다 — 새로 짠 건 "기사 → 주문 폴더"뿐이라 사이트 글 형식 규칙(docs/post-formats.md)이 한 곳에만 있다.
+정보원 읽기는 사이트(플러그인의 실시간 피드)가 하고, 이 스크립트는 사람이 고른 글의 본문과 대표 사진만 읽는다.
 
 토큰을 아끼는 나눔(10/20 사용자: "토큰 최소화 구조로"):
-  · 손 노동(본문 읽기, 링크·원문 제목·날짜 붙이기, 사진 찾기)은 이 스크립트가 한다
-  · Claude는 본문을 읽고 한국어 제목·한두 문장·핵심 정리만 쓴다
+  · 손 노동(본문 읽기, 사진 받기, 주문 폴더 만들기, 링크·원문 제목·날짜 붙이기)은 이 스크립트가 한다
+  · Claude는 본문을 읽고 한국어 제목·카드 글만 쓴다
   · 링크·원문 제목·날짜는 Claude가 베껴 쓰지 않고 answer가 번호로 다시 붙인다
 
-picks.json (Claude가 쓰는 파일):
-    {"picks": [{"n": 3, "title": "한국어 제목", "note": "무엇이고, 왜 카드뉴스 거리인지 한두 문장",
-                "points": ["본문을 우리 카드 말투로 녹인 핵심 정리 — 한국어 원문 3~4줄, 영어 원문 5~7줄"]}]}
+주문 폴더(local/radar/mock/<부탁id>-<번호>/): 셰프의 아카이빙 주문과 같은 모양이다.
+    order.json   (이 스크립트가 만듦: kind archive, 사진 이름 / Claude가 title·categories를 채움)
+    cards.json   {"intro": [...], "cards": [{"title", "what": [...], "src"}], "outro": [...]}   (Claude)
+    notes.json   {"cover_alt", "featured_alt", "cards": [{"alt": ""}, ...]}                      (Claude)
+    changes.json ["제목: …", "확인 필요: …"]                                                      (Claude)
+    images/cover.<확장자>   (이 스크립트가 기사 대표 사진을 받아 둠)
 
 사이트 인증은 셰프(tools/cardnews/cardnews.py)와 같다: 이 맥은 local/cardnews.env, 클라우드는 환경의 network secret.
 표준 라이브러리만 쓴다 — 클라우드 routine에서 설치 없이 돌리려고.
@@ -104,36 +110,55 @@ def is_english(c):
     return not re.search(r"[가-힣]", c["orig"])
 
 
-def image_of(link):
-    """원문 페이지의 대표 사진(og:image). 고른 거리에만 부르니 Claude 토큰과 무관하다.
-    heyPOP은 3000px·800KB에 webp까지 있어서, WordPress.com 사진 변환기(Photon)로 560×234 jpg로 줄인다.
-    유튜브 썸네일은 Photon이 받지 않아서(302) 그대로 쓴다."""
+def og_image(link):
+    """원문 페이지의 대표 사진 주소(og:image). 고른 글에만 부르니 Claude 토큰과 무관하다. 못 찾으면 ''.
+    구글 뉴스 링크는 원문이 아니라 구글 뉴스 화면이라 대표 사진도 구글 로고뿐이다"""
     if "news.google.com" in link:
-        return ""  # 원문이 아니라 구글 뉴스 화면이라 대표 사진도 구글 로고뿐
+        return ""
     try:
         h = get(link)
     except Exception:
         return ""
     m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', h)
          or re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', h))
-    if not m:
+    return html.unescape(m.group(1)) if m else ""
+
+
+def get_bytes(url):
+    for wait in (5, None):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read(), r.headers.get("Content-Type", "")
+        except (urllib.error.URLError, TimeoutError):
+            if wait is None:
+                raise
+            time.sleep(wait)
+
+
+def download_photo(link, folder):
+    """기사 대표 사진을 folder/images/cover.<확장자>로 받아 파일 이름을 돌려준다. 못 받으면 ''.
+    WordPress.com 사진 변환기(Photon)로 폭 1400px로 줄여 받는다 — 원본이 3000px·800KB인 곳(heyPOP)이 있어서.
+    유튜브 썸네일은 Photon이 받지 않아서(302) 그대로 받는다"""
+    url = og_image(link)
+    if not url:
         return ""
-    url = html.unescape(m.group(1))
-    if "ytimg.com" in url:
-        return url
-    return "https://i0.wp.com/" + re.sub(r"^https?://", "", url).split("?")[0] + "?resize=560,234&ssl=1"
+    if "ytimg.com" not in url:
+        url = "https://i0.wp.com/" + re.sub(r"^https?://", "", url).split("?")[0] + "?w=1400&ssl=1"
+    try:
+        data, ctype = get_bytes(url)
+    except Exception:
+        return ""
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(ctype.split(";")[0].strip())
+    if not ext or len(data) < 2000:  # 이미지가 아니거나(오류 화면) 너무 작으면(추적 픽셀) 쓰지 않는다
+        return ""
+    (folder / "images").mkdir(parents=True, exist_ok=True)
+    name = f"cover.{ext}"
+    (folder / "images" / name).write_bytes(data)
+    return name
 
 
-def make_item(c, p):
-    """후보(링크·원문 제목·날짜는 스크립트가 받아 둔 것) + Claude가 쓴 pick(제목·설명·핵심 정리) → 사이트에 보낼 거리 하나"""
-    points = [str(x) for x in p.get("points", [])][:5]
-    if not points:
-        sys.exit(f"{p['n']}번에 points(핵심 정리)가 없어요")
-    return {"source": c["source"], "title": p["title"], "note": p["note"], "points": points,
-            "orig": c["orig"], "link": c["link"], "date": c["date"], "image": image_of(c["link"])}
-
-
-# ── 정리 부탁: 탭의 실시간 피드에서 사람이 고른 글만 정리(10/20 사용자) ──────────
+# ── 모의 글 부탁: 탭의 실시간 피드에서 사람이 고른 글을 카드뉴스 형식의 임시글로(10/28 사용자) ──────────
 
 def asks_dir():
     d = ROOT / "local" / "radar" / "asks"
@@ -141,31 +166,63 @@ def asks_dir():
     return d
 
 
+def mock_dir(aid, n):
+    return ROOT / "local" / "radar" / "mock" / f"{aid}-{n}"
+
+
 def cmd_asks():
-    """기다리는 정리 부탁을 가져오고(사이트에서 '정리 중'으로 바뀐다) 글마다 본문을 보여 준다.
-    고르는 일은 없다 — 사람이 이미 골랐으니 전부 정리한다."""
+    """기다리는 모의 글 부탁을 가져오고(사이트에서 '만드는 중'으로 바뀐다) 글마다 본문을 보여 준다.
+    글마다 주문 폴더와 대표 사진도 미리 만들어 둔다. 고르는 일은 없다 — 사람이 이미 골랐으니 전부 만든다."""
     asks = wp("asks", base=RADAR_API)
     if not asks:
-        print("기다리는 정리 부탁이 없어요")
+        print("기다리는 모의 글 부탁이 없어요")
         return
     for a in asks:
         (asks_dir() / f"{a['id']}.json").write_text(json.dumps(a, ensure_ascii=False), encoding="utf-8")
-        print(f"# 정리 부탁 {a['id']} — {len(a['items'])}개 전부 → local/radar/asks/{a['id']}-picks.json\n")
+        print(f"# 모의 글 부탁 {a['id']} — {len(a['items'])}개 전부\n")
         for n, c in enumerate(a["items"], 1):
-            print(f"## {n} · {c['source']} · {c['orig']}\n" + body_text(c) + "\n")
+            d = mock_dir(a["id"], n)
+            d.mkdir(parents=True, exist_ok=True)
+            photo = download_photo(c["link"], d)
+            order = {"kind": "archive", "title": "", "categories": [], "tags": []}
+            if photo:
+                order.update(cover_photo=photo, featured=photo)  # 기사 사진이 한 장뿐이라 표지·대표가 같은 사진이다
+            (d / "order.json").write_text(json.dumps(order, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print(f"## {n} · {c['source']} · {c['orig']}\n주문 폴더: {d.relative_to(ROOT)} · "
+                  + (f"대표 사진: images/{photo}" if photo else "대표 사진을 못 받았어요(사진 없는 글로 만들어요)")
+                  + "\n" + body_text(c) + "\n")
+
+
+def read_json(p, default):
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else default
 
 
 def cmd_answer(aid, fail=None):
-    """정리 결과(또는 실패 이유)를 사이트로. 결과는 탭의 리포트 칸에 쌓인다."""
+    """만든 임시글(또는 실패 이유)을 사이트로. 결과는 탭의 모의 글 칸에 링크로 쌓인다.
+    권리 확인 줄은 Claude에게 맡기지 않고 여기서 붙인다 — 남의 기사 사진을 쓰는 글이라 빠지면 안 되어서."""
     if fail:
         wp(f"asks/{aid}", {"error": fail}, base=RADAR_API)
-        print(f"정리 부탁 {aid}: 실패로 알렸어요")
+        print(f"모의 글 부탁 {aid}: 실패로 알렸어요")
         return
     a = json.loads((asks_dir() / f"{aid}.json").read_text(encoding="utf-8"))
-    picks = json.loads((asks_dir() / f"{aid}-picks.json").read_text(encoding="utf-8"))["picks"]
-    items = [make_item(a["items"][int(p["n"]) - 1], p) for p in picks]
+    items = []
+    for n, c in enumerate(a["items"], 1):
+        d = mock_dir(aid, n)
+        base = {"source": c["source"], "orig": c["orig"], "link": c["link"], "date": c["date"]}
+        result = read_json(d / "result.json", {})
+        order = read_json(d / "order.json", {})
+        if not result.get("post_id"):
+            items.append({**base, "error": "임시글을 만들지 못했어요. 특파원 다시 부르기를 눌러 보세요"})
+            continue
+        changes = list(read_json(d / "changes.json", []))
+        must = ([f"꼭 확인: 표지 사진은 {c['source']} 기사의 사진이에요. 발행 전에 사용 권리를 확인하거나 직접 구한 사진으로 바꿔 주세요"]
+                if order.get("cover_photo") else [])
+        info = ["확인 필요: 인스타 카드뉴스 없이 기사에서 만든 모의 글이에요. 발행해도 되는 글인지 한 번 봐 주세요"]
+        items.append({**base, "title": order.get("title", ""), "post_id": result["post_id"], "preview": result["preview"],
+                      "edit": result["edit"], "changes": must + info + changes})
     res = wp(f"asks/{aid}", {"items": items}, base=RADAR_API)
-    print(f"정리 부탁 {aid}: {len(items)}개 → {res['status']}")
+    made = sum(1 for i in items if i.get("post_id"))
+    print(f"모의 글 부탁 {aid}: 임시글 {made}개, 못 만든 글 {len(items) - made}개 → {res['status']}")
 
 
 # ── 번역·거르기: 피드의 외국어 제목을 우리 말투로 + 우리 거리 아닌 글 접기(10/20 사용자) ──────────
