@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Trend Radar
  * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 카드뉴스 형식의 비공개 임시글(모의 글)로 만들어 탭에 링크로 쌓는다.
- * Version: 2.0.0
+ * Version: 2.1.0
  * Author: Trendportal
  */
 
@@ -754,6 +754,82 @@ add_action(
 	}
 );
 
+/**
+ * 모의 글 부탁 하나 지우기(10/28 사용자: 주문내역 삭제와 임시글 삭제를 묶어서).
+ * 만든 글은 비공개 초안(draft)일 때만 휴지통으로 보내고, 이미 발행했거나 예약한 글은 건드리지 않는다 — 사람이 검토해 발행한 글이 여기서 지워지면 안 된다.
+ * 사진은 셰프 코드가 올릴 때 이름 앞에 "<부탁id>-<번호>-"를 붙이므로(cardnews.py upload) 그 이름으로 찾아 완전 삭제한다.
+ * 발행된 글이 남는 기사는 그 글이 사진을 쓰고 있어서 사진도 남긴다.
+ * 돌려주는 값: drafts(휴지통으로 보낸 글), kept(발행돼서 남긴 글), media(지운 사진). $asks에서 그 부탁 기록도 뺀다
+ */
+function tp_radar_delete_ask( &$asks, $id ) {
+	$out = array( 'drafts' => 0, 'kept' => 0, 'media' => 0 );
+	foreach ( array_values( (array) ( $asks[ $id ]['result'] ?? array() ) ) as $n => $it ) {
+		$keep = false;
+		$pid  = (int) ( $it['post_id'] ?? 0 );
+		$post = $pid ? get_post( $pid ) : null;
+		if ( $post && 'post' === $post->post_type ) {
+			if ( 'draft' === $post->post_status ) {
+				wp_trash_post( $pid );
+				++$out['drafts'];
+			} elseif ( 'trash' !== $post->post_status ) {
+				$keep = true;
+				++$out['kept'];
+			}
+		}
+		if ( $keep ) {
+			continue;
+		}
+		$files = get_posts(
+			array(
+				'post_type'   => 'attachment',
+				'post_status' => 'any',
+				'numberposts' => -1,
+				'fields'      => 'ids',
+				'meta_query'  => array( array( 'key' => '_wp_attached_file', 'value' => '/' . (int) $id . '-' . ( $n + 1 ) . '-', 'compare' => 'LIKE' ) ), // phpcs:ignore WordPress.DB.SlowDBQuery
+			)
+		);
+		foreach ( $files as $aid ) {
+			if ( wp_delete_attachment( $aid, true ) ) {
+				++$out['media'];
+			}
+		}
+	}
+	unset( $asks[ $id ] );
+	return $out;
+}
+
+/** 지울 수 있는 부탁인가: 끝났거나 실패했거나, 너무 오래 안 끝난 것(만드는 중인 부탁을 지우면 곧 올라올 글이 주인 없이 남는다) */
+function tp_radar_ask_deletable( $a ) {
+	$st = $a['status'] ?? 'waiting';
+	return in_array( $st, array( 'done', 'failed' ), true ) || ! empty( $a['err'] ) || time() - (int) ( $a['rang'] ?? $a['at'] ?? 0 ) > TP_RADAR_ASK_STALE;
+}
+
+add_action(
+	'admin_post_tp_radar_delete',
+	function () {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( '관리자만 지울 수 있어요' );
+		}
+		check_admin_referer( 'tp_radar_delete' );
+		$id   = (int) ( $_POST['id'] ?? 0 );
+		$asks = tp_radar_asks();
+		$back = admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report' );
+		// 탭의 판단을 믿지 않고 여기서 다시 검사한다
+		if ( ! isset( $asks[ $id ] ) || ! tp_radar_ask_deletable( $asks[ $id ] ) ) {
+			wp_safe_redirect( add_query_arg( 'tprd_msg', rawurlencode( '지울 수 없는 부탁이에요 (아직 만드는 중이거나 이미 지웠어요)' ), $back ) );
+			exit;
+		}
+		$res = tp_radar_delete_ask( $asks, $id );
+		tp_radar_save_asks( $asks );
+		$msg = sprintf( '지웠어요: 임시글 %d개(휴지통), 사진 %d장', $res['drafts'], $res['media'] );
+		if ( $res['kept'] ) {
+			$msg .= sprintf(' · 이미 발행한 글 %d개는 그대로 뒀어요', $res['kept'] );
+		}
+		wp_safe_redirect( add_query_arg( 'tprd_msg', rawurlencode( $msg ), $back ) );
+		exit;
+	}
+);
+
 // 🔄 피드 새로고침: 30분 보관본을 버리고 지금 다시 받기
 add_action(
 	'admin_post_tp_radar_refresh',
@@ -1073,6 +1149,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-wait { margin: 0; padding: 12px 16px 12px 32px; border-radius: 12px; background: var(--card); box-shadow: 0 2px 10px rgba(59,47,42,.08); }
 .tprd-wait li { margin: 3px 0; }
 .tprd-recall { display: inline; margin-left: 4px; }
+.tprd-recall.tprd-del button { background: #fde3da; box-shadow: 0 2px 0 #e9b3a3; color: #8f1d2c; }
 .tprd-recall button, .tprd-btn { padding: 6px 14px; border: 0; border-radius: 999px; background: #ffe45c; color: var(--ink); font: 700 13px "IBM Plex Sans KR", sans-serif; cursor: pointer; box-shadow: 0 2px 0 #d9b800; }
 .tprd-btn:disabled { background: var(--soft); color: var(--muted); box-shadow: none; cursor: default; }
 /* 사진 위 자막 띠: 갈래 색 바탕 + 흰 글씨(나라 · 정보원), 그 아래 제목 */
@@ -1206,6 +1283,9 @@ function tp_radar_report_view( $asks, $show ) {
 <span class="tprd-state<?php echo esc_attr( $cls ); ?>"><?php echo esc_html( $says . ( ! empty( $a['err'] ) ? ' — ' . $a['err'] : '' ) ); ?></span>
 		<?php if ( $late || ! empty( $a['err'] ) ) : ?>
 <form class="tprd-recall" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_recall' ); ?><input type="hidden" name="action" value="tp_radar_recall"><input type="hidden" name="id" value="<?php echo (int) $id; ?>"><button type="submit">🔔 다시 부르기</button></form>
+		<?php endif; ?>
+		<?php if ( tp_radar_ask_deletable( $a ) ) : ?>
+<form class="tprd-recall tprd-del" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm(<?php echo esc_attr( wp_json_encode( '이 부탁의 기록과, 특파원이 만든 임시글·그 글에 올린 사진을 지워요. 이미 발행한 글은 안 지워요. 되돌릴 수 없어요. 지울까요?' ) ); ?>);"><?php wp_nonce_field( 'tp_radar_delete' ); ?><input type="hidden" name="action" value="tp_radar_delete"><input type="hidden" name="id" value="<?php echo (int) $id; ?>"><button type="submit">🗑 지우기 (기록·임시글)</button></form>
 		<?php endif; ?>
 </h2>
 		<?php if ( 'done' === $st ) : ?>
