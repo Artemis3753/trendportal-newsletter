@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: TP Trend Radar
- * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 리포트로 정리해 탭에 쌓는다.
- * Version: 1.18.1
+ * Description: 관리자 전용 탭 "트란시스 특파원"(처음 이름은 트렌드 레이더). 정보원 새 글을 실시간 피드로 모아 보여 주고, 체크한 글을 클라우드 routine(tools/radar/radar.py)이 카드뉴스 형식의 비공개 임시글(모의 글)로 만들어 탭에 링크로 쌓는다.
+ * Version: 2.0.0
  * Author: Trendportal
  */
 
@@ -12,13 +12,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /*
  * 10/20 사용자 결정: 이 도구는 "필요할 때 들어와서 아이디어를 얻는 곳"이다.
- * 피드를 둘러보고 → 마음에 드는 글을 체크 → 특파원이 리포트로 정리. 매일 아침 리포트와 메일 발송은 범위에서 뺐다(1.6.0).
+ * 피드를 둘러보고 → 마음에 드는 글을 체크 → 특파원이 카드뉴스 형식의 비공개 임시글(모의 글)로 만든다 → 사람이 검토하고 발행.
+ * 매일 아침 리포트와 메일 발송은 범위에서 뺐다(1.6.0). 글자 요약 리포트는 2.0.0(10/28 사용자)에서 모의 글로 바꿨다.
  *
  * 저장: 옵션(autoload 끔 — 이 탭과 REST에서만 읽는다)
- *   tp_radar_asks    정리 부탁과 그 결과(아래 "정리 부탁")
- *   tp_radar_titles  피드 제목 번역(아래 "제목 번역")
- *   tp_radar_archive 받아 둔 글 보관함(피드는 여기서 최근 7일을 읽는다)
- *   tp_radar_bell    초인종(routine 트리거 주소·열쇠)
+ *   tp_radar_asks       모의 글 부탁과 그 결과(아래 "모의 글 부탁")
+ *   tp_radar_titles     피드 제목 번역(아래 "제목 번역")
+ *   tp_radar_archive    받아 둔 글 보관함(피드는 여기서 최근 7일을 읽는다)
+ *   tp_radar_bell       초인종 ① 번역·거르기 routine(Sonnet) 트리거 주소·열쇠
+ *   tp_radar_bell_mock  초인종 ② 모의 글 routine(Opus) 트리거 주소·열쇠
  */
 
 const TP_RADAR_SLUG = 'tp-trend-radar';
@@ -27,19 +29,29 @@ const TP_RADAR_SLUG = 'tp-trend-radar';
 // 10/20 사용자: 번역이 끝나도 문구가 안 사라짐 → '훑는 중' 30초 자동 새로고침이 문구 붙은 주소를 그대로 다시 읽고 있었다
 add_filter( 'removable_query_args', fn( $args ) => array_merge( $args, array( 'tprd_msg' ) ) );
 
-// ── 리포트 카드 ──────────────────────────────────────────
+// ── 모의 글 결과 ─────────────────────────────────────────
 
-function tp_radar_clean_item( $it ) {
+/**
+ * 모의 글 하나의 결과(radar.py answer가 보낸 것). 성공이면 post_id·preview·edit·changes, 못 만들었으면 error.
+ * 링크는 우리 사이트 주소만 받는다 — 결과 줄의 버튼이 엉뚱한 곳으로 가지 않게
+ */
+function tp_radar_clean_draft( $it ) {
+	$own = function ( $u ) {
+		$u = esc_url_raw( (string) $u );
+		return 0 === strpos( $u, home_url( '/' ) ) ? $u : '';
+	};
 	return array(
-		'source' => sanitize_text_field( $it['source'] ?? '' ),
-		'title'  => sanitize_text_field( $it['title'] ?? '' ),  // Claude가 쓴 한국어 제목
-		'note'   => sanitize_text_field( $it['note'] ?? '' ),   // 무엇이고 왜 거리인지 한두 문장
-		'orig'   => sanitize_text_field( $it['orig'] ?? '' ),   // 원문 제목 (원문 확인용)
-		'link'   => esc_url_raw( $it['link'] ?? '' ),
-		'date'   => sanitize_text_field( $it['date'] ?? '' ),   // 원문 날짜 Y-m-d
-		'image'  => esc_url_raw( $it['image'] ?? '' ),          // 원문 대표 사진(radar.py가 Photon으로 줄인 주소). 없을 수 있다
-		// 영어 원문일 때만: Claude가 본문을 우리 카드 말투로 녹인 핵심 정리(10/20 사용자 A안 — 전문 번역 대신)
-		'points' => array_slice( array_values( array_filter( array_map( 'sanitize_text_field', (array) ( $it['points'] ?? array() ) ) ) ), 0, 5 ),
+		'source'  => sanitize_text_field( $it['source'] ?? '' ),
+		'orig'    => sanitize_text_field( $it['orig'] ?? '' ),    // 원문 제목
+		'link'    => esc_url_raw( $it['link'] ?? '' ),             // 원문 주소
+		'date'    => sanitize_text_field( $it['date'] ?? '' ),    // 원문 날짜 Y-m-d
+		'title'   => sanitize_text_field( $it['title'] ?? '' ),   // 만든 글의 제목
+		'post_id' => (int) ( $it['post_id'] ?? 0 ),
+		'preview' => $own( $it['preview'] ?? '' ),
+		'edit'    => $own( $it['edit'] ?? '' ),
+		// 셰프와 같은 표시 규칙: '꼭 확인:'·'확인 필요:'로 시작하는 줄은 발행 전에 봐야 할 것
+		'changes' => array_slice( array_values( array_filter( array_map( 'sanitize_text_field', (array) ( $it['changes'] ?? array() ) ) ) ), 0, 30 ),
+		'error'   => sanitize_text_field( $it['error'] ?? '' ),
 	);
 }
 
@@ -185,7 +197,7 @@ function tp_radar_flag( $source, $class = 'tprd-flag' ) {
 // ── 실시간 피드: 정보원 새 글을 사이트가 직접 모은다(토큰 0) ──────────────
 /*
  * 10/20 사용자 A안: 탭의 "📰 실시간 피드" 칸. Claude 없이 PHP가 RSS를 읽으니 몇 번을 열어도 비용이 없다.
- * 외국어는 원제목 그대로 — 번역·요약이 필요한 글만 체크해서 "정리 부탁"(아래)으로 특파원을 부른다.
+ * 외국어는 원제목 그대로 — 모의 글로 만들 글만 체크해서 "모의 글 부탁"(아래)으로 특파원을 부른다.
  * 20곳 넘게 차례로 받으면 탭이 십몇 초 멈춰서 한꺼번에(병렬) 받고, 결과는 30분 보관한다.
  */
 const TP_RADAR_FEED_TTL  = 30 * MINUTE_IN_SECONDS;
@@ -496,7 +508,7 @@ add_action(
  * 같은 날 저녁: 정치·시사·사건사고, 경기 결과·부상 같은 스포츠 뉴스, 업계 인사·실적, 순수 테크 기사는 필요 없다
  * → 정규식으로는 "너무 테크"를 못 가려서, 제목을 번역하는 김에 특파원이 한국어 글까지 훑어 "접기"를 같이 표시한다.
  * 지우지 않고 접는 이유: 잘못 접힌 글이 있어도 피드 맨 아래에서 찾을 수 있게(사용자 선택).
- * routine이 깨어날 때마다(정리 부탁 · 아래 "번역·거르기 부탁") 아직 안 훑은 글만 본다.
+ * routine이 깨어날 때마다(아래 "번역·거르기 부탁") 아직 안 훑은 글만 본다.
  * tp_radar_titles: 링크 => array( 한국어 제목(한국어 글은 ''), 저장 시각, 접기 true|false, 새 규칙으로 훑음 true, 사람 냄새 true|false )  — 가장 긴 피드 창(Link in Bio 14일)보다 넉넉히 15일 보관
  *   접기 칸이 없는 것 = 번역만 하고 아직 안 훑은 글(10/20 저녁 전 번역분)
  *   다섯째 칸(10/22 사용자: "사람 냄새 필터") 자체가 없는 것 = 사람 냄새를 아직 안 본 글. true/false로 "봤다"를 남겨야 같은 글을 다시 안 보낸다
@@ -599,18 +611,20 @@ add_action(
 	}
 );
 
-// ── 정리 부탁: 피드에서 고른 글만 특파원이 핵심 정리·번역 ─────────────────
+// ── 모의 글 부탁: 피드에서 고른 글을 특파원이 카드뉴스 형식의 비공개 임시글로 ─────────────────
 /*
  * 10/20 사용자: 피드에서 여러 개 체크 → 한 번에 특파원 호출. routine은 한 번 깨울 때마다 고정 비용이 커서 묶어서 부른다.
- * 결과는 탭의 리포트 칸에 쌓인다(부탁한 사람이 탭을 보고 있으니 따로 알리지 않는다).
+ * 10/28 사용자: 글자 요약 리포트 대신 카드뉴스 형식의 임시글(모의 글)로 — 검토하고 마음에 들면 바로 발행. 글은 Opus 전용 routine이 만든다.
+ * 결과는 탭의 모의 글 칸에 링크로 쌓인다(부탁한 사람이 탭을 보고 있으니 따로 알리지 않는다).
  * 초인종은 셰프와 같은 방식: routine의 API 트리거 주소로 POST 한 번. 특파원은 신호에 딸린 글을 따르지 않고,
- * REST /asks에서 '기다리는 중' 부탁만 가져간다(tools/radar/PROMPT.md) — 열쇠가 새도 할 수 있는 건 "특파원 깨우기"뿐.
+ * REST /asks에서 '기다리는 중' 부탁만 가져간다(tools/radar/PROMPT-mock.md) — 열쇠가 새도 할 수 있는 건 "특파원 깨우기"뿐.
  *
  * tp_radar_asks: id => { at, by, status(waiting·cooking·done·failed), items, rang, took, result, err }  최근 TP_RADAR_ASKS_KEEP개
+ * 한 번에 3개까지: Opus는 글 하나를 만드는 데 사진 받기·초안·화면 확인까지 해서 길고 비싸다(10/28 사용자 추천안)
  */
-const TP_RADAR_ASK_MAX        = 10; // 한 번에 부탁할 수 있는 글 수 — 한 번 실행에 읽는 양의 상한
+const TP_RADAR_ASK_MAX        = 3; // 한 번에 부탁할 수 있는 글 수 — 한 번 실행에서 만드는 글의 상한
 const TP_RADAR_ASKS_KEEP      = 40;
-const TP_RADAR_ASK_STALE      = 15 * MINUTE_IN_SECONDS; // 이만큼 지나도 안 끝나면 "다시 부르기"를 보여 준다
+const TP_RADAR_ASK_STALE      = 25 * MINUTE_IN_SECONDS; // 이만큼 지나도 안 끝나면(Opus가 글 3개를 만들면 길다) "다시 부르기"를 보여 준다
 
 function tp_radar_asks() {
 	$a = get_option( 'tp_radar_asks', array() );
@@ -623,49 +637,31 @@ function tp_radar_save_asks( $asks ) {
 }
 
 /*
- * 1.6.0으로 올릴 때 한 번: 예전 아침 리포트(tp_radar_days)를 리포트 칸의 기록으로 옮긴다.
- * 10/20 14:27에 실제로 한 번 나간 리포트(메일 발송분)가 탭에서 사라지지 않게. 옮긴 뒤엔 아침 리포트용 옵션을 지운다
- * — tp_radar_mail에는 발신메일봇 열쇠가 있어서, 안 쓰는 비밀값을 사이트에 남겨 두지 않으려고(원본은 local/transis.env).
+ * 2.0.0으로 올릴 때 한 번: 글자 요약 리포트(옛 정리 부탁 결과)와 1.6.0 때 옮겨 둔 아침 리포트를 지운다.
+ * 10/28 사용자: 지난 리포트는 지우기 — 새 화면에는 글자 리포트를 그리는 코드가 없고, 옛 모양을 새 REST가 받으면 섞이기 때문.
+ * 옵션 하나(tp_radar_mock_v)로 한 번만 돌게 한다.
  */
 add_action(
 	'admin_init',
 	function () {
-		$days = get_option( 'tp_radar_days', null );
-		if ( null === $days ) {
+		if ( get_option( 'tp_radar_mock_v' ) ) {
 			return;
 		}
-		$asks = tp_radar_asks();
-		foreach ( (array) $days as $ymd => $d ) {
-			if ( empty( $d['items'] ) || 0 === strpos( (string) ( $d['mail'] ?? '' ), 'preview:' ) ) {
-				continue; // 미리보기(시험)는 옮기지 않는다
-			}
-			$at = (int) ( $d['at'] ?? 0 );
-			$at = $at > 0 ? $at : (int) strtotime( $ymd . ' 09:00:00' );
-			while ( isset( $asks[ $at ] ) ) {
-				++$at;
-			}
-			$asks[ $at ] = array(
-				'at'      => $at,
-				'by'      => '아침 리포트',
-				'morning' => true,
-				'status'  => 'done',
-				'items'   => $d['items'],
-				'result'  => $d['items'],
-				'err'     => '',
-			);
-		}
-		tp_radar_save_asks( $asks );
-		delete_option( 'tp_radar_days' );
-		delete_option( 'tp_radar_offered' );
-		delete_option( 'tp_radar_mail' );
+		delete_option( 'tp_radar_asks' );
+		update_option( 'tp_radar_mock_v', 1, false );
 	}
 );
 
-/** 초인종: 특파원 routine을 지금 깨운다. $note는 실행 기록에서 알아보는 표시일 뿐. 성공하면 true, 실패하면 이유 문장 */
-function tp_radar_ring( $note ) {
-	$bell = get_option( 'tp_radar_bell', array() );
+/**
+ * 초인종: routine을 지금 깨운다. $note는 실행 기록에서 알아보는 표시일 뿐. 성공하면 true, 실패하면 이유 문장.
+ * $which: 'main' = 번역·거르기 routine(Sonnet), 'mock' = 모의 글 routine(Opus). 열쇠가 서로 달라서 옵션을 나눴다
+ */
+function tp_radar_ring( $note, $which = 'main' ) {
+	$bell = get_option( 'mock' === $which ? 'tp_radar_bell_mock' : 'tp_radar_bell', array() );
 	if ( empty( $bell['url'] ) || empty( $bell['token'] ) ) {
-		return '초인종이 아직 설정되지 않았어요 (피드 칸 맨 아래 "특파원 초인종 설정")';
+		return 'mock' === $which
+			? '모의 글 초인종이 아직 설정되지 않았어요 (피드 칸 맨 아래 "모의 글 초인종 설정")'
+			: '초인종이 아직 설정되지 않았어요 (피드 칸 맨 아래 "특파원 초인종 설정")';
 	}
 	$res  = wp_remote_post(
 		$bell['url'],
@@ -678,7 +674,7 @@ function tp_radar_ring( $note ) {
 				'anthropic-version' => '2023-06-01',
 				'Content-Type'      => 'application/json',
 			),
-			// 특파원은 이 글을 따르지 않는다. 실행 기록에서 어느 부탁 때 깨웠는지 알아보는 표시일 뿐
+			// routine은 이 글을 따르지 않는다. 실행 기록에서 어느 부탁 때 깨웠는지 알아보는 표시일 뿐
 			'body'    => wp_json_encode( array( 'text' => $note ) ),
 		)
 	);
@@ -691,11 +687,11 @@ function tp_radar_ring( $note ) {
 		: "특파원이 응답하지 않았어요 (오류 {$code}" . ( 401 === $code ? ', 열쇠가 틀렸거나 바뀌었어요' : '' ) . ')';
 }
 
-/** 부탁 하나를 '기다리는 중'으로 두고 초인종 — 새 부탁과 "다시 부르기"가 같이 쓴다 */
+/** 부탁 하나를 '기다리는 중'으로 두고 초인종 — 새 부탁과 "다시 부르기"가 같이 쓴다. 모의 글 routine을 부른다 */
 function tp_radar_ring_ask( &$asks, $id ) {
 	$asks[ $id ]['status'] = 'waiting';
 	$asks[ $id ]['rang']   = time();
-	$rang                  = tp_radar_ring( "ask {$id}" );
+	$rang                  = tp_radar_ring( "ask {$id}", 'mock' );
 	$asks[ $id ]['err']    = true === $rang ? '' : $rang;
 }
 
@@ -772,7 +768,7 @@ add_action(
 	}
 );
 
-// 초인종 설정 저장. 열쇠 칸을 비워 두면 기존 열쇠를 그대로 둔다(화면에 열쇠를 다시 보여 주지 않아서)
+// 초인종 설정 저장(둘 다 같은 창구, which로 구분). 열쇠 칸을 비워 두면 기존 열쇠를 그대로 둔다(화면에 열쇠를 다시 보여 주지 않아서)
 add_action(
 	'admin_post_tp_radar_bell',
 	function () {
@@ -780,7 +776,9 @@ add_action(
 			wp_die( '관리자만 바꿀 수 있어요' );
 		}
 		check_admin_referer( 'tp_radar_bell' );
-		$bell  = get_option( 'tp_radar_bell', array() );
+		$mock  = 'mock' === ( $_POST['which'] ?? '' );
+		$opt   = $mock ? 'tp_radar_bell_mock' : 'tp_radar_bell';
+		$bell  = get_option( $opt, array() );
 		$url   = esc_url_raw( trim( wp_unslash( $_POST['bell_url'] ?? '' ) ) );
 		$token = trim( sanitize_text_field( wp_unslash( $_POST['bell_token'] ?? '' ) ) );
 		$back  = admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=feed' );
@@ -793,8 +791,8 @@ add_action(
 		if ( '' !== $token ) {
 			$bell['token'] = $token;
 		}
-		update_option( 'tp_radar_bell', $bell, false );
-		wp_safe_redirect( add_query_arg( 'tprd_msg', rawurlencode( '초인종을 저장했어요. 이제 정리 부탁을 하면 특파원이 바로 와요' ), $back ) );
+		update_option( $opt, $bell, false );
+		wp_safe_redirect( add_query_arg( 'tprd_msg', rawurlencode( $mock ? '모의 글 초인종을 저장했어요. 이제 모의 글을 부탁하면 특파원이 바로 와요' : '초인종을 저장했어요. 이제 번역·거르기를 부탁하면 특파원이 바로 와요' ), $back ) );
 		exit;
 	}
 );
@@ -861,7 +859,7 @@ add_action(
 			)
 		);
 
-		// 정리 부탁 가져가기: '기다리는 중'인 부탁을 '정리 중'으로 바꾸며 돌려준다(두 번 깨어나도 한 번만 정리하게)
+		// 모의 글 부탁 가져가기: '기다리는 중'인 부탁을 '만드는 중'으로 바꾸며 돌려준다(두 번 깨어나도 한 번만 정리하게)
 		register_rest_route(
 			'tp-radar/v1',
 			'/asks',
@@ -886,7 +884,7 @@ add_action(
 			)
 		);
 
-		// 정리 결과 받기(items) 또는 실패 알리기(error)
+		// 모의 글 결과 받기(items) 또는 실패 알리기(error)
 		register_rest_route(
 			'tp-radar/v1',
 			'/asks/(?P<id>\d+)',
@@ -904,9 +902,9 @@ add_action(
 						$asks[ $id ]['status'] = 'failed';
 						$asks[ $id ]['err']    = $err;
 					} else {
-						$items = array_values( array_map( 'tp_radar_clean_item', (array) $req->get_param( 'items' ) ) );
+						$items = array_values( array_map( 'tp_radar_clean_draft', (array) $req->get_param( 'items' ) ) );
 						if ( ! $items ) {
-							return new WP_Error( 'tp_radar_empty', '정리한 글이 없어요', array( 'status' => 400 ) );
+							return new WP_Error( 'tp_radar_empty', '만든 글이 없어요', array( 'status' => 400 ) );
 						}
 						$asks[ $id ]['status']  = 'done';
 						$asks[ $id ]['result']  = $items;
@@ -943,35 +941,58 @@ add_action(
 	}
 );
 
-/** 리포트 카드 하나 — 정리 부탁 결과 */
-function tp_radar_card( $it, $i ) {
-	list( $bg, $line, $fg ) = tp_radar_chip_color( $it['source'] );
-	$lang                   = tp_radar_lang( $it['orig'] );
+/** 모의 글 한 줄 — 만든 임시글의 제목·미리보기·편집 링크, 발행 전에 볼 것(셰프와 같은 '꼭 확인'·'확인 필요' 표시) */
+function tp_radar_draft_row( $it ) {
+	$must  = array();
+	$check = array();
+	$rest  = array();
+	foreach ( $it['changes'] as $c ) {
+		if ( 0 === strpos( $c, '꼭 확인:' ) ) {
+			$must[] = $c;
+		} elseif ( 0 === strpos( $c, '확인 필요:' ) ) {
+			$check[] = $c;
+		} else {
+			$rest[] = $c;
+		}
+	}
 	?>
-<article class="tprd-card">
-<span class="tprd-no">#<?php echo (int) $i + 1; ?></span>
-	<?php if ( ! empty( $it['image'] ) ) : ?>
-<a class="tprd-screen" href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><img class="ph" src="<?php echo esc_url( $it['image'] ); ?>" alt="" loading="lazy" referrerpolicy="no-referrer"><span class="tprd-cap"><?php echo tp_radar_where( $it['source'] ); // phpcs:ignore -- tp_radar_where가 이미 이스케이프 ?></span></a>
+<li class="tprd-draft">
+<div class="tprd-dhead"><?php tp_radar_chip( $it['source'], $it['date'] ); ?>
+	<?php if ( $it['error'] ) : ?>
+<b><?php echo esc_html( $it['orig'] ); ?></b> <span class="tprd-state bad">못 만들었어요 — <?php echo esc_html( $it['error'] ); ?></span>
 	<?php else : ?>
-<span class="tprd-screen empty"><span class="tprd-cap"><?php echo tp_radar_where( $it['source'] ); // phpcs:ignore ?></span></span>
+<b><?php echo esc_html( $it['title'] ); ?></b> <span class="tprd-state">임시글(비공개)</span>
 	<?php endif; ?>
-<div class="tprd-bd">
-<span class="tprd-orig" style="margin:0"><?php echo esc_html( substr( $it['date'], 5 ) ); ?> 원문</span>
-	<?php if ( $lang ) : ?>
-<span class="tprd-tr">🌐 특파원 번역</span>
-	<?php endif; ?>
-<h3><a href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $it['title'] ); ?></a></h3>
-<p><?php echo esc_html( $it['note'] ); ?></p>
-	<?php if ( ! empty( $it['points'] ) ) : ?>
-<div class="tprd-pts"><b>📝 핵심 정리<?php echo $lang ? '<span> · ' . esc_html( $lang ) . ' 원문을 특파원이 번역해 정리했어요</span>' : ''; ?></b><ul>
-		<?php foreach ( $it['points'] as $pt ) : ?>
-<li><?php echo esc_html( $pt ); ?></li>
-		<?php endforeach; ?>
-</ul></div>
-	<?php endif; ?>
-<p class="tprd-orig">원문: <?php echo esc_html( $it['orig'] ); ?></p>
 </div>
-</article>
+	<?php if ( ! $it['error'] ) : ?>
+<p class="tprd-dlinks">
+		<?php if ( $it['preview'] ) : ?>
+<a class="tprd-btn" href="<?php echo esc_url( $it['preview'] ); ?>" target="_blank" rel="noopener">👀 미리보기</a>
+		<?php endif; ?>
+		<?php if ( $it['edit'] ) : ?>
+<a class="tprd-btn ghost" href="<?php echo esc_url( $it['edit'] ); ?>" target="_blank" rel="noopener">✏️ 편집기에서 열기·발행</a>
+		<?php endif; ?>
+<a class="tprd-orig" href="<?php echo esc_url( $it['link'] ); ?>" target="_blank" rel="noopener">원문: <?php echo esc_html( $it['orig'] ); ?></a>
+</p>
+		<?php if ( $must || $check ) : ?>
+<ul class="tprd-todo">
+			<?php foreach ( $must as $c ) : ?>
+<li class="must">❗ <?php echo esc_html( $c ); ?></li>
+			<?php endforeach; ?>
+			<?php foreach ( $check as $c ) : ?>
+<li class="check">🟡 <?php echo esc_html( $c ); ?></li>
+			<?php endforeach; ?>
+</ul>
+		<?php endif; ?>
+		<?php if ( $rest ) : ?>
+<details class="tprd-rest"><summary>특파원이 손본 것 <?php echo count( $rest ); ?>건</summary><ul>
+			<?php foreach ( $rest as $c ) : ?>
+<li><?php echo esc_html( $c ); ?></li>
+			<?php endforeach; ?>
+</ul></details>
+		<?php endif; ?>
+	<?php endif; ?>
+</li>
 	<?php
 }
 
@@ -996,13 +1017,13 @@ function tp_radar_ago( $t ) {
 }
 
 function tp_radar_page() {
-	// 첫 화면은 피드(10/20 사용자: 피드를 둘러보고 골라서 리포트로 — 들어오면 바로 고를 수 있게)
+	// 첫 화면은 피드(10/20 사용자: 피드를 둘러보고 골라서 글로 — 들어오면 바로 고를 수 있게)
 	$view = 'report' === ( $_GET['view'] ?? '' ) ? 'report' : 'feed';
 	$asks = tp_radar_asks();
-	// 리포트는 처음엔 정리 부탁 6번만. 더 보기를 누를 때마다 6번씩
+	// 모의 글 칸은 처음엔 부탁 6번만. 더 보기를 누를 때마다 6번씩
 	$show = max( 6, (int) ( $_GET['show'] ?? 6 ) );
 	$msg  = sanitize_text_field( wp_unslash( $_GET['tprd_msg'] ?? '' ) );
-	// 피드는 피드 칸을 열 때만 받는다(리포트만 볼 때 15곳을 부르지 않게). 보관본이 있으면 개수만 보여 준다
+	// 피드는 피드 칸을 열 때만 받는다(모의 글 칸만 볼 때 여러 곳을 부르지 않게). 보관본이 있으면 개수만 보여 준다
 	$feed = 'feed' === $view ? tp_radar_feed() : get_transient( 'tp_radar_feed' );
 	?>
 <div class="tprd">
@@ -1041,13 +1062,11 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-doc { margin-left: auto; padding: 5px 12px; border: 1.5px dashed var(--ink); border-radius: 999px; color: var(--ink); font-size: 12.5px; font-weight: 700; }
 .tprd-doc:hover { background: var(--hl); }
 .tprd-msg { margin: 0 0 18px; padding: 10px 14px; border-radius: 10px; background: var(--hl); font-weight: 700; }
-/* 날짜·정리 부탁 머리 = 방송 코너 제목 */
+/* 날짜·모의 글 부탁 머리 = 방송 코너 제목 */
 .tprd-day { margin: 0 0 34px; scroll-margin-top: 50px; }
 .tprd-day h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; font: 400 21px/1.2 "Jua", sans-serif; color: var(--ink); }
 .tprd-corner { padding: 3px 10px; border-radius: 6px; background: var(--live); color: #fff; font: 400 14px/1.3 "Do Hyeon", sans-serif; }
 .tprd-corner.ask { background: #1f5fc4; }
-.tprd-anchor { display: flex; align-items: center; gap: 8px; margin: -4px 0 14px; padding: 7px 12px; border-radius: 10px; background: var(--hl); font-size: 13px; }
-.tprd-anchor img { width: 30px; height: 30px; }
 .tprd-state { padding: 2px 10px; border-radius: 999px; background: #d9f1e3; color: #13784f; font: 700 12px/1.5 "IBM Plex Sans KR", sans-serif; }
 .tprd-state.bad { background: #fde3da; color: #b42333; }
 .tprd-state.wait { background: #fff1c2; color: #8a6400; }
@@ -1063,30 +1082,28 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 .tprd-where { display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: 4px; color: #fff; font: 400 13px/1.45 "Do Hyeon", sans-serif; }
 .tprd-cap .tt { display: block; font: 400 17px/1.3 "Do Hyeon", sans-serif; color: #fff; text-decoration: none; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tprd-cap a.tt:hover { text-decoration: underline; }
-/* 리포트 카드: 넓은 화면(16:9) + 아래 원고 */
-.tprd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px 18px; align-items: start; }
-.tprd-card { position: relative; display: flex; flex-direction: column; background: var(--card); border-radius: 16px; box-shadow: 0 4px 16px rgba(59,47,42,.10); overflow: hidden; }
-.tprd-card .tprd-screen { aspect-ratio: 2.2 / 1; }
-.tprd-card .tprd-screen.empty { aspect-ratio: auto; min-height: 92px; }
-.tprd-no { position: absolute; top: 9px; left: 9px; z-index: 1; padding: 1px 9px; border-radius: 6px; background: var(--live); color: #fff; font: 400 14px/1.4 "Do Hyeon", sans-serif; }
-.tprd-bd { padding: 12px 14px 14px; }
+/* 모의 글 줄: 임시글 제목 · 미리보기·편집 버튼 · 발행 전에 볼 것 */
 .tprd-chip { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1.5px solid; font-size: 11.5px; font-weight: 700; }
 .tprd-flag { display: inline-block; width: 17px; height: 17px; margin: 0 5px 0 -5px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.18); vertical-align: -3px; object-fit: cover; }
 .tprd-flag-s { width: 14px; height: 14px; margin: 0 5px 0 -3px; vertical-align: -2px; box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
 .tprd-tr { display: inline-block; padding: 0 7px; border-radius: 6px; background: #ebe5ff; color: #5b3fd0; font-size: 11px; font-weight: 700; }
 .tprd-tr.wait { background: var(--soft); color: var(--muted); }
-.tprd-bd h3 { margin: 6px 0 2px; font: 400 19px/1.3 "Jua", sans-serif; }
-.tprd-bd h3 a { color: var(--ink); text-decoration: none; }
-.tprd-bd h3 a:hover { text-decoration: underline; }
-.tprd-bd p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.6; }
-.tprd-bd .tprd-orig { margin-top: 6px; font-size: 12px; color: var(--muted); }
-.tprd-pts { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #faf6ef; font-size: 13px; }
-.tprd-pts b { display: block; margin-bottom: 2px; }
-.tprd-pts b span { font-weight: 400; color: var(--muted); }
-.tprd-pts ul { margin: 0; padding-left: 16px; list-style: "· "; }
-.tprd-pts li { margin: 2px 0; }
+.tprd-drafts { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.tprd-draft { padding: 14px 16px; border-radius: 14px; background: var(--card); box-shadow: 0 3px 12px rgba(59,47,42,.10); }
+.tprd-dhead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 16px; }
+.tprd-dlinks { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0 0; }
+.tprd-dlinks .tprd-btn { text-decoration: none; display: inline-block; }
+.tprd-btn.ghost { background: var(--soft); box-shadow: none; }
+.tprd-dlinks .tprd-orig { font-size: 12px; color: var(--muted); }
+.tprd-todo { list-style: none; margin: 10px 0 0; padding: 0; }
+.tprd-todo li { margin: 4px 0 0; padding: 5px 10px; border-radius: 8px; font-size: 13px; }
+.tprd-todo .must { background: #ffe0e6; border-left: 4px solid #d6335b; }
+.tprd-todo .check { background: #fff7d1; border-left: 4px solid #e0b100; }
+.tprd-rest { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+.tprd-rest summary { cursor: pointer; }
+.tprd-rest ul { margin: 6px 0 0; padding-left: 18px; }
 .tprd-more { display: inline-block; padding: 8px 18px; border-radius: 999px; background: var(--ink); color: #fff; font-weight: 700; text-decoration: none; }
-/* 실시간 피드: 거르기 → 카드 격자(체크) → 아래에 붙는 정리 부탁 막대 */
+/* 실시간 피드: 거르기 → 카드 격자(체크) → 아래에 붙는 모의 글 부탁 막대 */
 .tprd-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
 .tprd-filters button { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font: 700 12.5px "IBM Plex Sans KR", sans-serif; cursor: pointer; }
 .tprd-filters button[aria-pressed="true"] { background: var(--ink); color: #fff; }
@@ -1131,7 +1148,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 <div class="tprd-bug">
 <span class="tprd-live">📓 취재 일지</span>
 <img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="트란시스 특파원">
-<div><h1>트란시스 특파원 취재 일지</h1><p>정보원 새 글을 둘러보고, 마음에 드는 글을 체크하면 특파원이 리포트로 정리해 와요</p></div>
+<div><h1>트란시스 특파원 취재 일지</h1><p>정보원 새 글을 둘러보고, 마음에 드는 글을 체크하면 특파원이 카드뉴스 형식의 임시글로 만들어 와요</p></div>
 </div>
 	<?php
 	// 흐르는 자막: 받아 둔 피드의 최신 제목 8개(번역이 있으면 한국어). 피드를 아직 안 받았으면 없음
@@ -1147,7 +1164,7 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 	<?php endif; ?>
 <nav class="tprd-nav">
 <a class="tprd-tab<?php echo 'feed' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG ) ); ?>">📰 실시간 피드<?php echo is_array( $feed ) ? ' <small>' . count( $feed['items'] ) . '</small>' : ''; ?></a>
-<a class="tprd-tab<?php echo 'report' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report' ) ); ?>">🎙️ 리포트<?php echo $asks ? ' <small>' . count( $asks ) . '</small>' : ''; ?></a>
+<a class="tprd-tab<?php echo 'report' === $view ? ' on' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report' ) ); ?>">🃏 모의 글<?php echo $asks ? ' <small>' . count( $asks ) . '</small>' : ''; ?></a>
 <a class="tprd-doc" href="<?php echo esc_url( TP_RADAR_REPORT ); ?>" target="_blank" rel="noopener">📊 트렌드포털 데이터마이닝 보고서</a>
 </nav>
 	<?php if ( $msg ) : ?>
@@ -1164,12 +1181,12 @@ body.toplevel_page_tp-trend-radar #wpcontent, body.toplevel_page_tp-trend-radar 
 	<?php
 }
 
-/** 🎙️ 리포트 칸: 정리 부탁과 그 결과, 최근 것부터 */
+/** 🃏 모의 글 칸: 모의 글 부탁과 그 결과(임시글 링크), 최근 것부터 */
 function tp_radar_report_view( $asks, $show ) {
 	$pending = false;
 	if ( ! $asks ) :
 		?>
-<p style="text-align:center">아직 리포트가 없어요. 📰 실시간 피드에서 마음에 드는 글을 체크하고 📝 정리 부탁을 눌러 보세요.</p>
+<p style="text-align:center">아직 모의 글이 없어요. 📰 실시간 피드에서 마음에 드는 글을 체크하고 🃏 모의 글 부탁을 눌러 보세요.</p>
 		<?php
 	endif;
 	foreach ( array_slice( $asks, 0, $show, true ) as $id => $a ) :
@@ -1178,28 +1195,25 @@ function tp_radar_report_view( $asks, $show ) {
 		$late     = in_array( $st, array( 'waiting', 'cooking' ), true ) && time() - (int) ( $a['rang'] ?? $a['at'] ) > TP_RADAR_ASK_STALE;
 		$says     = array(
 			'waiting' => '특파원 부르는 중',
-			'cooking' => '정리하는 중',
-			'done'    => '정리 완료',
-			'failed'  => '정리 실패',
+			'cooking' => '글 만드는 중',
+			'done'    => '임시글 완성',
+			'failed'  => '만들기 실패',
 		)[ $st ] ?? $st;
 		$cls      = 'done' === $st ? '' : ( 'failed' === $st || ! empty( $a['err'] ) ? ' bad' : ' wait' );
 		?>
 <section class="tprd-day" id="ask-<?php echo (int) $id; ?>">
-<h2><span class="tprd-corner ask"><?php echo empty( $a['morning'] ) ? '📝 정리 부탁' : '🌅 아침 리포트'; ?></span><?php echo esc_html( tp_radar_weekday( wp_date( 'Y-m-d', (int) $a['at'] ) ) . ' ' . wp_date( 'H:i', (int) $a['at'] ) ); ?> · <?php echo count( (array) $a['items'] ); ?>개
+<h2><span class="tprd-corner ask">🃏 모의 글 부탁</span><?php echo esc_html( tp_radar_weekday( wp_date( 'Y-m-d', (int) $a['at'] ) ) . ' ' . wp_date( 'H:i', (int) $a['at'] ) ); ?> · <?php echo count( (array) $a['items'] ); ?>개
 <span class="tprd-state<?php echo esc_attr( $cls ); ?>"><?php echo esc_html( $says . ( ! empty( $a['err'] ) ? ' — ' . $a['err'] : '' ) ); ?></span>
 		<?php if ( $late || ! empty( $a['err'] ) ) : ?>
 <form class="tprd-recall" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'tp_radar_recall' ); ?><input type="hidden" name="action" value="tp_radar_recall"><input type="hidden" name="id" value="<?php echo (int) $id; ?>"><button type="submit">🔔 다시 부르기</button></form>
 		<?php endif; ?>
 </h2>
 		<?php if ( 'done' === $st ) : ?>
-<p class="tprd-anchor"><img src="<?php echo esc_url( plugins_url( 'press.png', __FILE__ ) ); ?>" alt="">트란시스 특파원 취재 일지 — <?php echo esc_html( empty( $a['morning'] ) ? '부탁하신 글 ' . count( (array) $a['result'] ) . '개 정리했어요' : '오늘 거리 ' . count( (array) $a['result'] ) . '개예요' ); ?></p>
-<div class="tprd-grid">
-			<?php
-			foreach ( array_values( (array) $a['result'] ) as $i => $it ) {
-				tp_radar_card( $it, $i );
-			}
-			?>
-</div>
+<ul class="tprd-drafts">
+			<?php foreach ( array_values( (array) $a['result'] ) as $it ) : ?>
+				<?php tp_radar_draft_row( $it ); ?>
+			<?php endforeach; ?>
+</ul>
 		<?php else : ?>
 <ul class="tprd-wait">
 			<?php foreach ( (array) $a['items'] as $it ) : ?>
@@ -1209,11 +1223,11 @@ function tp_radar_report_view( $asks, $show ) {
 		<?php endif; ?>
 </section>
 	<?php endforeach; ?>
-	<?php if ( $pending ) : // 정리 중인 부탁이 있으면 30초마다 새로 읽어 끝난 결과가 저절로 보이게 ?>
+	<?php if ( $pending ) : // 만드는 중인 부탁이 있으면 30초마다 새로 읽어 끝난 결과가 저절로 보이게 ?>
 <script>setTimeout(function () { location.reload(); }, 30000);</script>
 	<?php endif; ?>
 	<?php if ( count( $asks ) > $show ) : ?>
-<p style="text-align:center"><a class="tprd-more" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report&show=' . ( $show + 6 ) ) ); ?>">✈️ 지난 리포트 더 보기</a></p>
+<p style="text-align:center"><a class="tprd-more" href="<?php echo esc_url( admin_url( 'admin.php?page=' . TP_RADAR_SLUG . '&view=report&show=' . ( $show + 6 ) ) ); ?>">✈️ 지난 모의 글 더 보기</a></p>
 	<?php endif; ?>
 	<?php
 }
@@ -1250,17 +1264,18 @@ function tp_radar_feed_row( $k, $it, $state, $tr ) {
 	<?php
 }
 
-/** 📰 실시간 피드 칸: 갈래 거르기 → 글 목록(체크) → 정리 부탁 막대 → 초인종 설정 */
+/** 📰 실시간 피드 칸: 갈래 거르기 → 글 목록(체크) → 모의 글 부탁 막대 → 초인종 설정 */
 function tp_radar_feed_view( $feed, $asks ) {
-	// 이미 정리 부탁한 글은 표시 — 같은 글을 또 부탁하지 않게
+	// 이미 모의 글을 부탁한 글은 표시 — 같은 글을 또 부탁하지 않게
 	$state = array();
 	foreach ( array_reverse( $asks, true ) as $id => $a ) {
 		foreach ( (array) $a['items'] as $it ) {
-			$state[ $it['link'] ] = array( 'done' === ( $a['status'] ?? '' ) ? '📝 정리됨' : '⏳ 정리 중', '#ask-' . $id );
+			$state[ $it['link'] ] = array( 'done' === ( $a['status'] ?? '' ) ? '🃏 글 만듦' : '⏳ 만드는 중', '#ask-' . $id );
 		}
 	}
-	$bell = get_option( 'tp_radar_bell', array() );
-	$tr   = tp_radar_titles();
+	$bell  = get_option( 'tp_radar_bell', array() );
+	$mbell = get_option( 'tp_radar_bell_mock', array() );
+	$tr    = tp_radar_titles();
 	$todo = tp_radar_unjudged( $feed );
 	// 특파원이 접어 둔 글은 맨 아래 접힌 칸으로. 갈래 개수·전체 개수는 보이는 글만 센다
 	$show = array();
@@ -1334,8 +1349,8 @@ fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: new URLSearch
 </details>
 	<?php endif; ?>
 <div class="tprd-bar">
-<button type="submit" class="tprd-btn" id="tprd-ask-btn" disabled>📝 정리 부탁</button>
-<span id="tprd-ask-n">정리할 글을 골라 주세요 · 한 번에 <?php echo (int) TP_RADAR_ASK_MAX; ?>개까지 · 끝나면 리포트 칸에 쌓여요</span>
+<button type="submit" class="tprd-btn" id="tprd-ask-btn" disabled>🃏 모의 글 부탁</button>
+<span id="tprd-ask-n">모의 글로 만들 글을 골라 주세요 · 한 번에 <?php echo (int) TP_RADAR_ASK_MAX; ?>개까지 · 끝나면 모의 글 칸에 쌓여요</span>
 </div>
 </form>
 <script>
@@ -1347,8 +1362,8 @@ fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: new URLSearch
 		e.target.closest('li').classList.toggle('on', e.target.checked);
 		var n = form.querySelectorAll('input[name="links[]"]:checked').length;
 		btn.disabled = n === 0 || n > max;
-		btn.textContent = n ? '📝 고른 ' + n + '개 정리 부탁' : '📝 정리 부탁';
-		say.textContent = n > max ? '한 번에 ' + max + '개까지예요 — ' + (n - max) + '개를 빼 주세요' : (n ? '특파원이 2~5분 안에 정리해 리포트 칸에 올려요' : '정리할 글을 골라 주세요 · 한 번에 ' + max + '개까지 · 끝나면 리포트 칸에 쌓여요');
+		btn.textContent = n ? '🃏 고른 ' + n + '개 모의 글 부탁' : '🃏 모의 글 부탁';
+		say.textContent = n > max ? '한 번에 ' + max + '개까지예요 — ' + (n - max) + '개를 빼 주세요' : (n ? '특파원이 5~15분 안에 비공개 임시글로 만들어 모의 글 칸에 올려요' : '모의 글로 만들 글을 골라 주세요 · 한 번에 ' + max + '개까지 · 끝나면 모의 글 칸에 쌓여요');
 	});
 	// 사진 B안: 사진 없는 줄이 화면에 들어오면 모아서(0.3초) 한 번에 최대 8개씩 서버에 찾아 달라고 한다
 	var waiting = [], timer = null;
@@ -1388,19 +1403,27 @@ fetch(ajaxurl, { method: 'POST', credentials: 'same-origin', body: new URLSearch
 	});
 })();
 </script>
-<?php // 초인종 설정: 처음 한 번과 열쇠를 바꿀 때만 쓰니 접어 둔다. 열쇠는 저장 뒤 다시 보여 주지 않는다 ?>
-<details class="tprd-bell"<?php echo empty( $bell['token'] ) ? ' open' : ''; ?>>
-<summary>🔔 특파원 초인종 설정 <small><?php echo empty( $bell['token'] ) ? '아직 설정 안 됨 — 정리 부탁을 해도 특파원이 오지 않아요' : '연결됨'; ?></small></summary>
+<?php // 초인종 설정 두 개(번역·거르기 routine / 모의 글 routine): 처음 한 번과 열쇠를 바꿀 때만 쓰니 접어 둔다. 열쇠는 저장 뒤 다시 보여 주지 않는다
+foreach ( array(
+	'main' => array( $bell, '🔔 특파원 초인종 설정 (번역·거르기)', '번역·거르기를 부탁해도 특파원이 오지 않아요', '트란시스 특파원 routine' ),
+	'mock' => array( $mbell, '🔔 모의 글 초인종 설정', '모의 글을 부탁해도 특파원이 오지 않아요', '모의 글 routine(Opus)' ),
+) as $which => $cfg ) :
+	list( $b, $label, $off, $rname ) = $cfg;
+	?>
+<details class="tprd-bell"<?php echo empty( $b['token'] ) ? ' open' : ''; ?>>
+<summary><?php echo esc_html( $label ); ?> <small><?php echo empty( $b['token'] ) ? '아직 설정 안 됨 — ' . esc_html( $off ) : '연결됨'; ?></small></summary>
 <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 	<?php wp_nonce_field( 'tp_radar_bell' ); ?>
 <input type="hidden" name="action" value="tp_radar_bell">
-<p class="tprd-orig">claude.ai/code/routines → 트란시스 특파원 routine → Edit → API 트리거에서 받은 주소와 열쇠를 넣어 주세요.</p>
-<label for="tprd-bell-url">주소</label>
-<input type="url" id="tprd-bell-url" name="bell_url" required value="<?php echo esc_attr( $bell['url'] ?? '' ); ?>" placeholder="https://api.anthropic.com/v1/claude_code/routines/trig_…/fire">
-<label for="tprd-bell-token">열쇠<?php echo empty( $bell['token'] ) ? '' : ' (바꿀 때만 넣으세요)'; ?></label>
-<input type="password" id="tprd-bell-token" name="bell_token" autocomplete="off"<?php echo empty( $bell['token'] ) ? ' required' : ''; ?>>
+<input type="hidden" name="which" value="<?php echo esc_attr( $which ); ?>">
+<p class="tprd-orig">claude.ai/code/routines → <?php echo esc_html( $rname ); ?> → Edit → API 트리거에서 받은 주소와 열쇠를 넣어 주세요.</p>
+<label for="tprd-bell-url-<?php echo esc_attr( $which ); ?>">주소</label>
+<input type="url" id="tprd-bell-url-<?php echo esc_attr( $which ); ?>" name="bell_url" required value="<?php echo esc_attr( $b['url'] ?? '' ); ?>" placeholder="https://api.anthropic.com/v1/claude_code/routines/trig_…/fire">
+<label for="tprd-bell-token-<?php echo esc_attr( $which ); ?>">열쇠<?php echo empty( $b['token'] ) ? '' : ' (바꿀 때만 넣으세요)'; ?></label>
+<input type="password" id="tprd-bell-token-<?php echo esc_attr( $which ); ?>" name="bell_token" autocomplete="off"<?php echo empty( $b['token'] ) ? ' required' : ''; ?>>
 <p><button type="submit" class="tprd-btn" style="margin-top:10px">저장</button></p>
 </form>
 </details>
+<?php endforeach; ?>
 	<?php
 }
