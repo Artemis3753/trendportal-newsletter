@@ -32,7 +32,7 @@ The editors are not developers, so the tools run from the WordPress admin screen
 |---|---|
 | **Card-news helper** (`tools/cardnews/`, `tools/figma-plugin/`, plugin `tp-cardnews-helper`) | A Figma plugin exports the cards. An editor uploads the zip and the Instagram caption as an order in an admin tab. A routine turns the order into a **private draft** and a newsletter HTML file. A person reviews, publishes or schedules it. |
 | **Newsletter builder** (`tools/newsletter/`, part of the card-news helper) | Builds the email HTML from the same order, with its own footer because Stibee adds none to mail made in its HTML editor. A person pastes it into Stibee and schedules it. |
-| **Trend feed, "correspondent"** (`tools/radar/`, plugin `tp-trend-radar`) | Gathers new posts from external sources into one feed in the admin. The editors tick what they like and a routine writes a Korean summary. |
+| **Trend feed, "correspondent"** (`tools/radar/`, plugin `tp-trend-radar`) | Gathers new posts from external sources into one feed in the admin. The editors tick up to three articles and a routine (Claude Opus) turns each into a **private mock draft post** in the cardnews format, reusing the card-news helper's builder and rulebook. A person reviews and publishes it. |
 | **Schedule** (`transis/`) | Reads the team's work inbox, read-only, keeps a schedule in a Google Sheet through Apps Script, and sends a daily reminder email and phone notification. |
 
 #### One design for all three
@@ -83,7 +83,7 @@ Weekly, on Fridays. Each issue is a longer take on that week's roundup. The help
 | `site/additional.css` | A copy of the site's Additional CSS, pasted into the editor by hand |
 | `tools/cardnews/` | Python script and instructions for the card-news helper routine |
 | `tools/newsletter/` | Python script that builds the newsletter HTML |
-| `tools/radar/` | Python script and instructions for the trend feed routine |
+| `tools/radar/` | Python script and instructions for the trend feed routines (feed titles, mock posts) |
 | `tools/figma-plugin/` | The Figma plugin that exports cards |
 | `transis/` | The schedule assistant: Python script, routine instructions, and the Apps Script web app |
 | `docs/PRD.md` | Requirements, decisions, and open questions |
@@ -114,7 +114,7 @@ Secrets (site keys, the Stibee key, routine tokens) live in the site's settings,
 | TP No Comment Popup | Turns off the Jetpack subscribe popup after a comment, which skips Stibee's consent steps |
 | TP Related Posts | Adds a row of related posts under each post |
 | TP Transis Frame | Shows the schedule web app at a hidden address on the site and sends web push notifications |
-| TP Trend Radar | The admin tab for the trend feed and its reports |
+| TP Trend Radar | The admin tab for the trend feed and its mock posts |
 | TP Video Preview | Shows a video's first frame before playback on iOS and mobile Chrome |
 | TP View Count | Shows each post's view count next to its date, read from Jetpack stats |
 | TP Weekly Links | Fixed links that always point to the latest weekly roundups, for the welcome email |

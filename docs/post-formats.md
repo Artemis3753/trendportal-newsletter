@@ -115,6 +115,13 @@ Built from the Thursday Figma zip, together with the newsletter (`docs/newslette
 - The TP Weekly Lock plugin fills in card numbers, the table of contents and the subscriber lock from card 02 when the page is shown. Do not write those by hand.
 - The ending says 댓글로 (the newsletter says 답장으로) and ends with the "매주 금요일…" paragraph.
 
+### Mock post from the trend feed (10/28) — standard format, no Instagram cardnews behind it
+Made by the trend correspondent's mock routine (`tools/radar/PROMPT-mock.md`, Claude Opus) from one ticked feed article, as a private draft, and published only after a person reviews it. It uses the **standard** format and the same builder as every other post, so the rules above apply (title, category, card text voice, `© source`, no CSS of its own). What differs:
+- The cards are written from the article, not read from Figma. Three to six cards, only what the article says; names, numbers and dates exactly as the article has them.
+- One photo: the article's main photo is the cover (`tp-cover-photo`) and the featured image. The cards have no photos of their own.
+- The photo is someone else's. Every mock post carries `꼭 확인:` (check the right to use the photo, or replace it) and `확인 필요:` (there is no Instagram cardnews behind it), added by `radar.py answer`.
+- The site is an archive of our Instagram cardnews: a person decides whether a mock post is published at all.
+
 ## Reference posts
 
 Posts the site owner approved as the model for their format. When writing a post of that kind, look at the reference's actual markup (`python3 tools/cardnews/cardnews.py ref <id>`) and copy its structure, not only the rules above.
