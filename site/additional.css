@@ -466,6 +466,26 @@ main .alignwide > .tp-reports + * { margin-block-start: 0; }
   .tp-pair .tp-series .wp-block-post-template > li:nth-child(n+4) { display: none; }
 }
 
+/* Interviews on phones (10/29): the same poster cards as the news list, every card one size.
+   The series layout above makes the newest item a big square, which does not suit one interview a week.
+   The category and date blocks sit in the template but stay hidden on desktop, where a card is photo + title only */
+.tp-interviews .wp-block-post-terms,
+.tp-interviews .wp-block-post-date { display: none; }
+@media (max-width: 781px) {
+  .tp-interviews .wp-block-post-template { grid-template-columns: 1fr 1fr; gap: 22px 12px; }
+  .tp-interviews .wp-block-post-template > li,
+  .tp-interviews .wp-block-post-template > li:first-child { display: block; padding: 0; border-bottom: 0; }
+  .tp-interviews .wp-block-post-featured-image,
+  .tp-interviews .wp-block-post-template > li:first-child .wp-block-post-featured-image { margin: 0 !important; border-radius: 14px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
+  .tp-interviews .wp-block-post-featured-image img,
+  .tp-interviews .wp-block-post-template > li:first-child .wp-block-post-featured-image img { aspect-ratio: 4 / 5 !important; object-fit: cover; object-position: 50% 50%; }
+  .tp-interviews .wp-block-post-template > li > .wp-block-post-terms { display: block; margin: 10px 0 0 !important; font-size: 0.6875rem; font-weight: 700; }
+  .tp-interviews .wp-block-post-terms a { color: #2f6bff; text-decoration: none; }
+  .tp-interviews .wp-block-post-template > li > .wp-block-post-title,
+  .tp-interviews .wp-block-post-template > li:first-child .wp-block-post-title { margin: 2px 0 4px !important; font-size: 0.875rem !important; line-height: 1.35; }
+  .tp-interviews .wp-block-post-template > li > .wp-block-post-date { display: block; margin: 0 !important; font-size: 0.6875rem; font-weight: 600; color: rgba(17, 17, 17, 0.6); }
+}
+
 /* ---------- Post page: cover (M1 light grain) ---------- */
 .tp-cover {
   position: relative;
