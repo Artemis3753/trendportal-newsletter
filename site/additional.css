@@ -450,6 +450,22 @@ main .alignwide:has(> .tp-reports) > * { width: 100%; }
 main .alignwide > .tp-reports { order: -1; margin-top: 0 !important; margin-bottom: var(--wp--preset--spacing--60); }
 main .alignwide > .tp-reports + * { margin-block-start: 0; }
 
+/* ---------- Home on wide screens (10/29): fill the side margins ----------
+   Only from 1400px up; below that the 1000px column stays exactly as before (phones and tablets untouched).
+   Reports go two columns and news five; weekly + interviews sit side by side (.tp-pair, three cards each).
+   Scoped through :has(> .tp-reports) so archive and search pages keep their own 1000px column */
+@media (min-width: 1400px) {
+  main .alignwide:has(> .tp-reports) { max-width: 1560px !important; }
+  main .alignwide:has(> .tp-reports) > * { max-width: 1560px !important; }
+  main .alignwide:has(> .tp-reports) .wp-block-post-template.columns-3 { grid-template-columns: repeat(5, 1fr) !important; }
+  .tp-reports > div:not(.tp-reports-head) { display: grid; grid-template-columns: 1fr 1fr; column-gap: 56px; }
+  .tp-reports .tp-latest-notice { grid-column: 1 / -1; }
+  .tp-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; margin-top: var(--wp--preset--spacing--70); }
+  .tp-pair > .tp-series { margin-top: 0 !important; }
+  .tp-pair .tp-series .wp-block-post-template { grid-template-columns: repeat(3, 1fr); }
+  .tp-pair .tp-series .wp-block-post-template > li:nth-child(n+4) { display: none; }
+}
+
 /* ---------- Post page: cover (M1 light grain) ---------- */
 .tp-cover {
   position: relative;
