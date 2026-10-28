@@ -1,21 +1,23 @@
 <?php
 /*
- * 홈 '독자 제보' 칸 (1.3.0, 10/18 사용자 결정)
+ * 홈 '독자 제보' 칸 (1.4.0, 10/28 사용자 결정)
  * - 맨 위: 공지 줄(시안 G1) — 공지글 중 가장 최근 것 하나. 확성기 칸은 제보 썸네일과 같은 56px라 '공지'·'NEW' 알약이 같은 세로줄에 선다
- * - 그 아래: 제보 줄(시안 H1) — 공지가 아닌 제보 중 가장 최근 것 하나. 작성자·시간은 제목 아래 회색 한 줄
+ * - 그 아래: 제보 줄(시안 H1) — 공지가 아닌 제보 중 최근 것 최대 10개. 작성자·시간은 제목 아래 회색 한 줄
+ * 10개를 넘게 쌓이면 오래된 제보는 홈에서만 빠진다(글은 지워지지 않고 '제보 전체 보기'에서 그대로 보인다)
  * KBoard 최신글 목록은 공지와 일반 글을 섞어 최신순으로 넘겨준다. 그래서 공지가 제보 자리를 차지하지 않게 여기서 나눈다.
- * (홈 템플릿의 rpp=5 안에서 고른다 — 공지가 5개를 넘게 쌓이면 제보 줄이 비어 보일 수 있다)
+ * (홈 템플릿의 rpp=20 안에서 고른다 — 공지가 10개를 넘게 쌓이면 제보 줄이 10개 미만으로 보일 수 있다)
  */
+$tp_report_limit = 10;
 $tp_notice = null;
-$tp_report = null;
+$tp_reports = array();
 while($content = $list->hasNext()){
 	if($content->notice){
 		if(!$tp_notice) $tp_notice = $content;
 	}
-	else if(!$tp_report){
-		$tp_report = $content;
+	else if(count($tp_reports) < $tp_report_limit){
+		$tp_reports[] = $content;
 	}
-	if($tp_notice && $tp_report) break;
+	if($tp_notice && count($tp_reports) >= $tp_report_limit) break;
 }
 // 홈 템플릿이 이 출력에 자동 줄바꿈(wpautop)을 걸어서 줄마다 <br>·<p>가 끼어든다 → 다 그린 뒤 줄바꿈을 접어서 내보낸다(맨 아래)
 ob_start();
@@ -29,7 +31,7 @@ ob_start();
 	</a>
 	<?php endif?>
 
-	<?php if($tp_report):?>
+	<?php foreach($tp_reports as $tp_report):?>
 	<?php
 	// 대표 이미지가 없으면 KBoard가 본문 첫 사진을 대신 돌려준다(getThumbnail).
 	// 비밀글 사진이 홈에 노출되면 안 되므로 비밀글은 썸네일을 만들지 않는다.
@@ -46,7 +48,8 @@ ob_start();
 			<span class="tp-latest-meta"><?php echo $tp_report->getUserDisplay()?> · <?php echo $tp_report->getDate()?></span>
 		</span>
 	</a>
-	<?php else:?>
+	<?php endforeach?>
+	<?php if(!$tp_reports):?>
 	<?php // 공지만 있고 제보가 없을 때도 빈 칸 대신 안내를 보여 준다 (KBoard는 목록이 아예 비었을 때만 안내를 띄운다) ?>
 	<div class="kboard-latest-empty-list-message">아직 제보가 없어요. 첫 제보를 남겨 주세요.</div>
 	<?php endif?>
