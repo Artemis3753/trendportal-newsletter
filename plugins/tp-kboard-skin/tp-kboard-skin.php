@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP KBoard Skin
  * Description: 트렌드포털 제보 게시판용 KBoard 스킨. default 스킨 복사본. 최신글 썸네일을 추가하고 추천(좋아요) 기능을 뺐다. 글쓰기 화면은 검색엔진에서 뺀다.
- * Version: 1.5.0
+ * Version: 1.6.0
  * Author: Trendportal
  */
 
@@ -64,3 +64,16 @@ function tp_kboard_thumb($content, $size) {
 	}
 	return $thumb;
 }
+
+/*
+ * 1.6.0: 홈 제보 칸도 카드 격자가 됐다(10/29). KBoard는 최신글(latest)을 그릴 때 스킨 style.css를 불러오지 않아서
+ * (게시판 목록 화면에서만 불러온다) 홈 전용 CSS를 따로 달았다. 추가 CSS에 붙여 넣을 필요가 없도록 플러그인이 직접 낸다.
+ * 버전 인자는 파일 수정 시각 — CSS만 고쳐도 브라우저 캐시가 새로 받는다.
+ */
+add_action('wp_enqueue_scripts', function () {
+	if (!is_front_page()) {
+		return;
+	}
+	$file = __DIR__ . '/skin/tp-default/home.css';
+	wp_enqueue_style('tp-kboard-home', plugins_url('skin/tp-default/home.css', __FILE__), array(), file_exists($file) ? filemtime($file) : '1.6.0');
+});
