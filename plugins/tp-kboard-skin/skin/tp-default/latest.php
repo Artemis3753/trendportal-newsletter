@@ -1,6 +1,6 @@
 <?php
 /*
- * 홈 '독자 제보' 칸 (1.4.0, 10/28 사용자 결정)
+ * 홈 '독자 제보' 칸 (1.4.0, 10/28 사용자 결정 / 1.4.1 본문에 붙여 넣은 외부 사진도 썸네일로)
  * - 맨 위: 공지 줄(시안 G1) — 공지글 중 가장 최근 것 하나. 확성기 칸은 제보 썸네일과 같은 56px라 '공지'·'NEW' 알약이 같은 세로줄에 선다
  * - 그 아래: 제보 줄(시안 H1) — 공지가 아닌 제보 중 최근 것 최대 10개. 작성자·시간은 제목 아래 회색 한 줄
  * 10개를 넘게 쌓이면 오래된 제보는 홈에서만 빠진다(글은 지워지지 않고 '제보 전체 보기'에서 그대로 보인다)
@@ -36,6 +36,12 @@ ob_start();
 	// 대표 이미지가 없으면 KBoard가 본문 첫 사진을 대신 돌려준다(getThumbnail).
 	// 비밀글 사진이 홈에 노출되면 안 되므로 비밀글은 썸네일을 만들지 않는다.
 	$tp_thumb = $tp_report->secret ? '' : $tp_report->getThumbnail(160, 160);
+	// getThumbnail은 첨부·사이트에 올린 사진만 찾는다. 기사 사진을 붙여 넣은 글(외부 주소 <img>)은 비어 나오므로
+	// 본문 첫 <img>의 주소를 직접 꺼낸다. 원본 서버가 핫링크를 막을 수 있어 Jetpack 이미지 CDN(photon)을 거치고,
+	// 없으면 원본 주소를 그대로 쓴다.
+	if(!$tp_thumb && !$tp_report->secret && preg_match('/<img[^>]+src=["\'](https?:\/\/[^"\']+)["\']/i', $tp_report->content, $tp_match)){
+		$tp_thumb = function_exists('jetpack_photon_url') ? jetpack_photon_url(html_entity_decode($tp_match[1]), array('resize' => '160,160')) : html_entity_decode($tp_match[1]);
+	}
 	?>
 	<a class="tp-latest-report" href="<?php echo $url->getDocumentURLWithUID($tp_report->uid)?>">
 		<span class="tp-latest-thumb<?php if(!$tp_thumb):?> is-empty<?php endif?>"><?php if($tp_thumb):?><img src="<?php echo esc_url($tp_thumb)?>" alt="" loading="lazy"><?php endif?></span>
