@@ -4,11 +4,11 @@
 /* 눌림 반응: 누르는 즉시 줄어들고, 놓으면 튕김 없이 부드럽게 복귀. scale 속성은 카드의 떠오르는 애니메이션(transform)과 충돌하지 않는다 */
 .wp-block-post-template.is-layout-grid > li,
 .tp-chips .wp-block-categories li, .tp-chips .tp-chip-all a,
-.tp-nl-form button, .tp-reports-cta a, .tp-latest-report, .tp-latest-notice { transition: scale 0.4s cubic-bezier(0.2, 0.85, 0.25, 1), background-color 0.2s, color 0.2s; -webkit-tap-highlight-color: transparent; }
-:is(.wp-block-post-template.is-layout-grid > li, .tp-chips .wp-block-categories li, .tp-chips .tp-chip-all a, .tp-nl-form button, .tp-reports-cta a, .tp-latest-report, .tp-latest-notice):is(:active, .tp-pressed) { scale: 0.97; transition-duration: 0.1s; transition-timing-function: ease-out; }
+.tp-nl-form button, .tp-reports-cta a, .tp-latest-card, .tp-card, .tp-latest-notice, .tp-board-notice { transition: scale 0.4s cubic-bezier(0.2, 0.85, 0.25, 1), background-color 0.2s, color 0.2s; -webkit-tap-highlight-color: transparent; }
+:is(.wp-block-post-template.is-layout-grid > li, .tp-chips .wp-block-categories li, .tp-chips .tp-chip-all a, .tp-nl-form button, .tp-reports-cta a, .tp-latest-card, .tp-card, .tp-latest-notice, .tp-board-notice):is(:active, .tp-pressed) { scale: 0.97; transition-duration: 0.1s; transition-timing-function: ease-out; }
 @media (prefers-reduced-motion: reduce) { .wp-block-post-template.is-layout-grid > li,
 .tp-chips .wp-block-categories li, .tp-chips .tp-chip-all a,
-.tp-nl-form button, .tp-reports-cta a, .tp-latest-report, .tp-latest-notice { transition: none; scale: none !important; } }
+.tp-nl-form button, .tp-reports-cta a, .tp-latest-card, .tp-card, .tp-latest-notice, .tp-board-notice { transition: none; scale: none !important; } }
 /* 카드 어디를 눌러도 펼치므로 눌러지는 손 모양을 보여 준다(모양은 그대로) */
 .wp-block-post-template.is-layout-grid > li { cursor: pointer; }
 }
