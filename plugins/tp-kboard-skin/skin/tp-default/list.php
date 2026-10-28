@@ -75,13 +75,13 @@
 						<div class="kboard-mobile-contents">
 							<span class="contents-item kboard-user"><?php echo $content->getUserDisplay()?></span>
 							<span class="contents-separator kboard-date">|</span>
-							<span class="contents-item kboard-date"><?php echo $content->getDate()?></span>
+							<span class="contents-item kboard-date"><?php echo tp_kboard_date($content)?></span>
 							<span class="contents-separator kboard-view">|</span>
 							<span class="contents-item kboard-view"><?php echo __('Views', 'kboard')?> <?php echo $content->view?></span>
 						</div>
 					</td>
 					<td class="kboard-list-user"><?php echo $content->getUserDisplay()?></td>
-					<td class="kboard-list-date"><?php echo $content->getDate()?></td>
+					<td class="kboard-list-date"><?php echo tp_kboard_date($content)?></td>
 					<td class="kboard-list-view"><?php echo $content->view?></td>
 				</tr>
 				<?php endwhile?>
@@ -100,13 +100,13 @@
 						<div class="kboard-mobile-contents">
 							<span class="contents-item kboard-user"><?php echo $content->getUserDisplay()?></span>
 							<span class="contents-separator kboard-date">|</span>
-							<span class="contents-item kboard-date"><?php echo $content->getDate()?></span>
+							<span class="contents-item kboard-date"><?php echo tp_kboard_date($content)?></span>
 							<span class="contents-separator kboard-view">|</span>
 							<span class="contents-item kboard-view"><?php echo __('Views', 'kboard')?> <?php echo $content->view?></span>
 						</div>
 					</td>
 					<td class="kboard-list-user"><?php echo $content->getUserDisplay()?></td>
-					<td class="kboard-list-date"><?php echo $content->getDate()?></td>
+					<td class="kboard-list-date"><?php echo tp_kboard_date($content)?></td>
 					<td class="kboard-list-view"><?php echo $content->view?></td>
 				</tr>
 				<?php endwhile?>
@@ -125,13 +125,13 @@
 						<div class="kboard-mobile-contents">
 							<span class="contents-item kboard-user"><?php echo $content->getUserDisplay()?></span>
 							<span class="contents-separator kboard-date">|</span>
-							<span class="contents-item kboard-date"><?php echo $content->getDate()?></span>
+							<span class="contents-item kboard-date"><?php echo tp_kboard_date($content)?></span>
 							<span class="contents-separator kboard-view">|</span>
 							<span class="contents-item kboard-view"><?php echo __('Views', 'kboard')?> <?php echo $content->view?></span>
 						</div>
 					</td>
 					<td class="kboard-list-user"><?php echo $content->getUserDisplay()?></td>
-					<td class="kboard-list-date"><?php echo $content->getDate()?></td>
+					<td class="kboard-list-date"><?php echo tp_kboard_date($content)?></td>
 					<td class="kboard-list-view"><?php echo $content->view?></td>
 				</tr>
 				<?php $boardBuilder->builderReply($content->uid)?>

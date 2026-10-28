@@ -51,7 +51,7 @@ ob_start();
 				<?php if($tp_report->secret):?><span class="kboard-icon-lock"></span><?php endif?>
 				<?php echo $tp_report->title?>
 			</span>
-			<span class="tp-latest-meta"><?php echo $tp_report->getUserDisplay()?> · <?php echo $tp_report->getDate()?></span>
+			<span class="tp-latest-meta"><?php echo $tp_report->getUserDisplay()?> · <?php echo tp_kboard_date($tp_report)?></span>
 		</span>
 	</a>
 	<?php endforeach?>
