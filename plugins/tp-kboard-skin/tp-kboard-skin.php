@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP KBoard Skin
  * Description: 트렌드포털 제보 게시판용 KBoard 스킨. default 스킨 복사본. 최신글 썸네일을 추가하고 추천(좋아요) 기능을 뺐다. 글쓰기 화면은 검색엔진에서 뺀다.
- * Version: 1.4.2
+ * Version: 1.5.0
  * Author: Trendportal
  */
 
@@ -42,4 +42,25 @@ add_filter('wp_robots', function ($robots) {
  */
 function tp_kboard_date($content) {
 	return date('Y.m.d', strtotime($content->date));
+}
+
+/*
+ * 1.5.0: 제보 썸네일 주소를 찾는 규칙을 한곳에 모았다(홈 목록 latest.php와 게시판 목록 list.php가 같이 쓴다).
+ * - 비밀글 사진이 목록·홈에 노출되면 안 되므로 비밀글은 썸네일을 만들지 않는다.
+ * - 대표 이미지가 없으면 KBoard가 본문 첫 사진을 대신 돌려준다(getThumbnail).
+ * - getThumbnail은 첨부·사이트에 올린 사진만 찾는다. 기사 사진을 붙여 넣은 글(외부 주소 <img>)은 비어 나오므로
+ *   본문 첫 <img>의 주소를 직접 꺼낸다. 원본 서버가 핫링크를 막을 수 있어 Jetpack 이미지 CDN(photon)을 거치고,
+ *   없으면 원본 주소를 그대로 쓴다.
+ * $size는 정사각 한 변의 픽셀이다.
+ */
+function tp_kboard_thumb($content, $size) {
+	if ($content->secret) {
+		return '';
+	}
+	$thumb = $content->getThumbnail($size, $size);
+	if (!$thumb && preg_match('/<img[^>]+src=["\'](https?:\/\/[^"\']+)["\']/i', $content->content, $match)) {
+		$src   = html_entity_decode($match[1]);
+		$thumb = function_exists('jetpack_photon_url') ? jetpack_photon_url($src, array('resize' => $size . ',' . $size)) : $src;
+	}
+	return $thumb;
 }

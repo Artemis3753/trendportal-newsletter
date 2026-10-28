@@ -48,96 +48,40 @@
 	<!-- 카테고리 끝 -->
 	
 	<!-- 리스트 시작 -->
-	<div class="kboard-list">
-		<table>
-			<thead>
-				<tr>
-					<td class="kboard-list-uid"><?php echo __('Number', 'kboard')?></td>
-					<td class="kboard-list-title"><?php echo __('Title', 'kboard')?></td>
-					<td class="kboard-list-user"><?php echo __('Author', 'kboard')?></td>
-					<td class="kboard-list-date"><?php echo __('Date', 'kboard')?></td>
-					<td class="kboard-list-view"><?php echo __('Views', 'kboard')?></td>
-				</tr>
-			</thead>
-			<tbody>
-				<?php while($content = $list->hasNextNotice()):?>
-				<tr class="<?php echo esc_attr($content->getClass())?>">
-					<td class="kboard-list-uid"><?php echo __('Notice', 'kboard')?></td>
-					<td class="kboard-list-title">
-						<a href="<?php echo esc_url($url->getDocumentURLWithUID($content->uid))?>">
-							<div class="kboard-default-cut-strings">
-								<?php if($content->isNew()):?><span class="kboard-default-new-notify">New</span><?php endif?>
-								<?php if($content->secret):?><span class="kboard-icon-lock"></span><?php endif?>
-								<?php echo $content->title?>
-								<span class="kboard-comments-count"><?php echo $content->getCommentsCount()?></span>
-							</div>
-						</a>
-						<div class="kboard-mobile-contents">
-							<span class="contents-item kboard-user"><?php echo $content->getUserDisplay()?></span>
-							<span class="contents-separator kboard-date">|</span>
-							<span class="contents-item kboard-date"><?php echo tp_kboard_date($content)?></span>
-							<span class="contents-separator kboard-view">|</span>
-							<span class="contents-item kboard-view"><?php echo __('Views', 'kboard')?> <?php echo $content->view?></span>
-						</div>
-					</td>
-					<td class="kboard-list-user"><?php echo $content->getUserDisplay()?></td>
-					<td class="kboard-list-date"><?php echo tp_kboard_date($content)?></td>
-					<td class="kboard-list-view"><?php echo $content->view?></td>
-				</tr>
-				<?php endwhile?>
-				<?php while($content = $list->hasNextPopular()):?>
-				<tr class="<?php echo esc_attr($content->getClass())?>">
-					<td class="kboard-list-uid"><?php echo esc_html($board->getPopularName())?></td>
-					<td class="kboard-list-title">
-						<a href="<?php echo esc_url($url->getDocumentURLWithUID($content->uid))?>">
-							<div class="kboard-default-cut-strings">
-								<?php if($content->isNew()):?><span class="kboard-default-new-notify">New</span><?php endif?>
-								<?php if($content->secret):?><span class="kboard-icon-lock"></span><?php endif?>
-								<?php echo $content->title?>
-								<span class="kboard-comments-count"><?php echo $content->getCommentsCount()?></span>
-							</div>
-						</a>
-						<div class="kboard-mobile-contents">
-							<span class="contents-item kboard-user"><?php echo $content->getUserDisplay()?></span>
-							<span class="contents-separator kboard-date">|</span>
-							<span class="contents-item kboard-date"><?php echo tp_kboard_date($content)?></span>
-							<span class="contents-separator kboard-view">|</span>
-							<span class="contents-item kboard-view"><?php echo __('Views', 'kboard')?> <?php echo $content->view?></span>
-						</div>
-					</td>
-					<td class="kboard-list-user"><?php echo $content->getUserDisplay()?></td>
-					<td class="kboard-list-date"><?php echo tp_kboard_date($content)?></td>
-					<td class="kboard-list-view"><?php echo $content->view?></td>
-				</tr>
-				<?php endwhile?>
-				<?php while($content = $list->hasNext()):?>
-				<tr class="<?php echo esc_attr($content->getClass())?>">
-					<td class="kboard-list-uid"><?php echo $list->index()?></td>
-					<td class="kboard-list-title">
-						<a href="<?php echo esc_url($url->getDocumentURLWithUID($content->uid))?>">
-							<div class="kboard-default-cut-strings">
-								<?php if($content->isNew()):?><span class="kboard-default-new-notify">New</span><?php endif?>
-								<?php if($content->secret):?><span class="kboard-icon-lock"></span><?php endif?>
-								<?php echo $content->title?>
-								<span class="kboard-comments-count"><?php echo $content->getCommentsCount()?></span>
-							</div>
-						</a>
-						<div class="kboard-mobile-contents">
-							<span class="contents-item kboard-user"><?php echo $content->getUserDisplay()?></span>
-							<span class="contents-separator kboard-date">|</span>
-							<span class="contents-item kboard-date"><?php echo tp_kboard_date($content)?></span>
-							<span class="contents-separator kboard-view">|</span>
-							<span class="contents-item kboard-view"><?php echo __('Views', 'kboard')?> <?php echo $content->view?></span>
-						</div>
-					</td>
-					<td class="kboard-list-user"><?php echo $content->getUserDisplay()?></td>
-					<td class="kboard-list-date"><?php echo tp_kboard_date($content)?></td>
-					<td class="kboard-list-view"><?php echo $content->view?></td>
-				</tr>
-				<?php $boardBuilder->builderReply($content->uid)?>
-				<?php endwhile?>
-			</tbody>
-		</table>
+	<?php
+	// 1.5.0: 표 대신 카드 격자(10/29 사용자가 시안 C를 골랐다). 공지는 맨 위 한 줄, 제보는 정사각 사진 카드.
+	// 번호·조회수 칸은 없앴고, 답글 줄(builderReply)도 그리지 않는다 — 제보 게시판은 답글을 쓰지 않는다.
+	// 카드는 PC에서 약 220px라 레티나 화면에서도 선명하도록 400px 썸네일을 쓴다(홈 목록은 56px라 160px).
+	$tp_cards = array();
+	while($content = $list->hasNextPopular()) $tp_cards[] = $content;
+	while($content = $list->hasNext()) $tp_cards[] = $content;
+	$tp_has_notice = false;
+	?>
+	<div class="tp-board">
+		<?php while($content = $list->hasNextNotice()): $tp_has_notice = true; ?>
+		<a class="tp-board-notice" href="<?php echo esc_url($url->getDocumentURLWithUID($content->uid))?>">
+			<span class="tp-pill is-notice">공지</span>
+			<span class="tp-board-notice-title"><?php echo $content->title?></span>
+		</a>
+		<?php endwhile?>
+
+		<?php if($tp_cards):?>
+		<div class="tp-board-grid">
+			<?php foreach($tp_cards as $content):?>
+			<?php $tp_thumb = tp_kboard_thumb($content, 400)?>
+			<a class="tp-card" href="<?php echo esc_url($url->getDocumentURLWithUID($content->uid))?>">
+				<span class="tp-card-thumb<?php if(!$tp_thumb):?> is-empty<?php endif?><?php if($content->secret):?> is-secret<?php endif?>">
+					<?php if($content->isNew()):?><span class="tp-pill is-new">NEW</span><?php endif?>
+					<?php if($tp_thumb):?><img src="<?php echo esc_url($tp_thumb)?>" alt="" loading="lazy"><?php endif?>
+				</span>
+				<span class="tp-card-title"><?php echo $content->title?><span class="kboard-comments-count"><?php echo $content->getCommentsCount()?></span></span>
+				<span class="tp-card-meta"><?php echo esc_html($content->member_display)?> · <?php echo tp_kboard_date($content)?></span>
+			</a>
+			<?php endforeach?>
+		</div>
+		<?php elseif(!$tp_has_notice):?>
+		<p class="tp-board-empty">아직 제보가 없어요. 첫 제보를 남겨 주세요.</p>
+		<?php endif?>
 	</div>
 	<!-- 리스트 끝 -->
 	

@@ -33,15 +33,8 @@ ob_start();
 
 	<?php foreach($tp_reports as $tp_report):?>
 	<?php
-	// 대표 이미지가 없으면 KBoard가 본문 첫 사진을 대신 돌려준다(getThumbnail).
-	// 비밀글 사진이 홈에 노출되면 안 되므로 비밀글은 썸네일을 만들지 않는다.
-	$tp_thumb = $tp_report->secret ? '' : $tp_report->getThumbnail(160, 160);
-	// getThumbnail은 첨부·사이트에 올린 사진만 찾는다. 기사 사진을 붙여 넣은 글(외부 주소 <img>)은 비어 나오므로
-	// 본문 첫 <img>의 주소를 직접 꺼낸다. 원본 서버가 핫링크를 막을 수 있어 Jetpack 이미지 CDN(photon)을 거치고,
-	// 없으면 원본 주소를 그대로 쓴다.
-	if(!$tp_thumb && !$tp_report->secret && preg_match('/<img[^>]+src=["\'](https?:\/\/[^"\']+)["\']/i', $tp_report->content, $tp_match)){
-		$tp_thumb = function_exists('jetpack_photon_url') ? jetpack_photon_url(html_entity_decode($tp_match[1]), array('resize' => '160,160')) : html_entity_decode($tp_match[1]);
-	}
+	// 썸네일 찾는 규칙은 tp-kboard-skin.php의 tp_kboard_thumb()에 모아 두었다(목록 화면과 같이 쓴다)
+	$tp_thumb = tp_kboard_thumb($tp_report, 160);
 	?>
 	<a class="tp-latest-report" href="<?php echo $url->getDocumentURLWithUID($tp_report->uid)?>">
 		<span class="tp-latest-thumb<?php if(!$tp_thumb):?> is-empty<?php endif?>"><?php if($tp_thumb):?><img src="<?php echo esc_url($tp_thumb)?>" alt="" loading="lazy"><?php endif?></span>
