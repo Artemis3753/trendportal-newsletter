@@ -21,7 +21,12 @@ sys.path.insert(0, str(ROOT / "tools" / "cardnews"))
 import cardnews  # noqa: E402  주문 폴더·사이트 REST·사진 올리기·브라우저를 그대로 쓴다
 
 LOGO = "https://i0.wp.com/trendportal.kr/wp-content/uploads/2026/09/cropped-tp-icon-square.png?fit=128%2C128&ssl=1"
-FONT = "-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"
+# 프리텐다드가 맨 앞(사이트와 같은 글꼴). 메일 앱에 웹폰트가 안 먹으면 뒤의 시스템 고딕으로 내려간다
+FONT = "Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"
+# 웹폰트 CSS(굵기 100~900 전부 들어 있음). Apple Mail 등은 이걸 받아 프리텐다드로 그리고, Gmail은 외부 글꼴을 안 받는다
+WEBFONT_CSS = "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+# 굵기 규칙(10/30 사용자): 제목 Bold 700 · 작은 라벨·강조 구절 SemiBold 600 · 목차·목록 Medium 500 · 본문 Regular 400 · 출처·참고·푸터 Light 300
+W_TITLE, W_LABEL, W_LIST, W_BODY, W_FINE = 700, 600, 500, 400, 300
 # 양옆 여백. 폰 Gmail 앱에선 앱 자체 여백까지 더해져 32px이면 글·사진이 좁아 보여서 20px로 줄임(10/20 사용자 A안, 폰·PC 같은 값)
 GUTTER_PX = 20
 GUTTER = f"{GUTTER_PX}px"
@@ -33,27 +38,27 @@ S = {
     # 스티비 HTML 편집기(10/20 미리보기)와 Gmail은 <body> 꾸밈을 버린다 → 글꼴·글자색·줄바꿈은 본문 상자에도 적어 둔다
     "mail": f"width:100%;max-width:600px;margin:0 auto;background:#fff;font-family:{FONT};color:#111;word-break:keep-all;",
     "rule": f"border-top:1px solid #111;margin:36px {GUTTER};",
-    "issue": "margin:0 0 10px;font-size:12px;font-weight:800;letter-spacing:1px;color:#888;",
-    "h1": "margin:0;font-size:30px;font-weight:800;line-height:1.3;letter-spacing:-1.1px;color:#111;",
-    "letter_p": "margin:0 0 14px;font-size:15px;line-height:1.8;",
-    "sig": "margin:24px 0 0;padding-top:14px;border-top:1px solid #e5e5e5;color:#888;font-size:12px;font-weight:800;letter-spacing:1px;",
+    "issue": "margin:0 0 10px;font-size:12px;font-weight:600;letter-spacing:1px;color:#888;",
+    "h1": "margin:0;font-size:30px;font-weight:700;line-height:1.3;letter-spacing:-1.1px;color:#111;",
+    "letter_p": "margin:0 0 14px;font-size:15px;font-weight:400;line-height:1.8;",
+    "sig": "margin:24px 0 0;padding-top:14px;border-top:1px solid #e5e5e5;color:#888;font-size:12px;font-weight:600;letter-spacing:1px;",
     "box": "background:#f1f1f1;border-radius:10px;padding:18px 20px;",
-    "box_t": "display:block;font-size:12px;letter-spacing:1px;color:#888;margin-bottom:8px;font-weight:800;",
-    "toc_h": "margin:0 0 12px;font-size:13px;font-weight:800;letter-spacing:1px;color:#888;",
-    "toc_td": "padding:7px 0;border-bottom:1px solid #eee;vertical-align:top;font-size:14px;line-height:1.5;",
-    "num": "margin:0 0 6px;font-size:13px;font-weight:800;color:#aaa;letter-spacing:1px;",
-    "h2": "margin:0 0 16px;font-size:21px;font-weight:800;line-height:1.4;letter-spacing:-0.6px;color:#111;",
-    "src": "margin:6px 0 18px;font-size:11px;color:#999;",
-    "h4": "margin:0 0 6px;font-size:13px;font-weight:800;color:#888;letter-spacing:0.5px;",
-    "p": "margin:0 0 18px;font-size:15px;line-height:1.8;",
-    "insight_p": "margin:0 0 10px;font-size:14.5px;line-height:1.8;",
+    "box_t": "display:block;font-size:12px;letter-spacing:1px;color:#888;margin-bottom:8px;font-weight:600;",
+    "toc_h": "margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:1px;color:#888;",
+    "toc_td": "padding:7px 0;border-bottom:1px solid #eee;vertical-align:top;font-size:14px;font-weight:500;line-height:1.5;",
+    "num": "margin:0 0 6px;font-size:13px;font-weight:600;color:#aaa;letter-spacing:1px;",
+    "h2": "margin:0 0 16px;font-size:21px;font-weight:700;line-height:1.4;letter-spacing:-0.6px;color:#111;",
+    "src": "margin:6px 0 18px;font-size:11px;font-weight:300;color:#999;",
+    "h4": "margin:0 0 6px;font-size:13px;font-weight:600;color:#888;letter-spacing:0.5px;",
+    "p": "margin:0 0 18px;font-size:15px;font-weight:400;line-height:1.8;",
+    "insight_p": "margin:0 0 10px;font-size:14.5px;font-weight:400;line-height:1.8;",
     # **핵심 구절**에만 굵게+형광(사이트 💡와 같은 모양, 10/19 사용자). 그라디언트를 못 읽는 메일 앱에선 굵게만 남는다.
     # 색은 반투명 노랑: 흰 바탕에선 #fff1a8과 같고, Gmail 앱 다크 모드(글자는 흰색으로 뒤집고 그라디언트는 그대로 둠)에선
     # 어두운 바탕과 섞여 진한 황토색이 돼 흰 글자가 읽힌다(10/20 테스트 메일에서 불투명 #fff1a8 위 흰 글자가 안 보였음)
-    "hl": "font-weight:800;background:linear-gradient(transparent 55%,rgba(255,215,6,0.35) 55%);-webkit-box-decoration-break:clone;box-decoration-break:clone;",
-    "refs": "margin:10px 0 0;font-size:12px;line-height:1.7;color:#888;",
-    "btn": "display:inline-block;background:#111;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:13px 24px;border-radius:999px;",
-    "foot": f"padding:28px {GUTTER} 32px;font-size:12px;line-height:1.8;color:#999;background:#f7f7f7;margin-top:40px;",
+    "hl": "font-weight:600;background:linear-gradient(transparent 55%,rgba(255,215,6,0.35) 55%);-webkit-box-decoration-break:clone;box-decoration-break:clone;",
+    "refs": "margin:10px 0 0;font-size:12px;font-weight:300;line-height:1.7;color:#888;",
+    "btn": "display:inline-block;background:#111;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:13px 24px;border-radius:999px;",
+    "foot": f"padding:28px {GUTTER} 32px;font-size:12px;font-weight:300;line-height:1.8;color:#999;background:#f7f7f7;margin-top:40px;",
 }
 DEFAULT_CLOSING = [
     "이번 주 가장 인상 깊었던 마케팅이 있다면 이 메일에 답장으로 알려 주세요.",
@@ -139,7 +144,7 @@ def card_html(i, c, nl, table, post_url):
         out.append(f'<a href="{html.escape(link)}">{img}</a>' if link else img)
     if link:
         # 메일 안에서는 영상이 재생되지 않아서 원본(우리 영상은 사이트 글)으로 보내는 링크
-        out.append(f'<a href="{html.escape(link)}" style="display:block;text-align:center;margin:10px 0 4px;font-size:13px;font-weight:700;color:#111;">▶ {e(label)}</a>')
+        out.append(f'<a href="{html.escape(link)}" style="display:block;text-align:center;margin:10px 0 4px;font-size:13px;font-weight:600;color:#111;">▶ {e(label)}</a>')
     if c.get("src"):
         center = "text-align:center;" if link and not c.get("wide") else ""
         out.append(f'<p style="{S["src"]}{center}">© {e(c["src"])}</p>')
@@ -173,7 +178,7 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
     # 머리: 로고 + 이름만. 오른쪽에 있던 'WEEKLY · 호수'는 바로 아래 날짜줄과 겹쳐서 호수를 뺐고(10/23 성현 님 피드백), 이어서 WEEKLY도 없앴다(사용자)
     parts.append(f'<div style="padding:28px {GUTTER} 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'
                  f'<td style="width:46px;"><img src="{LOGO}" alt="트렌드포털" width="36" height="36" style="display:block;border-radius:8px;"></td>'
-                 f'<td style="font-size:13px;font-weight:800;letter-spacing:0.5px;">TRENDPORTAL</td>'
+                 f'<td style="font-size:13px;font-weight:700;letter-spacing:0.5px;">TRENDPORTAL</td>'
                  f'</tr></table></div>')
     parts.append(f'<div style="padding:40px {GUTTER} 0;"><p style="{S["issue"]}">{e(dateline(order["issue"]))}</p>'
                  f'<h1 style="{S["h1"]}">이번 주 일어난<br>마케팅 이슈 총정리</h1></div>')
@@ -182,33 +187,33 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
     if nl.get("picks"):
         lis = "".join(f'<li>{e(p)}</li>' for p in nl["picks"])
         parts.append(f'<div style="margin:8px {GUTTER} 0;{S["box"]}"><span style="{S["box_t"]}">이번 주 에디터 픽</span>'
-                     f'<ol style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;font-weight:700;">{lis}</ol></div>')
+                     f'<ol style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;font-weight:500;">{lis}</ol></div>')
     # 공지(이벤트 등) — 사이트 목표가 제보 게시판 활성화라 위쪽에 둔다. 모양은 홈 공지 줄의 파란 '공지' 알약과 같은 계열
     if nl.get("notice"):
         n = nl["notice"]
         # text는 문단 목록이지만 문자열 하나로 써도 받는다 — 문자열을 그대로 돌리면 글자마다 <p>가 돼서 세로로 쌓였다(10/19 319 시험)
         paras = [n["text"]] if isinstance(n["text"], str) else n["text"]
-        body = "".join(f'<p style="margin:0 0 10px;font-size:14.5px;line-height:1.8;">{e(p)}</p>' for p in paras)
+        body = "".join(f'<p style="margin:0 0 10px;font-size:14.5px;font-weight:400;line-height:1.8;">{e(p)}</p>' for p in paras)
         btn = f'<p style="margin:14px 0 0;"><a href="{html.escape(n["url"])}" style="{S["btn"]}">{e(n["button"])}</a></p>' if n.get("url") else ""
         parts.append(f'<div style="margin:16px {GUTTER} 0;background:#f1f5ff;border-radius:10px;padding:18px 20px;">'
-                     f'<span style="display:inline-block;padding:2px 6px;border-radius:3px;background:#2f6bff;color:#fff;font-size:11px;font-weight:800;margin-bottom:10px;">공지</span>'
-                     f'<p style="margin:0 0 8px;font-size:16px;font-weight:800;line-height:1.5;">{e(n["title"])}</p>{body}{btn}</div>')
+                     f'<span style="display:inline-block;padding:2px 6px;border-radius:3px;background:#2f6bff;color:#fff;font-size:11px;font-weight:600;margin-bottom:10px;">공지</span>'
+                     f'<p style="margin:0 0 8px;font-size:16px;font-weight:700;line-height:1.5;">{e(n["title"])}</p>{body}{btn}</div>')
     # 이번 주 선정 제보(10/30 호부터, 제보 이벤트): 누가 무엇을 제보했는지 + 제보 글 링크. 제보자 이름은 게시판에 공개된 그대로
     if nl.get("reports"):
         items = []
         for r in nl["reports"]:
-            text = f'<p style="margin:4px 0 0;font-size:14px;line-height:1.7;">{e(r["text"])}</p>' if r.get("text") else ""
-            link = f' <a href="{html.escape(r["url"])}" style="color:#111;font-weight:700;">제보 보기 →</a>' if r.get("url") else ""
-            items.append(f'<div style="padding:12px 0;border-top:1px solid #e5e5e5;"><p style="margin:0;font-size:15px;font-weight:800;line-height:1.5;">{e(r["title"])}</p>'
-                         f'<p style="margin:2px 0 0;font-size:12px;color:#888;">제보 {e(r.get("user", ""))}{link}</p>{text}</div>')
+            text = f'<p style="margin:4px 0 0;font-size:14px;font-weight:400;line-height:1.7;">{e(r["text"])}</p>' if r.get("text") else ""
+            link = f' <a href="{html.escape(r["url"])}" style="color:#111;font-weight:600;">제보 보기 →</a>' if r.get("url") else ""
+            items.append(f'<div style="padding:12px 0;border-top:1px solid #e5e5e5;"><p style="margin:0;font-size:15px;font-weight:700;line-height:1.5;">{e(r["title"])}</p>'
+                         f'<p style="margin:2px 0 0;font-size:12px;font-weight:300;color:#888;">제보 {e(r.get("user", ""))}{link}</p>{text}</div>')
         parts.append(f'<div style="margin:16px {GUTTER} 0;{S["box"]}"><span style="{S["box_t"]}">이번 주 선정 제보 ☕</span>{"".join(items)}'
-                     f'<p style="margin:10px 0 0;font-size:12px;color:#888;">선정된 분께는 적어 주신 이메일로 스타벅스 아메리카노 기프티콘을 보내 드려요.</p></div>')
+                     f'<p style="margin:10px 0 0;font-size:12px;font-weight:300;color:#888;">선정된 분께는 적어 주신 이메일로 스타벅스 아메리카노 기프티콘을 보내 드려요.</p></div>')
     parts.append(rule)
     # 목차: 메일 프로그램 다수가 #앵커 이동을 지원하지 않아 링크 없이 목록만(모의본과 같음)
     rows = []
     for i, c in enumerate(cs, 1):
         last = "border-bottom:0;" if i == len(cs) else ""
-        rows.append(f'<tr><td style="{S["toc_td"]}{last}width:34px;font-weight:800;color:#aaa;">{i:02d}</td>'
+        rows.append(f'<tr><td style="{S["toc_td"]}{last}width:34px;font-weight:600;color:#aaa;">{i:02d}</td>'
                     f'<td style="{S["toc_td"]}{last}">{e(c["title"])}</td></tr>')
     parts.append(f'<div style="padding:0 {GUTTER};"><p style="{S["toc_h"]}">이번 주 {len(cs)}가지</p>'
                  f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">{"".join(rows)}</table></div>')
@@ -216,10 +221,10 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
         parts.append(rule)
         parts.append(card_html(i, c, by_no.get(c["no"], {}), table, post_url))
     parts.append(rule)
-    cl = "".join(f'<p style="margin:0 0 14px;font-size:15px;line-height:1.8;">{e(p)}</p>' for p in (nl.get("closing") or DEFAULT_CLOSING))
-    parts.append(f'<div style="padding:0 {GUTTER};"><p style="margin:0 0 10px;font-size:16px;font-weight:800;">여러분의 이번 주 픽은?</p>{cl}'
+    cl = "".join(f'<p style="margin:0 0 14px;font-size:15px;font-weight:400;line-height:1.8;">{e(p)}</p>' for p in (nl.get("closing") or DEFAULT_CLOSING))
+    parts.append(f'<div style="padding:0 {GUTTER};"><p style="margin:0 0 10px;font-size:16px;font-weight:700;">여러분의 이번 주 픽은?</p>{cl}'
                  f'<p style="margin:0 0 14px;"><a href="https://trendportal.kr/report/" style="{S["btn"]}">제보하러 가기</a></p>'
-                 f'<p style="margin:28px 0 0;font-size:15px;line-height:1.8;">매주 금요일, 국내외에서 실제로 터진 마케팅만 골라 보내 드릴게요.<br>그럼 다음 주 금요일에 만나요!<br><b>트렌드포털 주인장</b> 드림</p></div>')
+                 f'<p style="margin:28px 0 0;font-size:15px;font-weight:400;line-height:1.8;">매주 금요일, 국내외에서 실제로 터진 마케팅만 골라 보내 드릴게요.<br>그럼 다음 주 금요일에 만나요!<br><b>트렌드포털 주인장</b> 드림</p></div>')
     # 푸터(10/23 사용자): 광고가 안 들어가는 호가 기본이라 이름·전화·주소 대신 '©·문의 메일·수신거부'만 둔다(Trend A Word 식).
     # 광고가 든 호(newsletter.json "ad": true)는 발신자 정보(이름·연락처)가 필요해서 그 줄들로 바꾼다. 줄은 공개 저장소에 적을 수 없어 사이트에 둔 것을 읽는다(sender 함수).
     # 광고 호인데 줄을 못 읽었으면 짧은 푸터로 조용히 나가면 안 되니 빨간 자리 표시로 붙여 넣기 전에 눈에 띄게 한다
@@ -239,6 +244,20 @@ def mail_html(order, cards, nl, table, post_url, sender=()):
     return f'<div style="{S["mail"]}">{"".join(parts)}</div>'
 
 
+def with_font(doc):
+    """글 태그마다 font-family를 직접 적는다. 스티비 편집기·Gmail·붙여 넣기는 바깥 상자의 글꼴 상속을 버리는 경우가 있다.
+    태그에 style이 있으면 맨 앞에 끼워 넣고(뒤의 값이 이기지 않게 font-family는 다른 곳에 안 쓴다), 없으면 style을 새로 단다"""
+    def fix(m):
+        tag, attrs = m.group(1), m.group(2)
+        if "font-family" in attrs:
+            return m.group(0)
+        if 'style="' in attrs:
+            attrs = attrs.replace('style="', 'style="font-family:' + FONT + ';', 1)
+            return "<" + tag + attrs + ">"
+        return "<" + tag + attrs + ' style="font-family:' + FONT + ';">'
+    return re.sub(r"<(p|h[1-4]|td|th|li|ol|ul|a|span|b|strong|em)(?=[\s>])([^>]*)>", fix, doc)
+
+
 def build(d):
     order = cardnews.load(d, "order.json")
     cards = cardnews.load(d, "cards.json")
@@ -252,13 +271,19 @@ def build(d):
     lines = sender() if ad else []
     mail = mail_html(order, cards, nl, table, post_url, lines)
     doc = (f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-           f'<title>트렌드포털 위클리 {e(order["issue"])}</title></head><body style="{S["page"]}">{mail}</body></html>')
+           f'<link rel="stylesheet" href="{WEBFONT_CSS}">'
+           f'<title>트렌드포털 위클리 {e(order["issue"])}</title></head><body style="{S["page"]}">{with_font(mail)}</body></html>')
     out = d / "out"
     out.mkdir(exist_ok=True)
     (out / "stibee.html").write_text(doc, encoding="utf-8")
     empty = [x["no"] for x in nl["cards"] if not x.get("point")]
     nosrc = [x["no"] for x in nl["cards"] if x.get("point") and not x.get("sources")]
     print(f"{out / 'stibee.html'} ({len(doc.encode()) // 1024}KB, 카드 {len(cards['cards'])}장)")
+    # 글꼴이 빠진 글 태그가 하나라도 있으면 멈춘다 — 셰프가 "글꼴은 됐겠지"하고 넘어가지 못하게(10/30 글꼴 버그 재발 방지)
+    bare = [t for t in re.findall(r"<(?:p|h[1-4]|td|th|li|ol|ul|a|span|b|strong|em)(?=[\s>])[^>]*>", doc) if "font-family" not in t]
+    if bare or WEBFONT_CSS not in doc:
+        sys.exit(f"글꼴 검사 실패: font-family 없는 태그 {len(bare)}개 또는 웹폰트 링크 없음 — newsletter.py의 with_font를 손대지 말고 Claude Code에 알릴 것")
+    print(f"글꼴 검사 통과: Pretendard, 글 태그 전부에 font-family 있음")
     for msg in (["광고 호: 푸터에 발신자 정보를 넣었는지, 스티비 제목 맨 앞에 (광고)를 붙였는지 확인 — 발신자 정보가 비었으면 푸터에 빨간 글씨가 보여요"] if ad else []) \
             + ([f"주목 포인트가 빈 카드: {empty}"] if empty else []) +([f"출처 없는 주목 포인트: {nosrc} — 리서치한 사실엔 출처를 단다"] if nosrc else []) \
             + ([] if post_url or not any(c.get("clip") for c in cards["cards"]) else ["우리 영상 카드의 '사이트에서 영상 보기' 링크는 사이트 초안을 만든 뒤 다시 build"]):
