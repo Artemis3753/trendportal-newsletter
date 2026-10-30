@@ -258,6 +258,26 @@ def with_font(doc):
     return re.sub(r"<(p|h[1-4]|td|th|li|ol|ul|a|span|b|strong|em)(?=[\s>])([^>]*)>", fix, doc)
 
 
+# 독자에게 "우리가 뭘 못 찾았는지"를 말하는 문장의 꼴(10/30 885호 사고: "이번 주 수집한 자료에서는 … 확인하지 못했다"가 구독자 전원에게 발송됨).
+# 확인 못 한 건 조용히 빼는 게 규칙인데 지시문만으로는 막지 못해서, 만든 메일 글에서 코드가 한 번 더 찾는다.
+# "적지 않은(=많은)"·"확인되지 않았다(=세상 소식)"는 정상 문장이라 일부러 넣지 않았다: 우리 조사의 빈틈을 1인칭으로 말하는 꼴만 잡는다
+RESEARCH_TALK = re.compile(
+    r"(수집한|찾아본|조사한|검색한|확인한|살펴본|참고한) ?(자료|기사|출처|정보|내용)"
+    r"|(확인|파악|검색|입수|찾|다루)(하지 못|할 수 없|하지는 못|하기 어려)"
+    r"|직접 (볼 수|확인할 수|확인하지)"
+    r"|(자료|정보|출처)가 (부족|없어|충분하지)"
+    r"|적지 않는다"
+    r"|알려진 바(가)? 없"
+)
+
+
+def research_talk(doc):
+    """만든 메일의 글에서 조사 과정을 말하는 문장 조각을 모아 돌려준다. 태그를 걷어낸 글 전체를 보므로 레터·픽·💡·공지·맺음을 한꺼번에 본다."""
+    text = html.unescape(re.sub(r"<[^>]+>", " ", re.sub(r"<head>.*?</head>", "", doc, flags=re.S)))
+    text = re.sub(r"\s+", " ", text)
+    return [text[max(m.start() - 20, 0):m.end() + 25] for m in RESEARCH_TALK.finditer(text)]
+
+
 def build(d):
     order = cardnews.load(d, "order.json")
     cards = cardnews.load(d, "cards.json")
@@ -284,6 +304,13 @@ def build(d):
     if bare or WEBFONT_CSS not in doc:
         sys.exit(f"글꼴 검사 실패: font-family 없는 태그 {len(bare)}개 또는 웹폰트 링크 없음 — newsletter.py의 with_font를 손대지 말고 Claude Code에 알릴 것")
     print(f"글꼴 검사 통과: Pretendard, 글 태그 전부에 font-family 있음")
+    # 조사 과정 언급이 있으면 글꼴처럼 멈춘다 — 경고만 하면 지나가고, 지나가면 예약 발송으로 구독자에게 간다(10/30 885호)
+    talk = research_talk(doc)
+    if talk:
+        sys.exit("조사 과정 언급 검사 실패 — 독자에게 '자료에서 확인하지 못했다' 류를 말하면 안 돼요(엄격 금지, docs/newsletter.md). "
+                 "확인 못 한 건 글에서 조용히 빼고, 빠졌다는 사실은 changes.json의 '뉴스레터:'·'확인 필요:' 줄로만 알릴 것. 찾은 곳:\n"
+                 + "\n".join(f"  · …{t}…" for t in talk))
+    print("조사 과정 언급 검사 통과")
     for msg in (["광고 호: 푸터에 발신자 정보를 넣었는지, 스티비 제목 맨 앞에 (광고)를 붙였는지 확인 — 발신자 정보가 비었으면 푸터에 빨간 글씨가 보여요"] if ad else []) \
             + ([f"주목 포인트가 빈 카드: {empty}"] if empty else []) +([f"출처 없는 주목 포인트: {nosrc} — 리서치한 사실엔 출처를 단다"] if nosrc else []) \
             + ([] if post_url or not any(c.get("clip") for c in cards["cards"]) else ["우리 영상 카드의 '사이트에서 영상 보기' 링크는 사이트 초안을 만든 뒤 다시 build"]):
