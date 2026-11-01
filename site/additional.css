@@ -1279,3 +1279,68 @@ body:has(.tp-fmt-receipt) { overflow-x: clip; }
 .tp-fmt-receipt .r-18a { left: 50.5%; top: 56.0%; }
 .tp-fmt-receipt .r-18b { left: 50.5%; top: 58.0%; }
 /* cardnews order 855 end */
+
+/* Starry stage posts (e.g. 887): the card videos were split from combined card videos (tools/cardnews clipcrop), so the text they
+   carried is real text here, on a full-width black band with slowly twinkling stars. Written by hand, not by the cardnews css command,
+   so the data URIs below are fine. Markup: .tp-fmt-stars (group, order.json design) > intro p, then per card video, h2, p.
+   Same full-width trick as .tp-copy-stage: the post column is narrower than the screen, so stretch to 100vw and clip the scrollbar overshoot */
+body:has(.tp-fmt-stars) { overflow-x: clip; }
+/* The theme puts a margin above the post body (24px on phones, about 57px on PC, set inline on the group around .wp-block-post-content),
+   which shows as a white strip between the grey cover header and a full-width band. Remove it on posts that start with the band, so the band touches the header */
+.wp-block-group:has(> .wp-block-post-content > .tp-fmt-stars) { margin-top: 0 !important; }
+.wp-block-post-content .tp-fmt-stars {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 100vw;
+  max-width: 100vw !important;
+  margin: 0 calc(50% - 50vw) 0 !important;
+  padding: 64px 20px 88px;
+  background: #000;
+  color: #fff;
+}
+.tp-fmt-stars::before,
+.tp-fmt-stars::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  will-change: opacity;
+}
+.tp-fmt-stars::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='460'%3E%3Ccircle cx='259' cy='200' r='1' fill='white' opacity='0.6'/%3E%3Ccircle cx='108' cy='412' r='1.6' fill='white' opacity='0.75'/%3E%3Ccircle cx='325' cy='372' r='1' fill='white' opacity='0.45'/%3E%3Ccircle cx='258' cy='370' r='1' fill='white' opacity='0.75'/%3E%3Ccircle cx='505' cy='366' r='1' fill='white' opacity='1'/%3E%3Ccircle cx='176' cy='361' r='1.6' fill='white' opacity='0.6'/%3E%3Ccircle cx='488' cy='121' r='0.6' fill='white' opacity='0.45'/%3E%3Ccircle cx='130' cy='248' r='1.3' fill='white' opacity='1'/%3E%3Ccircle cx='98' cy='400' r='1' fill='white' opacity='1'/%3E%3Ccircle cx='102' cy='341' r='1' fill='white' opacity='0.75'/%3E%3Ccircle cx='57' cy='255' r='1' fill='white' opacity='0.6'/%3E%3Ccircle cx='170' cy='153' r='1' fill='white' opacity='0.9'/%3E%3Ccircle cx='82' cy='354' r='1' fill='white' opacity='0.75'/%3E%3Ccircle cx='153' cy='428' r='0.8' fill='white' opacity='0.6'/%3E%3Ccircle cx='101' cy='96' r='0.8' fill='white' opacity='0.45'/%3E%3Ccircle cx='339' cy='444' r='0.8' fill='white' opacity='0.6'/%3E%3Ccircle cx='142' cy='444' r='1.3' fill='white' opacity='0.6'/%3E%3Ccircle cx='58' cy='278' r='1.6' fill='white' opacity='1'/%3E%3Ccircle cx='197' cy='173' r='1.6' fill='white' opacity='0.9'/%3E%3Ccircle cx='324' cy='446' r='0.8' fill='white' opacity='1'/%3E%3Ccircle cx='242' cy='168' r='1.6' fill='white' opacity='0.75'/%3E%3Ccircle cx='377' cy='329' r='0.8' fill='white' opacity='0.75'/%3E%3Ccircle cx='405' cy='424' r='1.3' fill='white' opacity='0.9'/%3E%3Ccircle cx='300' cy='361' r='1' fill='white' opacity='0.75'/%3E%3Ccircle cx='36' cy='323' r='1' fill='white' opacity='0.45'/%3E%3Ccircle cx='66' cy='266' r='0.8' fill='white' opacity='0.9'/%3E%3Ccircle cx='142' cy='341' r='0.8' fill='white' opacity='0.9'/%3E%3Ccircle cx='410' cy='368' r='1.6' fill='white' opacity='1'/%3E%3Ccircle cx='502' cy='211' r='1' fill='white' opacity='0.6'/%3E%3Ccircle cx='331' cy='145' r='0.8' fill='white' opacity='0.6'/%3E%3Ccircle cx='28' cy='280' r='1' fill='white' opacity='0.75'/%3E%3Ccircle cx='501' cy='424' r='1' fill='white' opacity='0.6'/%3E%3Ccircle cx='103' cy='22' r='0.6' fill='white' opacity='0.6'/%3E%3Ccircle cx='245' cy='132' r='0.8' fill='white' opacity='0.6'/%3E%3Ccircle cx='136' cy='74' r='0.8' fill='white' opacity='0.45'/%3E%3Ccircle cx='314' cy='355' r='1.3' fill='white' opacity='1'/%3E%3Ccircle cx='476' cy='274' r='1' fill='white' opacity='0.45'/%3E%3Ccircle cx='504' cy='171' r='1.6' fill='white' opacity='0.6'/%3E%3Ccircle cx='196' cy='147' r='1.3' fill='white' opacity='0.9'/%3E%3Ccircle cx='42' cy='68' r='1.6' fill='white' opacity='0.6'/%3E%3Ccircle cx='357' cy='44' r='1' fill='white' opacity='0.75'/%3E%3Ccircle cx='273' cy='191' r='1' fill='white' opacity='0.6'/%3E%3Ccircle cx='503' cy='150' r='0.8' fill='white' opacity='0.75'/%3E%3Ccircle cx='439' cy='65' r='1.6' fill='white' opacity='0.6'/%3E%3Ccircle cx='138' cy='351' r='1.6' fill='white' opacity='0.75'/%3E%3Ccircle cx='178' cy='59' r='0.6' fill='white' opacity='0.6'/%3E%3C/svg%3E");
+  background-size: 520px 460px;
+  animation: tp-fmt-stars-dim 7s ease-in-out infinite;
+}
+.tp-fmt-stars::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='640'%3E%3Cpath transform='translate(154 458)' fill='white' d='M0 -6Q0.8400000000000001 -0.8400000000000001 6 0Q0.8400000000000001 0.8400000000000001 0 6Q-0.8400000000000001 0.8400000000000001 -6 0Q-0.8400000000000001 -0.8400000000000001 0 -6Z'/%3E%3Cpath transform='translate(377 123)' fill='white' d='M0 -9Q1.2600000000000002 -1.2600000000000002 9 0Q1.2600000000000002 1.2600000000000002 0 9Q-1.2600000000000002 1.2600000000000002 -9 0Q-1.2600000000000002 -1.2600000000000002 0 -9Z'/%3E%3Cpath transform='translate(154 261)' fill='white' d='M0 -9Q1.2600000000000002 -1.2600000000000002 9 0Q1.2600000000000002 1.2600000000000002 0 9Q-1.2600000000000002 1.2600000000000002 -9 0Q-1.2600000000000002 -1.2600000000000002 0 -9Z'/%3E%3Cpath transform='translate(642 470)' fill='white' d='M0 -13Q1.8200000000000003 -1.8200000000000003 13 0Q1.8200000000000003 1.8200000000000003 0 13Q-1.8200000000000003 1.8200000000000003 -13 0Q-1.8200000000000003 -1.8200000000000003 0 -13Z'/%3E%3Cpath transform='translate(269 183)' fill='white' d='M0 -9Q1.2600000000000002 -1.2600000000000002 9 0Q1.2600000000000002 1.2600000000000002 0 9Q-1.2600000000000002 1.2600000000000002 -9 0Q-1.2600000000000002 -1.2600000000000002 0 -9Z'/%3E%3Cpath transform='translate(517 264)' fill='white' d='M0 -7Q0.9800000000000001 -0.9800000000000001 7 0Q0.9800000000000001 0.9800000000000001 0 7Q-0.9800000000000001 0.9800000000000001 -7 0Q-0.9800000000000001 -0.9800000000000001 0 -7Z'/%3E%3Cpath transform='translate(444 357)' fill='white' d='M0 -13Q1.8200000000000003 -1.8200000000000003 13 0Q1.8200000000000003 1.8200000000000003 0 13Q-1.8200000000000003 1.8200000000000003 -13 0Q-1.8200000000000003 -1.8200000000000003 0 -13Z'/%3E%3Cpath transform='translate(313 145)' fill='white' d='M0 -6Q0.8400000000000001 -0.8400000000000001 6 0Q0.8400000000000001 0.8400000000000001 0 6Q-0.8400000000000001 0.8400000000000001 -6 0Q-0.8400000000000001 -0.8400000000000001 0 -6Z'/%3E%3Cpath transform='translate(555 390)' fill='white' d='M0 -9Q1.2600000000000002 -1.2600000000000002 9 0Q1.2600000000000002 1.2600000000000002 0 9Q-1.2600000000000002 1.2600000000000002 -9 0Q-1.2600000000000002 -1.2600000000000002 0 -9Z'/%3E%3C/svg%3E");
+  background-size: 700px 640px;
+  animation: tp-fmt-stars-glint 4.6s ease-in-out infinite;
+  animation-delay: -1.8s;
+}
+@keyframes tp-fmt-stars-dim { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes tp-fmt-stars-glint { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .tp-fmt-stars::before, .tp-fmt-stars::after { animation: none; opacity: .85; }
+}
+.wp-block-post-content .tp-fmt-stars > * {
+  max-width: var(--wp--style--global--content-size, 720px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+.tp-fmt-stars > :first-child { margin-top: 0 !important; }
+.tp-fmt-stars h2 { margin-top: 28px !important; margin-bottom: 0; color: #fff; }
+.tp-fmt-stars p { margin: 18px auto 0; color: rgba(255, 255, 255, .86); }
+.tp-fmt-stars a { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.tp-fmt-stars p.tp-source { color: rgba(255, 255, 255, .55); }
+.wp-block-post-content .tp-fmt-stars figure.wp-block-video {
+  width: 100% !important;
+  max-width: 640px !important;
+  margin: 80px auto 0 !important;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.tp-fmt-stars figure.wp-block-video video { display: block; width: 100%; height: auto; }
+.tp-fmt-stars + * { margin-top: 48px !important; }
