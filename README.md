@@ -91,7 +91,17 @@ flowchart LR
 
 ![The morning reminder email, built by transis.py from sample appointments and shown in dark mode. UI text translated into English for this screenshot; the shipped UI is Korean.](docs/img/transis-schedule-email.png)
 
+![The schedule web app rendered locally from its source with sample data, in dark mode. UI text translated into English for this screenshot; the shipped UI is Korean.](docs/img/transis-schedule-app.png)
+
 **What the code enforces, and what it only asks for.** The mail sender rejects any recipient outside a two-address allow-list and sends each email id once. That the routine only *reads* the inbox is an instruction to it, not a limit in code. Two early failures, a 400-thread read that stopped halfway and a newsletter sentence that reached subscribers, each led to a code change. The tables, `file:line` references and incidents are in [docs/TRANSIS.md](docs/TRANSIS.md).
+
+#### The other two tools
+
+Both live in the WordPress admin.
+
+![The card-news helper's empty order form, with the four order types, the Figma zip drop zone and the caption box. UI text translated into English for this screenshot; the shipped UI is Korean.](docs/img/transis-order-form.jpg)
+
+![The correspondent's feed in the admin, with filters, translated titles and the translate-and-fold request. Thumbnails are blurred. UI text translated into English for this screenshot; the shipped UI is Korean.](docs/img/transis-feed.jpg)
 
 ### How it was built
 
