@@ -11,6 +11,8 @@
     python3 tools/cardnews/cardnews.py report  <주문> [--fail "이유" | --ask "질문"]   (결과·멈춘 이유·질문을 관리자 탭에 적는다)
     python3 tools/cardnews/cardnews.py css     <주문> <파일.css> | --remove  (새 디자인 CSS를 사이트에 붙이기·빼기)
     python3 tools/cardnews/cardnews.py still   <주문> <카드 번호> <초>        (영상 카드 정지 화면·포스터를 그 초 장면으로)
+    python3 tools/cardnews/cardnews.py clipcrop <주문> [카드] [auto | off | <위%> <아래%>]
+                                                                            (카드 통째로 합쳐진 영상에서 화면 녹화 칸만 다시 자르기. fetch가 이미 자동으로 한다)
     python3 tools/cardnews/cardnews.py profile <주문> <대상 번호> [x y 한 변]  (인터뷰 대상 프로필 사진을 캡처에서 정사각형으로)
     python3 tools/cardnews/cardnews.py ref     <글 번호>                     (정답 예시 글의 블록 원문 보기, 읽기만)
     python3 tools/cardnews/cardnews.py cook    <주문> [--pc]                 (build → draft → verify → shot 한 번에, 판단이 끝난 뒤)
@@ -147,6 +149,26 @@ def esc(s):
     # 본문 글자: &, <, > 만 바꾼다 (WordPress 편집기가 저장하는 모양과 같게)
     # json에서 줄바꿈("\n")으로 적은 곳은 <br>로 — 사람이 json을 고칠 때 태그를 안 써도 되게
     return "<br>".join(html.escape(line, quote=False) for line in s.split("\n"))
+
+
+# 캡션 속 웹 주소를 링크로(11/01 사용자, 887). 인스타 캡션엔 https 없이 "domain.com/path"만 적는 일이 많은데, WordPress는 https://가 있는 것만
+# 자동으로 걸어 준다. 글자는 적힌 그대로 두고, 주소(href)에만 https://를 붙인다. 한국어 글자·이메일·"Node.js" 같은 말이 걸리지 않게
+# 끝 글자(도메인 이름)를 아래 목록으로 한정했다. 모르는 끝 글자의 주소는 걸지 않는 쪽이 틀리게 거는 것보다 낫다
+URL_TLDS = "com|kr|app|dev|net|org|io|me|co|ai|tv|shop|store|site|xyz|link|page|pages|blog|wiki"
+URL_RE = re.compile(rf"(?<![\w@./-])((?:https?://)?(?:[a-z0-9][a-z0-9-]*\.)+(?:{URL_TLDS})(?![A-Za-z0-9-])(?:/[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]*)?)", re.I)
+
+
+def linkify(text):
+    """esc()를 거친 본문 글자 안의 웹 주소에 <a>를 건다(rel=nofollow, WordPress 자동 링크와 같다). 이미 <a> 안이면 건드리지 않는다"""
+    def link(m):
+        url = m.group(1)
+        tail = ""
+        while url and url[-1] in ".,)!?;:":  # 문장 끝 마침표·쉼표는 주소가 아니다
+            url, tail = url[:-1], url[-1] + tail
+        href = url if url.lower().startswith(("http://", "https://")) else "https://" + url
+        return f'<a href="{href}" rel="nofollow">{url}</a>{tail}'
+    parts = re.split(r"(<a\b.*?</a>)", text, flags=re.S)
+    return "".join(p if p.startswith("<a ") or p.startswith("<a>") else URL_RE.sub(link, p) for p in parts)
 
 
 MARK = re.compile(r"\*\*(.+?)\*\*")
@@ -336,7 +358,7 @@ def qa_cards(media, cards, notes):
             out += iv_heading(f"QUESTION {n:02d}", re.sub(r"^Q\s*\d*\s*[.:]\s*", "", text))
         if card.get("image"):
             out += image_block(media, card["image"], note.get("alt", ""), size="large", link_none=True)
-        out += "".join(para(esc(p)) for p in card["what"])
+        out += "".join(para(linkify(esc(p))) for p in card["what"])
         if card.get("src"):
             out += ('<!-- wp:paragraph {"className":"tp-source","fontSize":"small"} -->'
                     f'<p class="tp-source has-small-font-size">© {esc(card["src"])}</p><!-- /wp:paragraph -->')
@@ -383,7 +405,7 @@ def build_archive(order, cards, notes, media):
         sys.exit(f"카드 {len(cards['cards'])}장인데 notes는 {len(notes['cards'])}장이에요")
     cover = cover_block(order, notes, media)
     out = cover
-    intro = [para(esc(p)) for p in cards["intro"]]
+    intro = [para(linkify(esc(p))) for p in cards["intro"]]
     # 인터뷰 프로필 카드: 시작 카드는 첫 줄 "[ 트포 인터뷰 : … ]" 바로 아래(광고 글 439의 [광고] 줄 자리와 같다), 끝 카드는 맨 끝
     # 패널형은 대상을 판 안 얼굴로 쓰니 프로필 카드를 따로 안 넣는다(panel_cards 참고)
     ad = bool(order.get("ad"))
@@ -424,7 +446,7 @@ def build_archive(order, cards, notes, media):
         if card.get("brand"):
             # 카피 모음형: 카드처럼 카피(제목) 바로 아래 브랜드 (사용자 결정 B, 10/17). 앞뒤 "—"는 CSS가 붙인다
             out += para(esc(card["brand"]), "tp-brand")
-        out += "".join(para(esc(p)) for p in card["what"])
+        out += "".join(para(linkify(esc(p))) for p in card["what"])
         if card.get("src"):
             out += ('<!-- wp:paragraph {"className":"tp-source","fontSize":"small"} -->'
                     f'<p class="tp-source has-small-font-size">© {esc(card["src"])}</p><!-- /wp:paragraph -->')
@@ -432,7 +454,7 @@ def build_archive(order, cards, notes, media):
             out += "</div><!-- /wp:group -->"
     if copy:
         out += "</div><!-- /wp:group -->"
-    out += "".join(para(esc(p)) for p in cards.get("outro", []))
+    out += "".join(para(linkify(esc(p))) for p in cards.get("outro", []))
     out += profiles
     if order.get("design"):
         # 셰프가 새 디자인을 만든 글: 커버 뒤 본문 전체를 이름표 하나로 감싼다.
@@ -730,11 +752,13 @@ def video_layer_aspect(fr):
     return fw / fh
 
 
-def video_frame(src, dst, aspect=None, at=None, scale="scale='min(2000,iw)':-2"):
+def video_frame(src, dst, aspect=None, at=None, scale="scale='min(2000,iw)':-2", box=None):
     """영상에서 장면 한 장 → JPEG. at(초)을 주면 그 장면, 아니면 ffmpeg thumbnail 필터가 앞 100장면 중
-    가장 '대표적인'(평균에 가까운) 장면을 고른다 — 시작의 검은 화면·전환 장면을 피하려고. 1초 뒤부터 본다."""
+    가장 '대표적인'(평균에 가까운) 장면을 고른다 — 시작의 검은 화면·전환 장면을 피하려고. 1초 뒤부터 본다.
+    box가 있으면 먼저 그 칸만 잘라서 고른다(나눈 영상의 포스터에 카드의 글자·별 배경이 안 들어가게)."""
     need_ffmpeg()
-    vf = [] if at is not None else ["thumbnail=100"]
+    vf = [crop_filter(box)] if box else []
+    vf += [] if at is not None else ["thumbnail=100"]
     if aspect:
         # 가운데를 기준으로 aspect 비율만큼 잘라 낸다 (넘치는 쪽만 자르고 늘리지 않음)
         vf.append(f"crop='trunc(min(iw,ih*{aspect:.4f})/2)*2':'trunc(min(ih,iw/{aspect:.4f})/2)*2'")
@@ -750,15 +774,169 @@ def video_frame(src, dst, aspect=None, at=None, scale="scale='min(2000,iw)':-2")
     return dst.name
 
 
-def make_clip(src, dst):
+def crop_filter(box):
+    # box = (x, y, 너비, 높이) 원본 픽셀 → ffmpeg crop. ffmpeg는 너비:높이:x:y 순서다. 없으면 빈 문자열
+    if not box:
+        return ""
+    x, y, w, h = box
+    return f"crop={w}:{h}:{x}:{y}"
+
+
+def make_clip(src, dst, box=None):
     # 우리 영상: 소리 빼고(-an, 자동 재생은 무음이어야 브라우저가 허락한다) H.264 720p, faststart = 받는 중에 바로 재생
+    # box가 있으면 그 칸만 잘라 쓴다(결합 영상 나누기, 아래 split_box)
     need_ffmpeg()
-    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-an", "-vf", SCALE_720,
+    vf = ",".join(v for v in (crop_filter(box), SCALE_720) if v)
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-an", "-vf", vf,
                         "-c:v", "libx264", "-preset", "medium", "-crf", "24", "-pix_fmt", "yuv420p",
                         "-movflags", "+faststart", str(dst)], capture_output=True)
     if r.returncode:
         sys.exit(f"{src.name}을 사이트용 영상으로 못 바꿨어요: {r.stderr.decode('utf-8', 'replace')[-300:]}")
     return dst.name
+
+
+# ── 결합 영상 나누기 (10/30 사용자: 영상+글자가 합쳐진 걸 올려도 우리가 나눠서 올려야 한다) ──
+# 성현 님이 올리는 영상이 카드 한 장 통째(화면 녹화 + 아래 글자 + 검은 별 배경)일 때가 있다(887).
+# 그 글자는 피그마 카드에서 이미 읽어 본문 텍스트(제목·본문)로 넣고 있어서, 영상에 구운 글자를 두면 같은 말이 두 번 나온다.
+# 그래서 영상에서 화면 녹화 칸만 잘라 쓴다. 글자는 본문 텍스트로 이미 들어 있다.
+# 칸의 위치는 영상 화면에서 직접 찾는다(아래 split_box). 바탕이 검은 카드만 찾는다. 887 영상 10개로 시험(위 ~10%, 아래 ~53% 경계)
+SPLIT_FRAMES, SPLIT_SIDE = 16, 180  # 영상 전체에서 고르게 뽑을 장면 수, 감지용으로 줄인 가로 픽셀
+SPLIT_BLACK = 4                     # 줄·열의 밝기 중앙값(0~255)이 이 이하 = 검다 (별은 드물어서 별 줄도 0, 어두운 한강 밤하늘은 이보다 밝다)
+SPLIT_STILL = 0.5                   # 장면 사이 밝기 차이가 이 이하 = 가만히 있다 (글·별은 압축 잡음 0.2 안팎, 움직이는 화면은 10 이상)
+SPLIT_MIN_STATIC = 0.25             # 가만히 있는 띠가 화면의 이만큼은 돼야 결합 카드로 본다 — 아래 작은 자막 띠가 있는 보통 영상을 안 건드리려고
+SPLIT_MIN_INK = 0.004               # 그 띠에 글자·별(밝은 점)이 이만큼은 있어야 한다 — 그냥 검은 띠(레터박스)는 그대로 둔다
+STAGE_CLASS = "tp-fmt-stars"        # 검은 바탕 + 깜빡이는 별 띠 디자인 이름표. 10/30 사용자가 원해서 손으로 만든 모양이라 셰프는 쓰지 않는다(CSS는 site/additional.css에 있고 order.json design에 사람이 직접 적는다)
+
+
+def probe_video(src):
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height:format=duration",
+                        "-of", "json", str(src)], capture_output=True, text=True)
+    info = json.loads(r.stdout or "{}")
+    s = (info.get("streams") or [{}])[0]
+    return int(s.get("width", 0)), int(s.get("height", 0)), float((info.get("format") or {}).get("duration") or 0)
+
+
+def first_run(flags, n):
+    """flags에서 True가 n개 이상 이어진 첫 구간의 (시작, 끝+1). 없으면 None. 한두 줄짜리 튐은 무시하려고 n개 이상만 센다"""
+    run = 0
+    for i, f in enumerate(flags + [False]):
+        if f:
+            run += 1
+        else:
+            if run >= n:
+                return i - run, i
+            run = 0
+    return None
+
+
+def split_box(src):
+    """결합 영상(카드 통째)에서 화면 녹화 칸 = (x, y, 너비, 높이) 원본 픽셀. 결합 영상이 아니거나 못 찾으면 None.
+    나눌 이유가 없는 영상(전체가 움직임, 위아래 검은 띠뿐, 아래 작은 자막 띠)은 None이라 지금까지처럼 통째로 쓴다.
+    기준 = "검고 가만히 있는 줄". 화면 녹화는 거의 안 움직이거나(요가원) 아주 어두울(한강) 수 있어서 움직임만으론 모자라고,
+    카드의 별 배경은 위쪽과 영상·글 사이가 늘 검다(중앙값 0). 위쪽 검은 띠가 끝나는 곳 = 영상 시작, 그 아래 처음 나오는
+    검은 틈 = 영상 끝(그 아래는 글). 장면 사이 변화는 가만히 있는 줄(글·별)을 가려내는 데 쓴다."""
+    need_ffmpeg()
+    w, h, dur = probe_video(src)
+    if not w or not h:
+        return None
+    sw, sh = SPLIT_SIDE, max(2, round(SPLIT_SIDE * h / w))
+    raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(src), "-an", "-vf",
+                          f"fps={SPLIT_FRAMES / max(dur, 0.5):.4f},scale={sw}:{sh}:flags=area,format=gray",
+                          "-frames:v", str(SPLIT_FRAMES), "-f", "rawvideo", "-"], capture_output=True).stdout
+    n = len(raw) // (sw * sh)
+    if n < 6:
+        return None
+    frames = [raw[i * sw * sh:(i + 1) * sw * sh] for i in range(n)]
+    # 픽셀마다 장면 사이 밝기 차이를 더한다 → 가만히 있는 글자·별은 0, 움직이는 화면은 크다
+    acc = [0] * (sw * sh)
+    for a, b in zip(frames, frames[1:]):
+        acc = [s + abs(x - y) for s, x, y in zip(acc, a, b)]
+    pairs = n - 1
+
+    def median(vals):
+        vals = sorted(vals)
+        return vals[len(vals) // 2]
+
+    def black(ys, xs):
+        """줄(또는 열) 하나가 검고 가만히 있는가: 모든 장면에서 모은 밝기의 중앙값이 거의 0이고 장면 사이 변화도 거의 없다"""
+        vals = [f[y * sw + x] for f in frames for y in ys for x in xs]
+        move = sum(acc[y * sw + x] for y in ys for x in xs) / (len(ys) * len(xs) * pairs)
+        return median(vals) <= SPLIT_BLACK and move <= SPLIT_STILL
+
+    xs_all = range(sw)
+    dark_rows = [black([y], xs_all) for y in range(sh)]
+    vr = first_run([not v for v in dark_rows], 3)  # 위 검은 띠가 끝나고 처음 나오는 3줄 이상의 밝은 구간
+    if not vr:
+        return None
+    top = vr[0]
+    gap = first_run(dark_rows[top:], 6)  # 영상 아래 처음 나오는 6줄 이상의 검은 틈
+    if not gap:
+        return None
+    bot = top + gap[0]
+    ys = range(top, bot)
+    dark_cols = [black(ys, [x]) for x in xs_all]
+    hr, hr_end = first_run([not v for v in dark_cols], 3), first_run([not v for v in dark_cols][::-1], 3)
+    if not hr or not hr_end:
+        return None
+    left, right = hr[0], sw - hr_end[0]
+    if bot - top < sh * 0.2 or right - left < sw * 0.5:
+        return None
+    if (bot - top) * (right - left) > (1 - SPLIT_MIN_STATIC) * sw * sh:
+        return None
+    # 칸 밖(가만히 있는 곳)에 글자·별이 있어야 결합 카드다
+    out = [v for y in range(sh) for x, v in enumerate(frames[0][y * sw:(y + 1) * sw]) if not (top <= y < bot and left <= x < right)]
+    if sum(1 for v in out if v > 60) / len(out) < SPLIT_MIN_INK:
+        return None
+    # 가장자리 한 칸(감지용 픽셀 하나)은 영상 경계에 걸친 줄이라 안으로 들여서 자른다. ffmpeg는 짝수 크기를 좋아한다
+    fx, fy = w / sw, h / sh
+    x0, y0 = round((left + 1) * fx) // 2 * 2, round((top + 1) * fy) // 2 * 2
+    x1, y1 = round((right - 1) * fx) // 2 * 2, round((bot - 1) * fy) // 2 * 2
+    return x0, y0, x1 - x0, y1 - y0
+
+
+def clip_names(n, box):
+    """우리 영상 카드의 영상·포스터 파일 이름. 자른 영상은 칸 좌표를 이름에 넣는다 — media.json에 옛 이름이 이미 올라가 있으면
+    draft가 다시 안 올려서(still과 같은 이유), 다시 자르면 새 이름이어야 한다"""
+    tag = "-c{}x{}".format(box[1], box[3]) if box else ""
+    return f"{n:02d}-clip{tag}.mp4", f"{n:02d}-poster{tag}.jpg"
+
+
+def clipcrop(d, n, mode):
+    """수정 요청용: 영상 카드의 화면 칸 자르기를 다시 한다. mode = "auto"(영상에서 다시 찾기) · "off"(통째로 되돌리기) · (위%, 아래%)(직접 지정, visual과 같은 %).
+    n이 None이면 영상 파일이 있는 모든 카드(2번부터). 원본은 uploads/NN-src.* 에서 다시 만들어 화질이 안 깎인다."""
+    order, cards = load(d, "order.json"), load(d, "cards.json")
+    files = order.get("files", {})
+    targets = [c for c in cards["cards"] if c.get("clip") and (n is None or c.get("no") == n)]
+    if n is not None and not targets:
+        sys.exit(f"{n}번은 우리 영상 카드가 아니에요 (영상 파일을 넣고 주소는 비운 카드만 돼요)")
+    for card in targets:
+        no = card["no"]
+        f = files.get(str(no))
+        if not f or not (d / f["path"]).exists():
+            print(f"{no}번: 영상 원본 파일이 없어 그대로 뒀어요")
+            continue
+        src = d / f["path"]
+        if mode == "auto":
+            box = split_box(src)
+        elif mode == "off":
+            box = None
+        else:
+            w, h, _ = probe_video(src)
+            top, bottom = mode
+            if not 0 <= top < bottom <= 100:
+                sys.exit("위%·아래%는 0 ≤ 위 < 아래 ≤ 100 (카드 높이 기준, 위에서부터)")
+            y0, y1 = round(h * top / 100) // 2 * 2, round(h * bottom / 100) // 2 * 2
+            box = (0, y0, w // 2 * 2, y1 - y0)
+        clip, poster = clip_names(no, box)
+        card["clip"] = make_clip(src, d / "images" / clip, box)
+        card["poster"] = video_frame(src, d / "images" / poster, scale=SCALE_720, box=box)
+        if box:
+            card["crop"] = list(box)
+        else:
+            card.pop("crop", None)
+        print(f"{no}번: " + (f"화면 칸만 잘랐어요 (위 {box[1]}px, 높이 {box[3]}px, 원본 {probe_video(src)[1]}px 중)" if box
+                           else "자르지 않고 통째로 썼어요 (결합 영상이 아니거나 되돌림)"))
+    save(d, "cards.json", cards)
 
 
 LINK_SITE = (("instagram.com", "인스타그램"), ("youtu", "유튜브"), ("x.com", "X"), ("twitter.com", "X"), ("tiktok.com", "틱톡"))
@@ -815,9 +993,14 @@ def video_card(d, n, card, fr, url, f):
         return [f"{n}번 영상 카드 파일({f['path']})이 없어요"]
     if not url:
         if f["kind"] == "video":
-            card["clip"] = make_clip(src, d / "images" / f"{n:02d}-clip.mp4")
+            # 카드 통째로 합쳐진 영상이면 화면 녹화 칸만 자른다(order.json "clip_split": false면 안 자름)
+            box = None if load(d, "order.json", {}).get("clip_split") is False else split_box(src)
+            clip, poster = clip_names(n, box)
+            card["clip"] = make_clip(src, d / "images" / clip, box)
             # 포스터는 재생 전 잠깐 보이는 첫 화면이라 영상과 같은 크기로
-            card["poster"] = video_frame(src, d / "images" / f"{n:02d}-poster.jpg", scale=SCALE_720)
+            card["poster"] = video_frame(src, d / "images" / poster, scale=SCALE_720, box=box)
+            if box:
+                card["crop"] = list(box)  # 안내는 카드마다가 아니라 fetch 끝에서 한 줄로
             mb = (d / "images" / card["clip"]).stat().st_size / 1048576
             if mb > 15:
                 warn.append(f"{n}번 우리 영상이 {mb:.0f}MB예요 — 폰에서 늦게 뜰 수 있으니 짧게 잘라도 될지 확인")
@@ -872,7 +1055,9 @@ def still(d, n, at):
     tag = f"{at:g}s".replace(".", "_")
     src = d / f["path"]
     if card.get("clip"):
-        card["poster"] = video_frame(src, d / "images" / f"{n:02d}-poster-{tag}.jpg", at=at, scale=SCALE_720)
+        # 결합 영상을 나눈 카드는 자른 칸 안에서 장면을 고른다(안 그러면 카드의 글자·별 배경이 포스터에 들어간다)
+        card["poster"] = video_frame(src, d / "images" / f"{n:02d}-poster-{tag}.jpg", at=at, scale=SCALE_720,
+                                     box=tuple(card["crop"]) if card.get("crop") else None)
     else:
         group = scan_group(d) if (d / "figma" / "scan.json").exists() else None
         fr = next((x for i, x in enumerate(reading_order([c for c in group if c.tag == "frame"]))
@@ -1555,6 +1740,10 @@ def fetch(d):
         warn.append(f"캡션 첫 줄은 글 제목(표지 영상 글자)으로 보고 뺐어요: {intro[0]} — 제목 후보로 쓰고, 영상 글자와 다르면 캡션 문단으로 되돌리기")
         intro = intro[1:]
     save(d, "cards.json", {"intro": intro, "cards": cards, "outro": outro})
+    split = [c["no"] for c in cards if c.get("crop")]
+    if split:
+        warn.append(f"영상 {', '.join(f'{n}번' for n in split)}은 카드 통째(화면 녹화 + 글자 + 별 배경)라서 화면 녹화 칸만 잘랐어요 — 영상에 있던 글자는 본문 텍스트로 이미 들어 있어요."
+                    " 잘린 곳이 이상하면 `clipcrop <주문> <카드> auto | off | <위%> <아래%>`로 다시")
     save(d, "order.json", order)
     # notes.json은 Claude가 채울 칸만 비워서 만든다 (이미 있으면 카드 수가 같을 때 그대로 둔다)
     notes = load(d, "notes.json", {})
@@ -1781,7 +1970,9 @@ def css_problems(css, cls):
         else:
             for sel in head.split(","):
                 # body:has(.이름표)도 받는다 — 화면 폭 띠(100vw)가 PC 스크롤바만큼 삐져나오는 걸 그 글에서만 자르려고(764 .tp-copy-stage와 같은 방법)
-                if not re.match(rf"(body:has\(\.{re.escape(cls)}\))?\s*\.{re.escape(cls)}(?![\w-])|body:has\(\.{re.escape(cls)}\)$", sel.strip()):
+                # 둘째 예외: 본문 맨 위가 화면 폭 띠일 때 커버 헤더와 띠 사이 흰 줄(테마가 본문 그룹에 주는 위쪽 여백)을 없애는 선택자
+                gap = rf"\.wp-block-group:has\(>\s*\.wp-block-post-content\s*>\s*\.{re.escape(cls)}\)$"
+                if not re.match(rf"(body:has\(\.{re.escape(cls)}\))?\s*\.{re.escape(cls)}(?![\w-])|body:has\(\.{re.escape(cls)}\)$|{gap}", sel.strip()):
                     bad.append(f".{cls}로 시작하지 않는 선택자: {sel.strip()[:60]}")
         for u in re.findall(r"url\(\s*['\"]?([^'\")]*)", body):
             if not u.startswith("https://trendportal.kr/"):
@@ -1814,6 +2005,8 @@ def css(d, src=None, remove=False):
         new = base
     else:
         cls = design_class(order)
+        if cls == STAGE_CLASS:
+            sys.exit(f"{STAGE_CLASS}는 사람이 직접 만든 모양이라 이 이름표로는 CSS를 붙이지 않아요. 새 모양이 필요하면 다른 이름표(tp-fmt-…)를 쓰세요")
         # 주석은 뺀다: 표시 주석을 흉내 내는 글자를 막고, 한글 주석이 저장에서 문제를 일으킨 적이 있어서(9/20 MCP)
         add = re.sub(r"/\*.*?\*/", "", Path(src).read_text(encoding="utf-8"), flags=re.S).strip()
         bad = css_problems(add, cls)
@@ -1985,6 +2178,13 @@ def main(argv):
         return shot(order_dir(argv[1]), (390, 1280) if "--pc" in argv else (390,))
     if argv[:1] == ["cook"] and len(argv) in (2, 3):
         return cook(order_dir(argv[1]), "--pc" in argv)
+    if argv[:1] == ["clipcrop"] and len(argv) >= 2:
+        rest = argv[2:]
+        n = int(rest.pop(0)) if rest and rest[0].isdigit() else None
+        mode = rest[0] if rest and rest[0] in ("auto", "off") else (float(rest[0]), float(rest[1])) if len(rest) == 2 else "auto" if not rest else None
+        if mode is None:
+            sys.exit("사용법: clipcrop <주문> [카드번호] [auto | off | <위%> <아래%>]")
+        return clipcrop(order_dir(argv[1]), n, mode)
     if argv[:1] == ["visual"] and len(argv) == 5:
         return visual(order_dir(argv[1]), int(argv[2]), float(argv[3]), float(argv[4]))
     if argv[:1] == ["reimage"] and len(argv) in (3, 4):

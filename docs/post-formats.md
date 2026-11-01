@@ -27,6 +27,7 @@ Reference posts are on trendportal.kr as `/archives/<id>/`.
 - Instagram actions that do not work on the site change: `태그해주세요`, `DM 주세요` → `댓글로 남겨주세요`.
 - Series episode numbers are dropped, the series name stays: `[ 트포 인터뷰 제 8화 : … ]` → `[ 트포 인터뷰 : … ]`.
 - Fix only obvious typos. Names, brands, numbers, dates and quotes never change.
+- **Web addresses become links** (11/01, post 1655): Instagram captions often list sites without `https://` (`sansa-online-temple.vercel.app`), and WordPress only links the ones that have it. `build` links every address in the caption paragraphs and card text itself: the text stays exactly as written, only the link target gets `https://` (`rel="nofollow"`, like WordPress's own auto-links). Only addresses ending in a known suffix (`.com .kr .app .dev …`) are linked, so an e-mail address, `Node.js` or `ver1.0` is not. In a hand-written `body.html` do the same by hand.
 - **Timeless wording** (10/22): the site is an archive, so a sentence that ties the post to the moment it was posted (`추석 맞이 무물을 올렸는데요`, `지금이 시험기간인 줄`) is rewritten to read without it, keeping the voice and the meaning. A keyword the post is actually about (an Olympics campaign, a Christmas ad) stays. Only that sentence changes, and each change is listed in "셰프가 손본 것" with both versions. Post 1311 is the first example.
 
 **Card text**
@@ -50,6 +51,7 @@ Reference posts are on trendportal.kr as `/archives/<id>/`.
 Make the post look as close to the original cards as our resources allow, and still read well on a phone and on PC.
 
 - Look at the card previews first (`figma/sheet.jpg` has them all in one image; `figma/cards/*.jpg` one by one for details) and the font, colour and alignment in `figma/scan.json`.
+- A full-width band or background colour that is the first thing after the cover photo must touch the grey cover header: the theme's margin above the post body shows as a white strip otherwise (24px on phones, about 57px on PC). Close it with `.wp-block-group:has(> .wp-block-post-content > .tp-fmt-…) { margin-top: 0 !important; }` under the post's own class (the `css` command accepts exactly this form). Look at the top of the phone and PC shots.
 - Card photos must not have a black band at the top or bottom. That band is the dark gradient that sits under the card text; the Figma plugin hides it when "어두운 그라데이션 지우기" is checked (the default) and records what it hid in `scan.json` (`overlaysHidden`). If fetch warns about a dark edge, read the group again with the box checked; leave the photo alone only when it is really a night scene. A post that was already published with bands is fixed with `cardnews.py reimage <post> <new zip>` (`--apply` to write; without it only compares). It replaces plain `NN.jpg` card photos only, and leaves hand-cropped ones (`visual`, `video`, `sharp`) alone.
 - If an existing format fits, use it. If the cards need something new, new CSS goes only under a new class (`tp-fmt-…`), so it cannot touch other posts.
 - Fonts: use the ones the site already has (all SIL OFL 1.1): Pretendard, Gowun Batang, Manrope, Orbitron. A new font only when it is truly needed **and** its licence explicitly allows web use. If unsure, do not use it.
@@ -69,6 +71,16 @@ For each card: photo → card title (H2, boxed like the card title) → text →
 
 ### Copy collection (post 729) — `"layout": "copy"`
 All cards on one dark band across the screen, copy in Gowun Batang, `— brand —` under it. **Only post 729 uses it for now**; do not choose it for other posts even if their cards have `-brand-` lines.
+
+### Combined card videos (order 887) — text and video are separated
+
+Some Instagram cards are one video per card: the screen recording on top and, under it, the card's title and text on a black background with white stars, all burned into the same file. People upload those files as they are, and **the helper takes them apart** (site owner, 10/30): the title and text are already in the body as real text (read from the Figma card), so leaving them inside the video would show every sentence twice. The post gets the screen recording only.
+
+- `fetch` looks at 16 frames of each own-video card (not the cover, not cards with a link) and finds the screen recording by itself: above it and between it and the text, the rows are black and do not change, and so are the text and the stars. It cuts the video and its poster down to that rectangle (`cards.json` → `crop` = x, y, width, height in source pixels) and says so in one line of its output. Tested on the 10 videos of order 887: all gave the same rectangle (about 712×380 of 720×900).
+- Only cards on a black background are found. A video that is not a combined card (everything moves, plain black bars only, a small caption strip) or a card with another background colour is left whole.
+- **Fixing a cut**: `cardnews.py clipcrop <order> [card] [auto | off | <top%> <bottom%>]` redoes it from the uploaded file (`uploads/NN-src.*`): `auto` looks again, `off` puts the whole card video back, the percentages cut by hand (percent of the card height from the top, like `visual`). `"clip_split": false` in `order.json` stops `fetch` from cutting at all. A cut file carries its box in its name (`03-clip-c92x380.mp4`), so a new cut is uploaded again and never mistaken for the old media. `still` picks its frame inside the cut.
+- **Principle: split by default, original on request** (site owner, 11/01). When a memo or a revision asks for the uploaded videos as they are (`원본 영상 그대로`), `clipcrop <order> off` puts the whole card videos back.
+- The black starry band (`tp-fmt-stars`, a permanent block in the site's additional CSS) is a look the site owner made by hand for post 887; it is applied by a person on request, never by the helper.
 
 ### Text in the photo (post 1007, Baemin receipts) — own design, `body.html`
 For cards whose text is part of the photo itself (an ad's own images, a screenshot), so Figma has no text layers for it (`scan.json` → `texts` is empty on cards that clearly show text). Approved look, site owner 10/19: "as close to the original cards as possible".
