@@ -50,7 +50,8 @@
 	<!-- 리스트 시작 -->
 	<?php
 	// 1.5.0: 표 대신 카드 격자(10/29 사용자가 시안 C를 골랐다). 공지는 맨 위 한 줄, 제보는 정사각 사진 카드.
-	// 번호·조회수 칸은 없앴고, 답글 줄(builderReply)도 그리지 않는다 — 제보 게시판은 답글을 쓰지 않는다.
+	// 번호 칸은 없앴고, 답글 줄(builderReply)도 그리지 않는다 — 제보 게시판은 답글을 쓰지 않는다.
+// 조회수는 1.7.0(11/02)부터 카드 맨 아랫줄에 "작성자 · 날짜 · 조회 N"으로 다시 보여 준다.
 	// 카드는 PC에서 약 220px라 레티나 화면에서도 선명하도록 400px 썸네일을 쓴다(홈 목록은 56px라 160px).
 	$tp_cards = array();
 	while($content = $list->hasNextPopular()) $tp_cards[] = $content;
@@ -75,7 +76,7 @@
 					<?php if($tp_thumb):?><img src="<?php echo esc_url($tp_thumb)?>" alt="" loading="lazy"><?php endif?>
 				</span>
 				<span class="tp-card-title"><?php echo $content->title?><span class="kboard-comments-count"><?php echo $content->getCommentsCount()?></span></span>
-				<span class="tp-card-meta"><?php echo esc_html($content->member_display)?> · <?php echo tp_kboard_date($content)?></span>
+				<span class="tp-card-meta"><?php echo esc_html($content->member_display)?> · <?php echo tp_kboard_date($content)?> · <?php echo tp_kboard_views($content)?></span>
 			</a>
 			<?php endforeach?>
 		</div>

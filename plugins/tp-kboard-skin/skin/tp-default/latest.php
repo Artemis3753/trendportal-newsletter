@@ -42,7 +42,7 @@ ob_start();
 				<?php if($tp_thumb):?><img src="<?php echo esc_url($tp_thumb)?>" alt="" loading="lazy"><?php endif?>
 			</span>
 			<span class="tp-latest-card-title"><?php echo $tp_report->title?></span>
-			<span class="tp-latest-card-meta"><?php echo esc_html($tp_report->member_display)?> · <?php echo tp_kboard_date($tp_report)?></span>
+			<span class="tp-latest-card-meta"><?php echo esc_html($tp_report->member_display)?> · <?php echo tp_kboard_date($tp_report)?> · <?php echo tp_kboard_views($tp_report)?></span>
 		</a>
 		<?php endforeach?>
 	</div>

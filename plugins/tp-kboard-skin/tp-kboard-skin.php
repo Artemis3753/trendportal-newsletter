@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP KBoard Skin
  * Description: 트렌드포털 제보 게시판용 KBoard 스킨. default 스킨 복사본. 최신글 썸네일을 추가하고 추천(좋아요) 기능을 뺐다. 글쓰기 화면은 검색엔진에서 뺀다.
- * Version: 1.6.0
+ * Version: 1.7.0
  * Author: Trendportal
  */
 
@@ -42,6 +42,15 @@ add_filter('wp_robots', function ($robots) {
  */
 function tp_kboard_date($content) {
 	return date('Y.m.d', strtotime($content->date));
+}
+
+/*
+ * 1.7.0: 제보 카드에 조회수를 붙인다(11/02 사용자 요청). 홈 뉴스 카드의 "· 조회 1,234"(TP View Count)와 같은 모양으로 맞췄다.
+ * 숫자는 KBoard가 글 보기 화면을 열 때마다 올리는 자체 카운터($content->view)다. 뉴스 글은 Jetpack 통계라 집계 방식이 서로 다르다.
+ * 1.5.0에서 번호·조회수 칸을 없앴던 걸 되돌리는 게 아니라, 카드 맨 아랫줄에 한 마디로 덧붙이는 것이다.
+ */
+function tp_kboard_views($content) {
+	return '조회 ' . number_format((int) $content->view);
 }
 
 /*
