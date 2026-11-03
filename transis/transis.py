@@ -522,7 +522,7 @@ def scan_mode(res):
     return 'FULL' if (today() - last).days >= FULL_EVERY_DAYS else 'DAILY'
 
 
-# 낮 동기화(SYNC, 12·16·20시)는 최근 하루가 아니라 지난 정리 이후 새 메일만 읽는다(10/17, 비용 절약).
+# 낮 동기화(SYNC, 12시)는 최근 하루가 아니라 지난 정리 이후 새 메일만 읽는다(10/17, 비용 절약).
 # 기준 = 시트의 마지막 정리 시각(updatedAt). 그 시각은 메일을 다 읽은 뒤(run) 찍혀서, 검색과 run 사이에 온 메일을
 # 놓치지 않게 30분을 겹쳐 잡는다. 실행 하나가 실패해도 다음 실행이 마지막 성공 시각부터 다시 찾는다
 SINCE_OVERLAP_MIN = 30
