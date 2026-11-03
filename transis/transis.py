@@ -603,7 +603,7 @@ def cmd_run(path):
 # 메일은 contact@가 아니라 발신 전용 계정(transis.trendportal@gmail.com)의 웹앱이 보낸다.
 # contact@ 보낸편지함에 리마인더가 매일 쌓이지 않게(10/14). 받는 사람은 여기서 고정하고, 발신함도 같은 목록만 허락한다
 MAIL_TO = 'kwonross5@gmail.com'
-MAIL_BCC = 'yd30421@gmail.com'  # 시험 기간 동안 지환 님이 모든 메일을 같이 받는다
+MAIL_PREVIEW = 'yd30421@gmail.com'  # --preview 때만 쓰는 시험 수신 주소. 실제 발송에는 숨은참조로 넣지 않는다(시험 기간 끝)
 MAIL_FILES = {
     'morning': ('subject.txt', 'email.html', 'email.txt'),
     'evening': ('evening_subject.txt', 'evening.html', 'evening.txt'),
@@ -617,10 +617,10 @@ def cmd_send(kind, preview=False):
     subject, body, text = (open(p, encoding='utf-8').read() for p in paths)
     mail = {'token': env('MAILER_TOKEN'), 'subject': subject, 'html': body, 'text': text}
     if preview:
-        mail.update(to=[MAIL_BCC], subject='[미리보기] ' + subject)
+        mail.update(to=[MAIL_PREVIEW], subject='[미리보기] ' + subject)
     else:
         # 같은 날 같은 종류는 한 번만: 응답이 끊겨 다시 보내도 발신함이 두 번째를 버린다
-        mail.update(to=[MAIL_TO], bcc=[MAIL_BCC], id=f'{kind}:{today().isoformat()}')
+        mail.update(to=[MAIL_TO], id=f'{kind}:{today().isoformat()}')
     req = urllib.request.Request(env('MAILER_URL'), data=json.dumps(mail).encode(),
                                  headers={'Content-Type': 'application/json'})
     res = urlopen_json(req)
