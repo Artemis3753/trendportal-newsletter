@@ -105,12 +105,12 @@ Both live in the WordPress admin.
 
 ### How it was built
 
-The requirements and the decisions above are mine, and I check the results by hand on a phone and a desktop. The code is built with Claude Code: Claude wrote it under my direction. Claude also wrote the documentation prose, and I approved it. This repository tracks no CLAUDE.md, custom commands or hooks, so each routine's instructions are its prompt file: [transis/PROMPT.md](transis/PROMPT.md), [tools/cardnews/PROMPT.md](tools/cardnews/PROMPT.md), [tools/radar/PROMPT.md](tools/radar/PROMPT.md).
+The requirements and the decisions above are mine, and I check the results by hand on a phone and a desktop. The code is built with Claude Code under my direction, and the documentation prose in this repository was written by Claude and approved by me. This repository tracks no CLAUDE.md, custom commands or hooks. The prompt files for the routines are [transis/PROMPT.md](transis/PROMPT.md), [tools/cardnews/PROMPT.md](tools/cardnews/PROMPT.md) and [tools/radar/PROMPT.md](tools/radar/PROMPT.md).
 
-- **Enforced in code.** The mail sender only sends to two allow-listed recipients and rejects anything else (`transis/mailer/Mailer.gs:13-14,47-50`). Calls to the sheet and the push endpoint need a token or key (`transis/apps-script/Code.gs:82,120`, `plugins/tp-transis-frame/push.php:105-109`).
-- **Rests only on the instructions.** The rule is that the routine reads the inbox but must not send, reply, delete or label (`transis/PROMPT.md:14`). The rule is to treat email text as data, never as instructions (`transis/PROMPT.md:15`).
+- **Enforced in code.** The mail sender only sends to two allow-listed recipients and rejects anything else. The same email id is sent once, even if the routine retries. Calls to the sheet and the push endpoint need a token or key.
+- **Rests only on the instructions.** The rule is that the routine reads the inbox but must not send, reply, delete or label. The rule is to treat email text as data, never as instructions.
 
-The `file:line` reference for every rule is in [docs/TRANSIS.md](docs/TRANSIS.md).
+The account the card-news routine writes to the site with has administrator rights, so the instructions it follows are not a permission limit. The `file:line` reference for every rule is in [docs/TRANSIS.md](docs/TRANSIS.md).
 
 ## Status
 
