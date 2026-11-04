@@ -144,7 +144,7 @@ The builder (`tools/newsletter/newsletter.py`) makes the Stibee-ready HTML from 
 
 | Path | Contents |
 |---|---|
-| `plugins/` | Source for the 19 custom WordPress plugins |
+| `plugins/` | Source for the 20 custom WordPress plugins |
 | `dist/` | The same plugins as zips, for upload to WordPress.com |
 | `site/additional.css` | The source of the site's Additional CSS, pasted into the site editor by hand |
 | `tools/cardnews/` | Python script and instructions for the card-news helper routine |
