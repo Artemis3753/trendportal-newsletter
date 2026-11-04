@@ -67,7 +67,8 @@ For each card: photo → card title (H2, boxed like the card title) → text →
 
 ### Video card (posts 351, 636)
 - Someone else's video: still image → right under it `▶ 인스타그램에서 영상 보기 (@account)` linking to the original post → H2 → text → source. Links end at `/reel/<id>/`, no tracking tail. Keep the exact original link; do not replace it with the account page.
-- Our own video: muted H.264 720p clip that autoplays and loops (`autoplay loop muted playsinline`), with a poster image. No source line.
+- Our own video: H.264 720p clip that autoplays and loops, always starting muted (`autoplay loop muted playsinline`), with a poster image. No source line.
+  - **Sound** (site owner, 11/04): if the uploaded video has audible sound, `fetch` keeps it (AAC) and sets `sound: true` on the card in `cards.json` (`cover_sound` in `order.json` for a cover video). `build` then adds the class `tp-has-sound` to the video block, and the TP Video Sound plugin puts a small speaker button at the bottom right of the video: off by default, one video at a time, off again when the video scrolls out of view. A video with no audio track, or only a silent one (below -50 dB), is encoded without sound and gets no button and no class. Nothing is written by hand for this; do not add or remove the class yourself. The 8-second home-card clip is always silent.
 
 ### Copy collection (post 729) — `"layout": "copy"`
 All cards on one dark band across the screen, copy in Gowun Batang, `— brand —` under it. **Only post 729 uses it for now**; do not choose it for other posts even if their cards have `-brand-` lines.

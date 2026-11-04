@@ -237,10 +237,13 @@ def video_link(v, cls=None):
     return para(f'▶ <a href="{attr(v["url"])}" target="_blank" rel="noreferrer noopener">{esc(v["label"])}</a>', cls)
 
 
-def clip_block(media, fn, poster, cls=None):
-    # 우리가 가진 영상(소리 뺀 것): 버튼 없이 자동 재생·반복, 아이폰도 자동 재생되게 playsinline
+def clip_block(media, fn, poster, cls=None, sound=False):
+    # 우리가 가진 영상: 자동 재생·반복은 소리 없이(muted) 시작하고, 아이폰도 자동 재생되게 playsinline.
+    # 소리가 실제로 들어 있는 영상에만 tp-has-sound 이름표를 붙인다 — TP Video Sound 플러그인이 이 이름표를 보고 소리 버튼을 단다
     mid, url = media.get(fn)
     _, purl = media.get(poster)
+    if sound:
+        cls = f"{cls} tp-has-sound" if cls else "tp-has-sound"
     extra = f',"className":"{cls}"' if cls else ""
     return (f'<!-- wp:video {{"id":{mid}{extra}}} --><figure class="wp-block-video{" " + cls if cls else ""}"><video autoplay loop muted '
             f'poster="{purl}" preload="auto" src="{url}" playsinline></video></figure><!-- /wp:video -->')
@@ -249,7 +252,7 @@ def clip_block(media, fn, poster, cls=None):
 def card_block(media, card, note):
     out = h2(card["title"])
     if card.get("clip"):
-        out += clip_block(media, card["clip"], card["poster"])
+        out += clip_block(media, card["clip"], card["poster"], sound=card.get("sound", False))
     if card.get("image"):
         out += image_block(media, card["image"], note.get("alt", ""), card.get("wide", False))
     if card.get("video"):
@@ -392,7 +395,7 @@ def cover_block(order, notes, media):
     if order.get("cover_clip"):
         # 표지가 영상인 새 포맷(10/25): 글자가 영상에 박혀 있어서 글 머리 회색 커버는 제목만 두고,
         # 영상은 본문 맨 위에서 자동 재생한다. TP Cover Photo는 사진(tp-cover-photo)만 커버로 옮기므로 영상은 건드리지 않는다
-        return clip_block(media, order["cover_clip"], order["cover_poster"], cls="tp-cover-clip")
+        return clip_block(media, order["cover_clip"], order["cover_poster"], cls="tp-cover-clip", sound=order.get("cover_sound", False))
     if order.get("cover_photo"):
         # TP Cover Photo가 이 이름표(tp-cover-photo) 사진을 글 머리 커버로 옮긴다
         return image_block(media, order["cover_photo"], notes.get("cover_alt", ""),
@@ -437,7 +440,7 @@ def build_archive(order, cards, notes, media):
         if copy:
             out += '<!-- wp:group {"className":"tp-copy","layout":{"type":"default"}} --><div class="wp-block-group tp-copy">'
         if card.get("clip"):
-            out += clip_block(media, card["clip"], card["poster"])
+            out += clip_block(media, card["clip"], card["poster"], sound=card.get("sound", False))
         if card.get("image"):
             out += image_block(media, card["image"], note.get("alt", ""), size="large")
         if card.get("video"):
@@ -782,12 +785,27 @@ def crop_filter(box):
     return f"crop={w}:{h}:{x}:{y}"
 
 
+# 이 값(dB)보다 작은 소리뿐인 트랙은 "무음 트랙"으로 본다 — 화면 녹화·내보내기 도구가 소리 없는 영상에도 빈 트랙을 달아 두는 일이 많아서
+SOUND_FLOOR_DB = -50
+
+
+def has_real_sound(src):
+    """원본에 실제로 들리는 소리가 있는지. 소리 트랙이 없거나 무음 트랙이면 False"""
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(src), "-vn", "-af", "volumedetect", "-f", "null", "-"],
+                       capture_output=True)
+    m = re.search(r"max_volume:\s*(-?[\d.]+) dB", r.stderr.decode("utf-8", "replace"))
+    return bool(m) and float(m.group(1)) > SOUND_FLOOR_DB
+
+
 def make_clip(src, dst, box=None):
-    # 우리 영상: 소리 빼고(-an, 자동 재생은 무음이어야 브라우저가 허락한다) H.264 720p, faststart = 받는 중에 바로 재생
-    # box가 있으면 그 칸만 잘라 쓴다(결합 영상 나누기, 아래 split_box)
+    """우리 영상: H.264 720p, faststart = 받는 중에 바로 재생. 돌려주는 값 = 파일 이름.
+    소리가 실제로 들어 있으면 AAC로 남긴다(사이트에서 독자가 소리 버튼으로 켠다). 없으면 -an으로 뺀다.
+    자동 재생은 muted 속성으로 시작하므로 소리를 남겨도 브라우저가 자동 재생을 허락한다.
+    box가 있으면 그 칸만 잘라 쓴다(결합 영상 나누기, 아래 split_box)"""
     need_ffmpeg()
     vf = ",".join(v for v in (crop_filter(box), SCALE_720) if v)
-    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-an", "-vf", vf,
+    audio = ["-c:a", "aac", "-b:a", "96k", "-ac", "2"] if has_real_sound(src) else ["-an"]
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), *audio, "-vf", vf,
                         "-c:v", "libx264", "-preset", "medium", "-crf", "24", "-pix_fmt", "yuv420p",
                         "-movflags", "+faststart", str(dst)], capture_output=True)
     if r.returncode:
@@ -814,6 +832,13 @@ def probe_video(src):
     info = json.loads(r.stdout or "{}")
     s = (info.get("streams") or [{}])[0]
     return int(s.get("width", 0)), int(s.get("height", 0)), float((info.get("format") or {}).get("duration") or 0)
+
+
+def clip_has_audio(path):
+    """완성된 클립에 소리 트랙이 있는지(make_clip이 실제 소리일 때만 남기므로, 있으면 곧 "소리 있는 영상")"""
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_type",
+                        "-of", "csv=p=0", str(path)], capture_output=True, text=True)
+    return bool(r.stdout.strip())
 
 
 def first_run(flags, n):
@@ -929,6 +954,7 @@ def clipcrop(d, n, mode):
             box = (0, y0, w // 2 * 2, y1 - y0)
         clip, poster = clip_names(no, box)
         card["clip"] = make_clip(src, d / "images" / clip, box)
+        card["sound"] = clip_has_audio(d / "images" / clip)
         card["poster"] = video_frame(src, d / "images" / poster, scale=SCALE_720, box=box)
         if box:
             card["crop"] = list(box)
@@ -973,6 +999,7 @@ def cover_video(d, order, f):
     if f["kind"] != "video" or not src.exists():
         return ["1번(표지)은 영상 파일만 받아요 — 파일이 없거나 사진이에요"]
     order["cover_clip"] = make_clip(src, d / "images" / "01-clip.mp4")
+    order["cover_sound"] = clip_has_audio(d / "images" / "01-clip.mp4")
     order["cover_poster"] = video_frame(src, d / "images" / "01-poster.jpg", scale=SCALE_720)
     order["cover_card_clip"] = make_card_clip(src, d / "images" / "01-card.mp4")
     # 대표 이미지는 포스터와 같은 장면(같은 thumbnail 선택)을 원래 크기로
@@ -997,6 +1024,7 @@ def video_card(d, n, card, fr, url, f):
             box = None if load(d, "order.json", {}).get("clip_split") is False else split_box(src)
             clip, poster = clip_names(n, box)
             card["clip"] = make_clip(src, d / "images" / clip, box)
+            card["sound"] = clip_has_audio(d / "images" / clip)
             # 포스터는 재생 전 잠깐 보이는 첫 화면이라 영상과 같은 크기로
             card["poster"] = video_frame(src, d / "images" / poster, scale=SCALE_720, box=box)
             if box:
