@@ -310,6 +310,10 @@ def insta_handle(url):
     return re.sub(r"^https?://(www\.)?instagram\.com/", "", url or "").split("/")[0].split("?")[0]
 
 
+# 사이트 기본 구분선 블록(CSS 없이 테마 모양 그대로). 주문 1717 라이브 글과 같은 마크업
+SEPARATOR = ('<!-- wp:separator --><hr class="wp-block-separator has-alpha-channel-opacity"/>'
+             '<!-- /wp:separator -->')
+
 SPACER = ('<!-- wp:spacer {"height":"40px"} -->'
           '<div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->')
 
@@ -436,7 +440,11 @@ def build_archive(order, cards, notes, media):
     if copy:
         out += ('<!-- wp:group {"align":"full","className":"tp-copy-stage","layout":{"type":"default"}} -->'
                 '<div class="wp-block-group alignfull tp-copy-stage">')
-    for card, note in ([] if interview else zip(cards["cards"], notes["cards"])):
+    for i, (card, note) in enumerate([] if interview else zip(cards["cards"], notes["cards"])):
+        # 일반형은 카드 하나가 사례 하나라서, 사례 사이에 구분 실선을 넣는다(사용자 11/05, 주문 1717·1684에서 두 번 요청).
+        # 첫 카드 앞과 마지막 카드 뒤에는 넣지 않는다. 카피 모음형은 어두운 띠 안에서 카드끼리 이미 나뉘어 있어 제외
+        if i > 0 and not copy:
+            out += SEPARATOR
         if copy:
             out += '<!-- wp:group {"className":"tp-copy","layout":{"type":"default"}} --><div class="wp-block-group tp-copy">'
         if card.get("clip"):

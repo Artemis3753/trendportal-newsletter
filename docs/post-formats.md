@@ -65,6 +65,8 @@ The script (`tools/cardnews/cardnews.py build`) picks the format from `order.jso
 ### Standard (post 242)
 For each card: photo → card title (H2, boxed like the card title) → text → source.
 
+**Divider between cases** (site owner, 11/05; asked for on orders 1684 and 1717): in the standard format each card is one case, so `build` puts the site's default separator block (`wp:separator`, no CSS of its own) between every two cards: not before the first card, not after the last one. Copy collection, interview Q&A, interview panel and weekly roundup do not get it, they have their own look. A hand-written body (`body.html`) in a standard-style post should add the same separator between cases.
+
 ### Video card (posts 351, 636)
 - Someone else's video: still image → right under it `▶ 인스타그램에서 영상 보기 (@account)` linking to the original post → H2 → text → source. Links end at `/reel/<id>/`, no tracking tail. Keep the exact original link; do not replace it with the account page.
 - Our own video: H.264 720p clip that autoplays and loops, always starting muted (`autoplay loop muted playsinline`), with a poster image. No source line.
