@@ -1,11 +1,45 @@
-// 트란시스 카드뉴스 읽기 — 피그마 앱 안에서 도는 "읽기 담당" (10/17)
+// 트란시스 카드뉴스 비서 — 피그마 앱 안에서 도는 "읽기 담당" (10/17, 11/7 '카드뉴스 읽기'에서 개명)
 //
 // 선택한 묶음(카드 프레임 여러 장이 든 프레임)에서 카드마다 글자 원문·위치·크기·사진 레이어를 모아
 // 화면(ui.html)으로 넘긴다. 화면이 그걸 figma/scan.json에 담아 zip으로 내려받게 한다.
 // 무엇이 제목이고 본문인지 같은 판단은 여기서 하지 않는다 — 그 규칙은 tools/cardnews/cardnews.py(fetch) 한곳에만 둔다.
 // 피그마 API를 부르는 게 아니라 앱 안에서 직접 읽어서, MCP·REST의 월 20회 한도와 상관없다.
 
-figma.showUI(__html__, { width: 340, height: 280 });
+// ── 창 크기 ──
+// ui.html의 손잡이 코드도 같은 최소·최대 값을 쓴다. 두 파일이 서로 값을 불러올 수 없어서 숫자를 양쪽에 두니, 바꿀 땐 같이 바꿀 것.
+// 최소 320×400: 이보다 좁으면 하단 "선택한 묶음 읽기" 버튼과 체크 줄이 찌그러지고,
+//   이보다 낮으면 완료 말풍선(요약 글+내려받기 버튼)이 스크롤 없이는 안 보인다.
+// 최대 700×900: 이보다 크면 피그마 창·노트북 화면을 넘어가서, 오른쪽 아래 손잡이가 화면 밖으로 나가 다시 줄일 수 없게 된다.
+// 기본 380×540: 대화 말풍선 + 마스코트 + 하단 버튼이 여유 있게 들어가는 크기(처음 340×280 → 340×400 → 이번에 확대).
+const SIZE = { defaultW: 380, defaultH: 540, minW: 320, minH: 400, maxW: 700, maxH: 900 };
+
+const clampSize = (w, h) => ({
+  width: Math.round(Math.min(SIZE.maxW, Math.max(SIZE.minW, w))),
+  height: Math.round(Math.min(SIZE.maxH, Math.max(SIZE.minH, h))),
+});
+
+// 저장된 크기가 숫자가 아니거나 범위 밖이면 무시한다. 깨진 값으로 창이 이상하게 열리는 것보다 기본 크기가 낫다.
+function isSavedSizeValid(s) {
+  return !!s && Number.isFinite(s.width) && Number.isFinite(s.height) &&
+    s.width >= SIZE.minW && s.width <= SIZE.maxW && s.height >= SIZE.minH && s.height <= SIZE.maxH;
+}
+
+// 처음엔 숨긴 채로 열고, 저장된 크기를 읽어 맞춘 뒤에 보여 준다. 기본 크기로 떴다가 저장 크기로 "튀는" 깜빡임을 없애려는 것.
+// (숨겨 둬도 UI는 메시지를 받으므로 아래 selectionchange → sendSelection 흐름은 그대로 동작한다.)
+figma.showUI(__html__, { width: SIZE.defaultW, height: SIZE.defaultH, visible: false });
+
+async function restoreSizeAndShow() {
+  try {
+    const saved = await figma.clientStorage.getAsync('size');
+    if (isSavedSizeValid(saved)) figma.ui.resize(saved.width, saved.height);
+  } catch (e) {
+    // 저장값을 못 읽어도 기본 크기로 연다.
+  } finally {
+    // 여기서 실패해도 창이 영영 안 뜨는 일은 없어야 하므로 finally에서 보여 준다.
+    figma.ui.show();
+  }
+}
+restoreSizeAndShow();
 
 // 카드 한 장이 될 수 있는 레이어 종류. 실제 파일은 묶음도 카드도 '그룹'이었다(10/17 트렌드포털802)
 const CARD_TYPES = ['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE'];
@@ -144,6 +178,17 @@ function ext(b) {
 const say = text => figma.ui.postMessage({ type: 'progress', text: text });
 
 figma.ui.onmessage = async msg => {
+  // 손잡이를 끄는 동안엔 크기만 바꾸고(저장 X), 손을 뗐을 때(done)만 저장한다. 끄는 내내 디스크에 쓰지 않으려는 것.
+  // 아래 scan 처리는 그대로 두려고, 읽기 요청이 아닌 메시지를 걸러내는 줄 바로 앞에서 크기 메시지만 먼저 처리한다.
+  if (msg.type === 'resize') {
+    const w = Number(msg.width);
+    const h = Number(msg.height);
+    if (!Number.isFinite(w) || !Number.isFinite(h)) return;
+    const size = clampSize(w, h);
+    figma.ui.resize(size.width, size.height);
+    if (msg.done) await figma.clientStorage.setAsync('size', size);
+    return;
+  }
   if (msg.type !== 'scan') return;
   const dropDark = msg.dropDark !== false; // 기본 켬: 어두운 그라데이션(검은 띠) 지우기
   const got = pickGroup();

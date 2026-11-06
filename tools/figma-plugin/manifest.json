@@ -1,5 +1,5 @@
 {
-  "name": "트란시스 카드뉴스 읽기",
+  "name": "트란시스 카드뉴스 비서",
   "id": "transis-cardnews-reader",
   "api": "1.0.0",
   "main": "code.js",
