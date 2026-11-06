@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: TP Cardnews Helper
- * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 읽기)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
+ * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 비서)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
  * Version: 1.30.2
  * Author: Trendportal
  */
@@ -283,7 +283,7 @@ function tp_cn_check_zip( $path, $filename ) {
 	$scan = $zip->getFromName( 'figma/scan.json' );
 	$zip->close();
 	if ( false === $scan ) {
-		return new WP_Error( 'tp_cn_zip', "이 zip에는 figma/scan.json이 없어요. 피그마 플러그인 '트란시스 카드뉴스 읽기'로 받은 zip인지 확인해 주세요" );
+		return new WP_Error( 'tp_cn_zip', "이 zip에는 figma/scan.json이 없어요. 피그마 플러그인 '트란시스 카드뉴스 비서'로 받은 zip인지 확인해 주세요" );
 	}
 	$data = json_decode( $scan, true );
 	return ! empty( $data['group']['name'] ) ? $data['group']['name'] : $fallback;
@@ -1627,7 +1627,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 					<li>폴더 안 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일은 <b>같은 폴더에 그대로</b> 둬요. 하나만 옮기거나 폴더를 지우면 플러그인이 안 열려요</li>
 					<li><b>피그마 데스크톱 앱</b>에서 아무 디자인 파일이나 열어요 (예시: 2026 트렌드포털). 웹 브라우저 피그마에선 안 돼요</li>
 					<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택 (윈도우는 메뉴가 왼쪽 위 피그마 로고 안에 있어요)</li>
-					<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 읽기</b>로 zip을 받아 여기에 올려요. 패널의 <b>"어두운 그라데이션 지우기"</b>는 켜 둔 채로 읽어요(사진 아래 검은 띠가 안 생겨요)</li>
+					<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 비서</b>로 zip을 받아 여기에 올려요. 패널의 <b>"어두운 그라데이션 지우기"</b>는 켜 둔 채로 읽어요(사진 아래 검은 띠가 안 생겨요)</li>
 				</ol>
 				<?php // 10/22: 개발용 플러그인은 자동 업데이트가 없어서, 판이 바뀌면 이미 설치한 컴퓨터도 파일을 바꿔야 한다(어두운 막 지우기 판부터). manifest.json은 그대로라 다시 가져올 필요 없음 ?>
 				<p class="tpcn-plug-update"><b>이미 설치했다면 (새 판으로 바꾸기)</b> — 위 zip을 새로 받아 압축을 풀고, 안의 <code>code.js</code> · <code>ui.html</code> 두 파일을 쓰던 <code>transis-cardnews-reader</code> 폴더에 <b>덮어써요</b>. 피그마에서 다시 가져올 필요는 없어요. 플러그인을 닫았다 다시 열었을 때 패널에 <b>"어두운 그라데이션 … 지우기"</b> 칸이 보이면 새 판이에요</p>
@@ -1654,7 +1654,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	</div>
 	<div class="tpcn-bubble" id="tpcn-bubble" role="status" hidden>
 		<ol>
-			<li>피그마에서 카드 묶음을 선택하고 플러그인 <b>트란시스 카드뉴스 읽기</b> → zip 내려받기</li>
+			<li>피그마에서 카드 묶음을 선택하고 플러그인 <b>트란시스 카드뉴스 비서</b> → zip 내려받기</li>
 			<li>여기에 zip · 인스타 캡션 · (있으면) 영상 카드 넣고 <b>주문 넣기</b></li>
 			<li><b>완성</b>이 뜨면 미리보기로 맛보고, 셰프가 손본 것 확인한 뒤 발행!</li>
 		</ol>
@@ -1683,7 +1683,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 			<label for="tpcn-zip">피그마 zip <em class="tpcn-must">필수</em></label>
 			<div class="tpcn-drop" id="tpcn-drop">
 				<span class="tpcn-ico" aria-hidden="true">📦</span>
-				<div><b id="tpcn-zipname">zip을 여기에 끌어다 놓거나 눌러서 고르기</b><span>'트란시스 카드뉴스 읽기'에서 받은 파일 그대로</span></div>
+				<div><b id="tpcn-zipname">zip을 여기에 끌어다 놓거나 눌러서 고르기</b><span>'트란시스 카드뉴스 비서'에서 받은 파일 그대로</span></div>
 				<input type="file" id="tpcn-zip" name="zip" accept=".zip,application/zip" required title=""><?php // title을 비워야 브라우저 기본 말풍선("No file chosen")이 안 뜬다 ?>
 			</div>
 		</div>
