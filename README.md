@@ -32,7 +32,7 @@ The editors are not developers, so the tools run from the WordPress admin screen
 |---|---|---|---|
 | **Schedule** (`transis/`) | Reads the team's work inbox through a Gmail MCP connector (the routine is instructed to only read), keeps a schedule in a Google Sheet through Apps Script, and sends a morning reminder email and an evening Web Push notification. It runs daily and emails the team. | Three runs a day: 08:10, 12:05, 21:50 | Sonnet 5.5 |
 | **Trend feed, "correspondent"** (`tools/radar/`, plugin `tp-trend-radar`) | The site reads 22 public sources into one feed in the admin. A routine translates foreign titles into Korean and hides items that are not trend material. Turning ticked articles into private mock drafts is built but currently not in use. | When the admin tab asks for it | Sonnet 5.5 |
-| **Card-news helper** (`tools/cardnews/`, `tools/figma-plugin/`, plugin `tp-cardnews-helper`) | A Figma plugin exports the cards. An editor uploads the zip and the Instagram caption as an order in an admin tab. A routine turns the order into a **private draft**, and for the weekly roundup also a newsletter HTML file (`tools/newsletter/`). A person reviews and publishes. | When an order arrives | Opus 5.5 |
+| **Card-news helper** (`tools/cardnews/`, `plugins/figma-cardnews-assistant/`, plugin `tp-cardnews-helper`) | A Figma plugin exports the cards. An editor uploads the zip and the Instagram caption as an order in an admin tab. A routine turns the order into a **private draft**, and for the weekly roundup also a newsletter HTML file (`tools/newsletter/`). A person reviews and publishes. | When an order arrives | Opus 5.5 |
 
 Run times and models are set in the routine settings on the server, not in this repository.
 
@@ -150,7 +150,7 @@ The builder (`tools/newsletter/newsletter.py`) makes the Stibee-ready HTML from 
 | `tools/cardnews/` | Python script and instructions for the card-news helper routine |
 | `tools/newsletter/` | Python script that builds and checks the newsletter HTML |
 | `tools/radar/` | Python script and instructions for the trend feed routines (feed titles, mock posts) |
-| `tools/figma-plugin/` | The Figma plugin that exports cards |
+| `plugins/figma-cardnews-assistant/` | The Figma plugin that exports cards |
 | `transis/` | The schedule assistant: Python script, routine instructions, the Apps Script web app (`apps-script/`) and the reminder-mail sender (`mailer/`) |
 | `docs/PRD.md` | Requirements, decisions, and open questions |
 | `docs/post-formats.md` | The rulebook for how a post is laid out |

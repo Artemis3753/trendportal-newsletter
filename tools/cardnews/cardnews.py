@@ -515,7 +515,7 @@ def build(d, quiet=False):
 
 
 # ── fetch: 피그마 묶음 → cards.json (+ 커버·대표 사진, 영상 정지 화면) ──
-# 기본은 피그마 플러그인(tools/figma-plugin)의 zip을 주문 폴더에 푼 것 (10/17, 한도 없음):
+# 기본은 피그마 플러그인(plugins/figma-cardnews-assistant)의 zip을 주문 폴더에 푼 것 (10/17, 한도 없음):
 #   figma/scan.json          카드별 글자·사진 레이어(hash)
 #   figma/images/<hash>.*    사진 원본 (카드에서 잘라 보인 구도가 아니라 올린 파일 그대로)
 #   figma/cover-export.png   글자까지 다 있는 표지
@@ -548,7 +548,7 @@ def figma_group(d, group_id):
 
 
 def scan_group(d):
-    """피그마 플러그인(tools/figma-plugin)이 만든 figma/scan.json → figma_group과 같은 모양의 나무.
+    """피그마 플러그인(plugins/figma-cardnews-assistant)이 만든 figma/scan.json → figma_group과 같은 모양의 나무.
     플러그인은 앱 안에서 직접 읽어서 MCP 월 20회 한도를 안 쓴다(10/17). 판단 규칙은 아래 그대로 쓰려고 모양만 맞춘다.
     글자는 레이어 이름 대신 실제 글자(characters)를 쓴다. 카드 속 줄바꿈은 메타데이터 때처럼 띄어쓰기로 잇는다."""
     s = load(d / "figma", "scan.json")
