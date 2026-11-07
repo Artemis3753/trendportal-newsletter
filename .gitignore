@@ -8,3 +8,7 @@ docs/1015-웹사이트-보완점
 docs/트렌드포털-세팅-중간보고.pdf
 
 __pycache__/
+
+# 맞춤법 검사 비서는 비공개 저장소(figma-korean-spellcheck)가 정본이다. 이 폴더는 영상·배포용 복사본이라 공개 저장소에 올리지 않는다
+plugins/figma-spellcheck-assistant/
+plugins/tp-cardnews-helper/transis-spellcheck-plugin.zip
