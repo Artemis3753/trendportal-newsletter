@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 비서)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.30.7
+ * Version: 1.30.8
  * Author: Trendportal
  */
 
@@ -1337,7 +1337,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 /* 맨 위 행주 띠: 토마토색 깅엄 체크 */
 .tpcn-towel { height: 12px; border-radius: 999px; opacity: .85;
   background: repeating-linear-gradient(90deg, rgba(228, 87, 46, .55) 0 12px, transparent 12px 24px), repeating-linear-gradient(0deg, rgba(228, 87, 46, .55) 0 6px, #fff6ea 6px 12px); }
-.tpcn-head { position: relative; display: flex; align-items: center; gap: 14px; padding-top: 18px; }
+/* 글(최소 360px)과 영상 카드(410px)가 한 줄에 안 들어가면 카드가 아래 줄로 내려간다(알약·제목이 찌그러지지 않게) */
+.tpcn-head { position: relative; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; padding-top: 18px; }
+.tpcn-head-text { flex: 1 1 360px; min-width: 0; }
 .tpcn-face { position: relative; flex: none; border: 0; padding: 0; background: none; border-radius: 50%; cursor: pointer; }
 .tpcn-face img { display: block; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 3px var(--card), 0 4px 12px rgba(59, 47, 42, .18); }
 .tpcn-face:focus-visible { outline: 2px solid var(--new); outline-offset: 2px; }
@@ -1423,12 +1425,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-kind span { display: block; padding: 7px 18px; border-radius: 999px; font-weight: 700; cursor: pointer; }
 .tpcn-kind input:checked + span { background: var(--tomato); color: #fff; }
 .tpcn-kind input:focus-visible + span, .tpcn-layouts input:focus-visible + span { box-shadow: 0 0 0 3px var(--new-soft); }
-/* 영상 가이드: 종류 탭과 한 줄. 자리가 모자라면 아래 줄로 내려간다(flex-wrap) */
-.tpcn-toprow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
-.tpcn-vg { display: grid; gap: 4px; min-width: 0; }
-.tpcn-vg-t { font-size: 12px; color: var(--muted); font-weight: 700; }
-.tpcn-vg-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.tpcn-vg-card { display: flex; flex-direction: column; gap: 6px; width: 220px; padding: 5px 5px 8px; border-radius: 12px; background: var(--bg); border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; line-height: 1.35; }
+/* 영상 가이드: 머리글 오른쪽에 카드 둘을 나란히. 좁은 화면에선 글 아래 줄로 내려가고 카드도 줄바꿈(아래 media) */
+.tpcn-vg { flex: none; display: flex; gap: 10px; }
+.tpcn-vg-card { display: flex; flex-direction: column; gap: 6px; width: 200px; padding: 5px 5px 8px; border-radius: 12px; background: var(--bg); border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; line-height: 1.35; }
 .tpcn-vg-card:hover { border-color: var(--tomato); }
 .tpcn-vg-card:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
 .tpcn-vg-th { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--line); }
@@ -1437,7 +1436,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-vg-th img { transition: transform .25s; }
 .tpcn-vg-card:hover .tpcn-vg-th img { transform: scale(1.04); }
 .tpcn-vg-name::after { content: " ↗"; color: var(--muted); font-weight: 500; }
-.tpcn-vg-name { padding: 0 4px; }
+.tpcn-vg-name { padding: 0 4px; font-size: 12px; }
 /* 인터뷰 칸: 형식 카드 두 장 + 대상 줄 */
 .tpcn-iv { display: grid; gap: 16px; padding: 14px; border-radius: 16px; border: 1.5px dashed var(--line-strong); }
 .tpcn-iv[hidden] { display: none; }
@@ -1535,8 +1534,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-bell summary small { margin-left: 6px; font-family: var(--font-body); font-size: 12px; color: var(--muted); }
 .tpcn-bell form { display: grid; gap: 12px; margin-top: 12px; }
 /* 설치 안내 둘: 제목 줄 오른쪽 알약, 펼치면 오른쪽 끝에 맞춘 말풍선 */
-.tpcn-guides { margin-left: auto; display: flex; gap: 8px; position: relative; }
+.tpcn-guides { margin: 10px 0 0; display: flex; gap: 8px; position: relative; }
 .tpcn-guides .tpcn-how { margin: 0; }
+.tpcn-guides .tpcn-how summary { white-space: nowrap; }
 .tpcn-guides .tpcn-how summary::after { content: "▾"; }
 .tpcn-guides .tpcn-how[open] summary::after { content: "▴"; }
 .tpcn-guides .tpcn-how > div { position: absolute; z-index: 6; right: 0; top: calc(100% + 8px); width: min(380px, calc(100vw - 40px)); margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); box-shadow: 0 8px 24px rgba(20, 22, 40, .18); font-size: 13px; }
@@ -1555,6 +1555,7 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
   /* 좁은 화면: 알약은 제목 아래 줄로, 말풍선은 왼쪽 끝에 맞춘다 */
   .tpcn-head { flex-wrap: wrap; }
   .tpcn-guides { margin-left: 0; width: 100%; flex-wrap: wrap; }
+  .tpcn-vg { margin-left: 0; width: 100%; flex-wrap: wrap; }
   .tpcn-guides .tpcn-how > div { right: auto; left: 0; }
   .tpcn-cap { flex-direction: column; align-items: flex-start; }
   .tpcn { margin-right: 10px; }
@@ -1624,6 +1625,15 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-body .tpcn-memo b { color: #b8421c; font-size: 12.5px; letter-spacing: .02em; }
 </style>
 
+<?php
+// 트란시스 영상 가이드: 머리글 오른쪽에 썸네일 카드로 나열한다(사용자 11/07 시안 1107-13).
+// 영상은 임베드하지 않고 눌렀을 때 유튜브를 새 창으로 연다 — 탭을 열 때마다 플레이어를 불러오지 않고, 주문서 화면을 그대로 둔다.
+// 영상을 늘릴 땐 아래 배열에 한 줄만 추가한다(id = 유튜브 주소의 v= 뒤 11자). 일부공개·공개 영상이어야 썸네일이 보인다.
+$tpcn_videos = array(
+	array( 'id' => 'Rq5PwAXT2DI', 'title' => '뉴스레터 관리자 가이드' ),
+	array( 'id' => '3QL22saUmhk', 'title' => '플러그인 설치 가이드' ),
+);
+?>
 <div class="tpcn-towel" aria-hidden="true"></div>
 <header class="tpcn-head">
 	<button type="button" class="tpcn-face" id="tpcn-face" aria-label="쓰는 법 보기" aria-controls="tpcn-bubble">
@@ -1631,56 +1641,67 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		<svg class="tpcn-hat" viewBox="0 0 64 50" aria-hidden="true"><path d="M15 35C4 35 2 20 13 18 12 6 27 2 32 10c5-8 21-5 19 8 11 2 9 17-2 17Z" fill="#fff" stroke="#dcc9ab" stroke-width="2.2" stroke-linejoin="round"/><rect x="15" y="32" width="34" height="13" rx="3.5" fill="#fff" stroke="#dcc9ab" stroke-width="2.2"/><path d="M24 34v9M32 34v9M40 34v9" stroke="#efe3cf" stroke-width="2.2" stroke-linecap="round"/></svg>
 		<span class="tpcn-spark" aria-hidden="true">✨</span>
 	</button>
-	<div>
+	<div class="tpcn-head-text">
 		<h1>트란시스 카드뉴스 도우미</h1>
 		<p>피그마 zip을 주문서로 넣어 주면, 셰프 트란시스가 사이트 초안으로 요리해 둘게요</p>
-	</div>
-	<?php // 10/19 사용자: 처음 한 번만 쓰는 설치 안내 둘은 제목 줄 오른쪽 빈자리에. 누르면 아래로 말풍선처럼 떠서 주문서를 밀지 않는다 ?>
-	<div class="tpcn-guides">
-		<?php // 10/18 사용자: 다른 컴퓨터(성현 님)에서도 피그마 플러그인을 쉽게 받게 ?>
-		<details class="tpcn-how">
-			<summary>🧩 피그마 플러그인 설치</summary>
-			<div class="tpcn-plug">
-				<div class="tpcn-dls">
-					<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 카드뉴스 비서 받기 (zip)</a>
+		<?php // 10/19 사용자: 처음 한 번만 쓰는 설치 안내 둘. 누르면 아래로 말풍선처럼 떠서 주문서를 밀지 않는다. 11/07: 영상 카드가 오른쪽 자리를 쓰게 되어 제목·설명 아래로 옮김 ?>
+		<div class="tpcn-guides">
+			<?php // 10/18 사용자: 다른 컴퓨터(성현 님)에서도 피그마 플러그인을 쉽게 받게 ?>
+			<details class="tpcn-how">
+				<summary>🧩 피그마 플러그인 설치</summary>
+				<div class="tpcn-plug">
+					<div class="tpcn-dls">
+						<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 카드뉴스 비서 받기 (zip)</a>
+						<?php if ( $u['splug'] ) : ?>
+						<a class="tpcn-dl" href="<?php echo esc_url( $u['splug'] ); ?>" download>🖋 맞춤법 검사 비서 받기 (zip)</a>
+						<?php endif; ?>
+					</div>
+					<ol>
+						<?php // 10/18: 윈도우에서 manifest.json만 다른 곳으로 옮겨 골랐다가 에러가 났다(code.js·ui.html이 옆에 없어서) → 맥·윈도우 압축 풀기와 '세 파일 같이'를 적어 둔다 ?>
+						<li>받은 zip의 압축을 풀어요 — 맥은 <b>더블클릭</b>, 윈도우는 <b>오른쪽 클릭 → 압축 풀기</b>(더블클릭은 안을 들여다보기만 해요). <code>transis-cardnews-reader</code> 폴더가 생겨요</li>
+						<li>폴더 안 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일은 <b>같은 폴더에 그대로</b> 둬요. 하나만 옮기거나 폴더를 지우면 플러그인이 안 열려요</li>
+						<li><b>피그마 데스크톱 앱</b>에서 아무 디자인 파일이나 열어요 (예시: 2026 트렌드포털). 웹 브라우저 피그마에선 안 돼요</li>
+						<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택 (윈도우는 메뉴가 왼쪽 위 피그마 로고 안에 있어요)</li>
+						<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 비서</b>로 zip을 받아 여기에 올려요. 패널의 <b>"어두운 그라데이션 지우기"</b>는 켜 둔 채로 읽어요(사진 아래 검은 띠가 안 생겨요)</li>
+					</ol>
 					<?php if ( $u['splug'] ) : ?>
-					<a class="tpcn-dl" href="<?php echo esc_url( $u['splug'] ); ?>" download>🖋 맞춤법 검사 비서 받기 (zip)</a>
+					<p class="tpcn-plug-update"><b>🖋 맞춤법 검사 비서도 같은 방법이에요</b> — 위 1~4번을 맞춤법 검사 비서 zip으로 한 번 더 해요(<code>transis-spellcheck-assistant</code> 폴더의 <code>manifest.json</code>). 그다음 <b>플러그인 → 개발 → 트란시스 맞춤법 검사 비서</b>를 열고, 처음 한 번 <b>접속 암호</b>를 넣어요. 검사할 문구가 든 프레임을 고르고 누르면 돼요</p>
 					<?php endif; ?>
+					<?php // 10/22: 개발용 플러그인은 자동 업데이트가 없어서, 판이 바뀌면 이미 설치한 컴퓨터도 파일을 바꿔야 한다(어두운 막 지우기 판부터). manifest.json은 그대로라 다시 가져올 필요 없음 ?>
+					<p class="tpcn-plug-update"><b>이미 설치했다면 (새 판으로 바꾸기)</b> — 위 zip을 새로 받아 압축을 풀고, 안의 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일을 쓰던 폴더(<code>transis-cardnews-reader</code>, 맞춤법 검사 비서는 <code>transis-spellcheck-assistant</code>)에 <b>덮어써요</b>. 판이 바뀔 때 이름 같은 설정도 같이 바뀔 수 있어서 세 파일을 모두 바꿔요. 피그마에서 다시 가져올 필요는 없어요. 플러그인을 닫았다 다시 열었을 때 패널에 <b>"어두운 그라데이션 … 지우기"</b> 칸이 보이면 새 판이에요</p>
 				</div>
-				<ol>
-					<?php // 10/18: 윈도우에서 manifest.json만 다른 곳으로 옮겨 골랐다가 에러가 났다(code.js·ui.html이 옆에 없어서) → 맥·윈도우 압축 풀기와 '세 파일 같이'를 적어 둔다 ?>
-					<li>받은 zip의 압축을 풀어요 — 맥은 <b>더블클릭</b>, 윈도우는 <b>오른쪽 클릭 → 압축 풀기</b>(더블클릭은 안을 들여다보기만 해요). <code>transis-cardnews-reader</code> 폴더가 생겨요</li>
-					<li>폴더 안 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일은 <b>같은 폴더에 그대로</b> 둬요. 하나만 옮기거나 폴더를 지우면 플러그인이 안 열려요</li>
-					<li><b>피그마 데스크톱 앱</b>에서 아무 디자인 파일이나 열어요 (예시: 2026 트렌드포털). 웹 브라우저 피그마에선 안 돼요</li>
-					<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택 (윈도우는 메뉴가 왼쪽 위 피그마 로고 안에 있어요)</li>
-					<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 비서</b>로 zip을 받아 여기에 올려요. 패널의 <b>"어두운 그라데이션 지우기"</b>는 켜 둔 채로 읽어요(사진 아래 검은 띠가 안 생겨요)</li>
-				</ol>
-				<?php if ( $u['splug'] ) : ?>
-				<p class="tpcn-plug-update"><b>🖋 맞춤법 검사 비서도 같은 방법이에요</b> — 위 1~4번을 맞춤법 검사 비서 zip으로 한 번 더 해요(<code>transis-spellcheck-assistant</code> 폴더의 <code>manifest.json</code>). 그다음 <b>플러그인 → 개발 → 트란시스 맞춤법 검사 비서</b>를 열고, 처음 한 번 <b>접속 암호</b>를 넣어요. 검사할 문구가 든 프레임을 고르고 누르면 돼요</p>
+			</details>
+			<details class="tpcn-how">
+				<summary>📱 트란시스 일정표 앱 설치</summary>
+				<div class="tpcn-app">
+				<?php if ( $u['tapp'] ) : ?>
+				<p class="tpcn-app-link"><a class="tpcn-dl" href="<?php echo esc_url( $u['tapp'] ); ?>" target="_blank" rel="noopener">일정표 열기</a>
+					<button type="button" class="tpcn-nl-copy" id="tpcn-app-copy" data-url="<?php echo esc_attr( $u['tapp'] ); ?>">📋 링크 복사</button></p>
+				<p class="tpcn-hint">복사한 링크를 카톡 나와의 채팅 등으로 폰에 보내거나, 폰에서 이 탭을 바로 열어도 돼요.</p>
+				<?php else : ?>
+				<p class="tpcn-hint">일정표 주소가 아직 설정되지 않았어요 (TP Transis Frame 설정).</p>
 				<?php endif; ?>
-				<?php // 10/22: 개발용 플러그인은 자동 업데이트가 없어서, 판이 바뀌면 이미 설치한 컴퓨터도 파일을 바꿔야 한다(어두운 막 지우기 판부터). manifest.json은 그대로라 다시 가져올 필요 없음 ?>
-				<p class="tpcn-plug-update"><b>이미 설치했다면 (새 판으로 바꾸기)</b> — 위 zip을 새로 받아 압축을 풀고, 안의 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일을 쓰던 폴더(<code>transis-cardnews-reader</code>, 맞춤법 검사 비서는 <code>transis-spellcheck-assistant</code>)에 <b>덮어써요</b>. 판이 바뀔 때 이름 같은 설정도 같이 바뀔 수 있어서 세 파일을 모두 바꿔요. 피그마에서 다시 가져올 필요는 없어요. 플러그인을 닫았다 다시 열었을 때 패널에 <b>"어두운 그라데이션 … 지우기"</b> 칸이 보이면 새 판이에요</p>
-			</div>
-		</details>
-		<details class="tpcn-how">
-			<summary>📱 트란시스 일정표 앱 설치</summary>
-			<div class="tpcn-app">
-			<?php if ( $u['tapp'] ) : ?>
-			<p class="tpcn-app-link"><a class="tpcn-dl" href="<?php echo esc_url( $u['tapp'] ); ?>" target="_blank" rel="noopener">일정표 열기</a>
-				<button type="button" class="tpcn-nl-copy" id="tpcn-app-copy" data-url="<?php echo esc_attr( $u['tapp'] ); ?>">📋 링크 복사</button></p>
-			<p class="tpcn-hint">복사한 링크를 카톡 나와의 채팅 등으로 폰에 보내거나, 폰에서 이 탭을 바로 열어도 돼요.</p>
-			<?php else : ?>
-			<p class="tpcn-hint">일정표 주소가 아직 설정되지 않았어요 (TP Transis Frame 설정).</p>
-			<?php endif; ?>
-			<ol class="tpcn-app-steps">
-				<li>아이폰 <b>Safari</b>로 위 링크를 열어요 (크롬·카톡 안 브라우저는 안 돼요)</li>
-				<li>아래 <b>공유 버튼 → 홈 화면에 추가</b></li>
-				<li><b>홈 화면에 생긴 트란시스 아이콘</b>으로 열고 🔔 알림을 켜요. Safari 탭에서는 알림을 켤 수 없어요</li>
-			</ol>
-			<p class="tpcn-hint">"현재 파일을 열 수 없습니다"가 뜨면 Safari에 구글 계정이 여러 개 로그인된 거예요. Safari에서 구글 로그아웃 후 다시 열어 주세요.</p>
-			</div>
-		</details>
+				<ol class="tpcn-app-steps">
+					<li>아이폰 <b>Safari</b>로 위 링크를 열어요 (크롬·카톡 안 브라우저는 안 돼요)</li>
+					<li>아래 <b>공유 버튼 → 홈 화면에 추가</b></li>
+					<li><b>홈 화면에 생긴 트란시스 아이콘</b>으로 열고 🔔 알림을 켜요. Safari 탭에서는 알림을 켤 수 없어요</li>
+				</ol>
+				<p class="tpcn-hint">"현재 파일을 열 수 없습니다"가 뜨면 Safari에 구글 계정이 여러 개 로그인된 거예요. Safari에서 구글 로그아웃 후 다시 열어 주세요.</p>
+				</div>
+			</details>
+		</div>
 	</div>
+	<?php if ( $tpcn_videos ) : ?>
+	<nav class="tpcn-vg" aria-label="트란시스 영상 가이드">
+		<?php foreach ( $tpcn_videos as $v ) : ?>
+		<a class="tpcn-vg-card" href="<?php echo esc_url( 'https://www.youtube.com/watch?v=' . $v['id'] ); ?>" target="_blank" rel="noopener noreferrer">
+			<?php // 큰 썸네일(maxres 1280x720)을 쓰고, 그 영상에 없으면 작은 것(mqdefault)으로 한 번만 되돌린다 ?>
+			<span class="tpcn-vg-th"><img src="<?php echo esc_url( 'https://i.ytimg.com/vi/' . $v['id'] . '/maxresdefault.jpg' ); ?>" alt="" width="200" height="112" loading="lazy" onerror="<?php echo esc_attr( "this.onerror=null;this.src='https://i.ytimg.com/vi/" . $v['id'] . "/mqdefault.jpg'" ); ?>"></span>
+			<span class="tpcn-vg-name"><?php echo esc_html( $v['title'] ); ?></span>
+		</a>
+		<?php endforeach; ?>
+	</nav>
+	<?php endif; ?>
 	<div class="tpcn-bubble" id="tpcn-bubble" role="status" hidden>
 		<ol>
 			<li>피그마에서 카드 묶음을 선택하고 플러그인 <b>트란시스 카드뉴스 비서</b> → zip 내려받기</li>
@@ -1701,37 +1722,12 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data" data-max="<?php echo (int) $u['max']; ?>">
 		<input type="hidden" name="action" value="tp_cn_order">
 		<?php echo $u['nonce']; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_nonce_field 결과 ?>
-		<?php
-		// 트란시스 영상 가이드: 종류 탭 오른쪽 빈 자리에 썸네일 카드로 나열한다.
-		// 영상은 임베드하지 않고 눌렀을 때 유튜브를 새 창으로 연다 — 탭을 열 때마다 플레이어를 불러오지 않고, 주문서 화면을 그대로 둔다.
-		// 영상을 늘릴 땐 아래 배열에 한 줄만 추가한다(id = 유튜브 주소의 v= 뒤 11자). 일부공개·공개 영상이어야 썸네일이 보인다.
-		$tpcn_videos = array(
-			array( 'id' => 'Rq5PwAXT2DI', 'title' => '뉴스레터 관리자 가이드' ),
-			array( 'id' => '3QL22saUmhk', 'title' => '플러그인 설치 가이드' ),
-		);
-		?>
-		<div class="tpcn-toprow">
-			<?php // 주문 종류(1.8.0, 사용자 A): 맨 위에서 고르면 인터뷰·광고일 때만 대상(브랜드) 칸이 나타난다 ?>
-			<div class="tpcn-kind" role="radiogroup" aria-label="주문 종류">
-				<label><input type="radio" name="kind" value="cardnews" checked><span>📰 카드뉴스</span></label>
-				<label><input type="radio" name="kind" value="interview"><span>🎤 인터뷰</span></label>
-				<label><input type="radio" name="kind" value="ad"><span>📢 광고</span></label>
-				<label><input type="radio" name="kind" value="newsletter"><span>📮 뉴스레터</span></label>
-			</div>
-			<?php if ( $tpcn_videos ) : ?>
-			<nav class="tpcn-vg" aria-label="트란시스 영상 가이드">
-				<b class="tpcn-vg-t">🎬 트란시스 영상 가이드</b>
-				<div class="tpcn-vg-list">
-				<?php foreach ( $tpcn_videos as $v ) : ?>
-					<a class="tpcn-vg-card" href="<?php echo esc_url( 'https://www.youtube.com/watch?v=' . $v['id'] ); ?>" target="_blank" rel="noopener noreferrer">
-						<?php // 큰 썸네일(maxres 1280x720)을 쓰고, 그 영상에 없으면 작은 것(mqdefault)으로 한 번만 되돌린다 ?>
-						<span class="tpcn-vg-th"><img src="<?php echo esc_url( 'https://i.ytimg.com/vi/' . $v['id'] . '/maxresdefault.jpg' ); ?>" alt="" width="220" height="124" loading="lazy" onerror="<?php echo esc_attr( "this.onerror=null;this.src='https://i.ytimg.com/vi/" . $v['id'] . "/mqdefault.jpg'" ); ?>"></span>
-						<span class="tpcn-vg-name"><?php echo esc_html( $v['title'] ); ?></span>
-					</a>
-				<?php endforeach; ?>
-				</div>
-			</nav>
-			<?php endif; ?>
+		<?php // 주문 종류(1.8.0, 사용자 A): 맨 위에서 고르면 인터뷰·광고일 때만 대상(브랜드) 칸이 나타난다 ?>
+		<div class="tpcn-kind" role="radiogroup" aria-label="주문 종류">
+			<label><input type="radio" name="kind" value="cardnews" checked><span>📰 카드뉴스</span></label>
+			<label><input type="radio" name="kind" value="interview"><span>🎤 인터뷰</span></label>
+			<label><input type="radio" name="kind" value="ad"><span>📢 광고</span></label>
+			<label><input type="radio" name="kind" value="newsletter"><span>📮 뉴스레터</span></label>
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-zip">피그마 zip <em class="tpcn-must">필수</em></label>
