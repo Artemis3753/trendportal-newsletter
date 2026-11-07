@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 비서)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.30.3
+ * Version: 1.30.4
  * Author: Trendportal
  */
 
@@ -1650,7 +1650,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				<p class="tpcn-plug-update"><b>🖋 맞춤법 검사 비서도 같은 방법이에요</b> — 위 1~4번을 맞춤법 검사 비서 zip으로 한 번 더 해요(<code>transis-spellcheck-assistant</code> 폴더의 <code>manifest.json</code>). 그다음 <b>플러그인 → 개발 → 트란시스 맞춤법 검사 비서</b>를 열고, 처음 한 번 <b>접속 암호</b>를 넣어요. 검사할 문구가 든 프레임을 고르고 누르면 돼요</p>
 				<?php endif; ?>
 				<?php // 10/22: 개발용 플러그인은 자동 업데이트가 없어서, 판이 바뀌면 이미 설치한 컴퓨터도 파일을 바꿔야 한다(어두운 막 지우기 판부터). manifest.json은 그대로라 다시 가져올 필요 없음 ?>
-				<p class="tpcn-plug-update"><b>이미 설치했다면 (새 판으로 바꾸기)</b> — 위 zip을 새로 받아 압축을 풀고, 안의 <code>code.js</code> · <code>ui.html</code> 두 파일을 쓰던 <code>transis-cardnews-reader</code> 폴더에 <b>덮어써요</b>. 피그마에서 다시 가져올 필요는 없어요. 플러그인을 닫았다 다시 열었을 때 패널에 <b>"어두운 그라데이션 … 지우기"</b> 칸이 보이면 새 판이에요</p>
+				<p class="tpcn-plug-update"><b>이미 설치했다면 (새 판으로 바꾸기)</b> — 위 zip을 새로 받아 압축을 풀고, 안의 <code>manifest.json</code> · <code>code.js</code> · <code>ui.html</code> 세 파일을 쓰던 폴더(<code>transis-cardnews-reader</code>, 맞춤법 검사 비서는 <code>transis-spellcheck-assistant</code>)에 <b>덮어써요</b>. 판이 바뀔 때 이름 같은 설정도 같이 바뀔 수 있어서 세 파일을 모두 바꿔요. 피그마에서 다시 가져올 필요는 없어요. 플러그인을 닫았다 다시 열었을 때 패널에 <b>"어두운 그라데이션 … 지우기"</b> 칸이 보이면 새 판이에요</p>
 			</div>
 		</details>
 		<details class="tpcn-how">
