@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 비서)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.30.5
+ * Version: 1.30.6
  * Author: Trendportal
  */
 
@@ -1703,6 +1703,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		// 영상을 늘릴 땐 아래 배열에 한 줄만 추가한다(id = 유튜브 주소의 v= 뒤 11자). 일부공개·공개 영상이어야 썸네일이 보인다.
 		$tpcn_videos = array(
 			array( 'id' => 'Rq5PwAXT2DI', 'title' => '뉴스레터 관리자 가이드' ),
+			array( 'id' => '3QL22saUmhk', 'title' => '플러그인 설치 가이드' ),
 		);
 		?>
 		<div class="tpcn-toprow">
