@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 비서)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.30.6
+ * Version: 1.30.7
  * Author: Trendportal
  */
 
@@ -1428,12 +1428,16 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-vg { display: grid; gap: 4px; min-width: 0; }
 .tpcn-vg-t { font-size: 12px; color: var(--muted); font-weight: 700; }
 .tpcn-vg-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.tpcn-vg-card { display: flex; align-items: center; gap: 8px; width: 216px; padding: 5px 10px 5px 5px; border-radius: 12px; background: var(--bg); border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; line-height: 1.35; }
+.tpcn-vg-card { display: flex; flex-direction: column; gap: 6px; width: 220px; padding: 5px 5px 8px; border-radius: 12px; background: var(--bg); border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; line-height: 1.35; }
 .tpcn-vg-card:hover { border-color: var(--tomato); }
 .tpcn-vg-card:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
-.tpcn-vg-th { position: relative; flex: none; width: 96px; height: 54px; border-radius: 8px; overflow: hidden; background: var(--line); }
+.tpcn-vg-th { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--line); }
 .tpcn-vg-th img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.tpcn-vg-th::after { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 16px; text-shadow: 0 1px 4px rgba(0, 0, 0, .55); }
+/* 재생 표시(▶)는 썸네일 안의 글자를 가려서 넣지 않는다. 대신 제목 옆 ↗로 "새 창으로 열린다"를 알린다 */
+.tpcn-vg-th img { transition: transform .25s; }
+.tpcn-vg-card:hover .tpcn-vg-th img { transform: scale(1.04); }
+.tpcn-vg-name::after { content: " ↗"; color: var(--muted); font-weight: 500; }
+.tpcn-vg-name { padding: 0 4px; }
 /* 인터뷰 칸: 형식 카드 두 장 + 대상 줄 */
 .tpcn-iv { display: grid; gap: 16px; padding: 14px; border-radius: 16px; border: 1.5px dashed var(--line-strong); }
 .tpcn-iv[hidden] { display: none; }
@@ -1720,7 +1724,8 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 				<div class="tpcn-vg-list">
 				<?php foreach ( $tpcn_videos as $v ) : ?>
 					<a class="tpcn-vg-card" href="<?php echo esc_url( 'https://www.youtube.com/watch?v=' . $v['id'] ); ?>" target="_blank" rel="noopener noreferrer">
-						<span class="tpcn-vg-th"><img src="<?php echo esc_url( 'https://i.ytimg.com/vi/' . $v['id'] . '/mqdefault.jpg' ); ?>" alt="" width="96" height="54" loading="lazy"></span>
+						<?php // 큰 썸네일(maxres 1280x720)을 쓰고, 그 영상에 없으면 작은 것(mqdefault)으로 한 번만 되돌린다 ?>
+						<span class="tpcn-vg-th"><img src="<?php echo esc_url( 'https://i.ytimg.com/vi/' . $v['id'] . '/maxresdefault.jpg' ); ?>" alt="" width="220" height="124" loading="lazy" onerror="<?php echo esc_attr( "this.onerror=null;this.src='https://i.ytimg.com/vi/" . $v['id'] . "/mqdefault.jpg'" ); ?>"></span>
 						<span class="tpcn-vg-name"><?php echo esc_html( $v['title'] ); ?></span>
 					</a>
 				<?php endforeach; ?>
