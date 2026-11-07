@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 비서)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.30.4
+ * Version: 1.30.5
  * Author: Trendportal
  */
 
@@ -1387,6 +1387,9 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-plug .tpcn-plug-update { margin: 10px 0 0; padding-top: 8px; border-top: 1px dashed var(--line-strong); font-size: 12.5px; line-height: 1.6; }
 .tpcn-dl { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--ink); color: #fff; font-weight: 700; text-decoration: none; }
 .tpcn-dl:hover, .tpcn-dl:focus { color: #fff; background: #5a4a42; }
+/* 받기 버튼이 둘 이상이면 위아래로 간격을 두고 폭을 같게 맞춘다(안 하면 폭이 들쭉날쭉하고 서로 붙어 보인다) */
+.tpcn-dls { display: grid; gap: 8px; }
+.tpcn-dls .tpcn-dl { text-align: center; }
 .tpcn-cap { display: flex; gap: 14px; align-items: center; margin-top: 10px; padding: 10px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line-strong); font-size: 12.5px; }
 .tpcn-capvid { flex: none; width: 150px; height: 150px; border-radius: 10px; background: #0d1014; }
 .tpcn-cap ol { margin: 4px 0 0; padding-left: 18px; }
@@ -1634,10 +1637,12 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		<details class="tpcn-how">
 			<summary>🧩 피그마 플러그인 설치</summary>
 			<div class="tpcn-plug">
-				<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 카드뉴스 비서 받기 (zip)</a>
-				<?php if ( $u['splug'] ) : ?>
-				<a class="tpcn-dl" href="<?php echo esc_url( $u['splug'] ); ?>" download>🖋 맞춤법 검사 비서 받기 (zip)</a>
-				<?php endif; ?>
+				<div class="tpcn-dls">
+					<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 카드뉴스 비서 받기 (zip)</a>
+					<?php if ( $u['splug'] ) : ?>
+					<a class="tpcn-dl" href="<?php echo esc_url( $u['splug'] ); ?>" download>🖋 맞춤법 검사 비서 받기 (zip)</a>
+					<?php endif; ?>
+				</div>
 				<ol>
 					<?php // 10/18: 윈도우에서 manifest.json만 다른 곳으로 옮겨 골랐다가 에러가 났다(code.js·ui.html이 옆에 없어서) → 맥·윈도우 압축 풀기와 '세 파일 같이'를 적어 둔다 ?>
 					<li>받은 zip의 압축을 풀어요 — 맥은 <b>더블클릭</b>, 윈도우는 <b>오른쪽 클릭 → 압축 풀기</b>(더블클릭은 안을 들여다보기만 해요). <code>transis-cardnews-reader</code> 폴더가 생겨요</li>
