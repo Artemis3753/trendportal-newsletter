@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TP Cardnews Helper
  * Description: 관리자 전용 탭 "트란시스 카드뉴스 도우미". 피그마 플러그인(트란시스 카드뉴스 비서)이 만든 zip과 인스타 캡션·영상 주소를 주문으로 받고, 처리 결과(초안·미리보기·고친 것 목록)를 보여 준다. 처리는 사이트 밖(tools/cardnews/cardnews.py)이 REST로 주문을 가져가서 한다.
- * Version: 1.30.2
+ * Version: 1.30.3
  * Author: Trendportal
  */
 
@@ -1271,8 +1271,10 @@ function tp_cn_page() {
 			'face'   => plugins_url( 'mascot.jpg', __FILE__ ),
 			'rest'   => plugins_url( 'mascot-rest.png', __FILE__ ),
 			'pcap'   => plugins_url( 'profile-capture.mp4', __FILE__ ),
-			// 피그마 플러그인(tools/figma-plugin)을 묶은 zip. 플러그인을 고치면 이 zip도 다시 묶는다
+			// 피그마 플러그인(plugins/figma-cardnews-assistant)을 묶은 zip. 플러그인을 고치면 이 zip도 다시 묶는다
 			'fplug'  => plugins_url( 'transis-figma-plugin.zip', __FILE__ ),
+			// 맞춤법 검사 비서 zip. 코드는 비공개 저장소가 정본이라 이 zip은 gitignore이고 사이트에만 올린다 → 파일이 없는 곳(저장소만 받아 설치한 경우)에선 버튼을 숨긴다
+			'splug'  => file_exists( plugin_dir_path( __FILE__ ) . 'transis-spellcheck-plugin.zip' ) ? plugins_url( 'transis-spellcheck-plugin.zip', __FILE__ ) : '',
 			'action' => admin_url( 'admin-post.php' ),
 			'nonce'  => wp_nonce_field( 'tp_cn_order', '_wpnonce', true, false ),
 			// 알림 A: 탭이 스스로 상태를 확인할 때 쓰는 주소와 로그인 확인 값(쿠키 인증에는 wp_rest nonce가 필요)
@@ -1418,6 +1420,17 @@ body.toplevel_page_tp-cardnews #wpcontent, body.toplevel_page_tp-cardnews #wpfoo
 .tpcn-kind span { display: block; padding: 7px 18px; border-radius: 999px; font-weight: 700; cursor: pointer; }
 .tpcn-kind input:checked + span { background: var(--tomato); color: #fff; }
 .tpcn-kind input:focus-visible + span, .tpcn-layouts input:focus-visible + span { box-shadow: 0 0 0 3px var(--new-soft); }
+/* 영상 가이드: 종류 탭과 한 줄. 자리가 모자라면 아래 줄로 내려간다(flex-wrap) */
+.tpcn-toprow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.tpcn-vg { display: grid; gap: 4px; min-width: 0; }
+.tpcn-vg-t { font-size: 12px; color: var(--muted); font-weight: 700; }
+.tpcn-vg-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.tpcn-vg-card { display: flex; align-items: center; gap: 8px; width: 216px; padding: 5px 10px 5px 5px; border-radius: 12px; background: var(--bg); border: 1.5px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 12.5px; line-height: 1.35; }
+.tpcn-vg-card:hover { border-color: var(--tomato); }
+.tpcn-vg-card:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--new-soft); }
+.tpcn-vg-th { position: relative; flex: none; width: 96px; height: 54px; border-radius: 8px; overflow: hidden; background: var(--line); }
+.tpcn-vg-th img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tpcn-vg-th::after { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 16px; text-shadow: 0 1px 4px rgba(0, 0, 0, .55); }
 /* 인터뷰 칸: 형식 카드 두 장 + 대상 줄 */
 .tpcn-iv { display: grid; gap: 16px; padding: 14px; border-radius: 16px; border: 1.5px dashed var(--line-strong); }
 .tpcn-iv[hidden] { display: none; }
@@ -1559,6 +1572,7 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 .tpcn .tpcn-panel:has(.tpcn-list) h2::before { content: "🍳"; margin-right: 2px; }
 .tpcn .tpcn-kind { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); background: #fff; }
 .tpcn .tpcn-kind input:checked + span { box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18); }
+.tpcn .tpcn-vg-card { border: 2px solid var(--ink); background: #fff; box-shadow: 2px 2px 0 var(--ink); }
 .tpcn .tpcn-drop { border: 2.5px dashed var(--ink); background: #fff8ec; }
 .tpcn .tpcn-form textarea, .tpcn .tpcn-form input[type=text], .tpcn .tpcn-form input[type=url], .tpcn .tpcn-form input[type=number] { border: 2px solid var(--ink); border-radius: 14px; background: #fff; }
 .tpcn .tpcn-go { border: 2.5px solid var(--ink); border-radius: 16px; box-shadow: 5px 5px 0 var(--ink); }
@@ -1620,7 +1634,10 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 		<details class="tpcn-how">
 			<summary>🧩 피그마 플러그인 설치</summary>
 			<div class="tpcn-plug">
-				<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 플러그인 받기 (zip)</a>
+				<a class="tpcn-dl" href="<?php echo esc_url( $u['fplug'] ); ?>" download>🧩 카드뉴스 비서 받기 (zip)</a>
+				<?php if ( $u['splug'] ) : ?>
+				<a class="tpcn-dl" href="<?php echo esc_url( $u['splug'] ); ?>" download>🖋 맞춤법 검사 비서 받기 (zip)</a>
+				<?php endif; ?>
 				<ol>
 					<?php // 10/18: 윈도우에서 manifest.json만 다른 곳으로 옮겨 골랐다가 에러가 났다(code.js·ui.html이 옆에 없어서) → 맥·윈도우 압축 풀기와 '세 파일 같이'를 적어 둔다 ?>
 					<li>받은 zip의 압축을 풀어요 — 맥은 <b>더블클릭</b>, 윈도우는 <b>오른쪽 클릭 → 압축 풀기</b>(더블클릭은 안을 들여다보기만 해요). <code>transis-cardnews-reader</code> 폴더가 생겨요</li>
@@ -1629,6 +1646,9 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 					<li>메뉴 <b>플러그인 → 개발 → 매니페스트에서 플러그인 가져오기…</b> → 그 폴더 안 <code>manifest.json</code> 선택 (윈도우는 메뉴가 왼쪽 위 피그마 로고 안에 있어요)</li>
 					<li>이제 카드뉴스 파일에서 <b>플러그인 → 개발 → 트란시스 카드뉴스 비서</b>로 zip을 받아 여기에 올려요. 패널의 <b>"어두운 그라데이션 지우기"</b>는 켜 둔 채로 읽어요(사진 아래 검은 띠가 안 생겨요)</li>
 				</ol>
+				<?php if ( $u['splug'] ) : ?>
+				<p class="tpcn-plug-update"><b>🖋 맞춤법 검사 비서도 같은 방법이에요</b> — 위 1~4번을 맞춤법 검사 비서 zip으로 한 번 더 해요(<code>transis-spellcheck-assistant</code> 폴더의 <code>manifest.json</code>). 그다음 <b>플러그인 → 개발 → 트란시스 맞춤법 검사 비서</b>를 열고, 처음 한 번 <b>접속 암호</b>를 넣어요. 검사할 문구가 든 프레임을 고르고 누르면 돼요</p>
+				<?php endif; ?>
 				<?php // 10/22: 개발용 플러그인은 자동 업데이트가 없어서, 판이 바뀌면 이미 설치한 컴퓨터도 파일을 바꿔야 한다(어두운 막 지우기 판부터). manifest.json은 그대로라 다시 가져올 필요 없음 ?>
 				<p class="tpcn-plug-update"><b>이미 설치했다면 (새 판으로 바꾸기)</b> — 위 zip을 새로 받아 압축을 풀고, 안의 <code>code.js</code> · <code>ui.html</code> 두 파일을 쓰던 <code>transis-cardnews-reader</code> 폴더에 <b>덮어써요</b>. 피그마에서 다시 가져올 필요는 없어요. 플러그인을 닫았다 다시 열었을 때 패널에 <b>"어두운 그라데이션 … 지우기"</b> 칸이 보이면 새 판이에요</p>
 			</div>
@@ -1672,12 +1692,35 @@ body.toplevel_page_tp-cardnews #wpcontent { background: #fbf4e6 radial-gradient(
 	<form class="tpcn-form" id="tpcn-form" method="post" action="<?php echo esc_url( $u['action'] ); ?>" enctype="multipart/form-data" data-max="<?php echo (int) $u['max']; ?>">
 		<input type="hidden" name="action" value="tp_cn_order">
 		<?php echo $u['nonce']; // phpcs:ignore WordPress.Security.EscapeOutput -- wp_nonce_field 결과 ?>
-		<?php // 주문 종류(1.8.0, 사용자 A): 맨 위에서 고르면 인터뷰·광고일 때만 대상(브랜드) 칸이 나타난다 ?>
-		<div class="tpcn-kind" role="radiogroup" aria-label="주문 종류">
-			<label><input type="radio" name="kind" value="cardnews" checked><span>📰 카드뉴스</span></label>
-			<label><input type="radio" name="kind" value="interview"><span>🎤 인터뷰</span></label>
-			<label><input type="radio" name="kind" value="ad"><span>📢 광고</span></label>
-			<label><input type="radio" name="kind" value="newsletter"><span>📮 뉴스레터</span></label>
+		<?php
+		// 트란시스 영상 가이드: 종류 탭 오른쪽 빈 자리에 썸네일 카드로 나열한다.
+		// 영상은 임베드하지 않고 눌렀을 때 유튜브를 새 창으로 연다 — 탭을 열 때마다 플레이어를 불러오지 않고, 주문서 화면을 그대로 둔다.
+		// 영상을 늘릴 땐 아래 배열에 한 줄만 추가한다(id = 유튜브 주소의 v= 뒤 11자). 일부공개·공개 영상이어야 썸네일이 보인다.
+		$tpcn_videos = array(
+			array( 'id' => 'Rq5PwAXT2DI', 'title' => '뉴스레터 관리자 가이드' ),
+		);
+		?>
+		<div class="tpcn-toprow">
+			<?php // 주문 종류(1.8.0, 사용자 A): 맨 위에서 고르면 인터뷰·광고일 때만 대상(브랜드) 칸이 나타난다 ?>
+			<div class="tpcn-kind" role="radiogroup" aria-label="주문 종류">
+				<label><input type="radio" name="kind" value="cardnews" checked><span>📰 카드뉴스</span></label>
+				<label><input type="radio" name="kind" value="interview"><span>🎤 인터뷰</span></label>
+				<label><input type="radio" name="kind" value="ad"><span>📢 광고</span></label>
+				<label><input type="radio" name="kind" value="newsletter"><span>📮 뉴스레터</span></label>
+			</div>
+			<?php if ( $tpcn_videos ) : ?>
+			<nav class="tpcn-vg" aria-label="트란시스 영상 가이드">
+				<b class="tpcn-vg-t">🎬 트란시스 영상 가이드</b>
+				<div class="tpcn-vg-list">
+				<?php foreach ( $tpcn_videos as $v ) : ?>
+					<a class="tpcn-vg-card" href="<?php echo esc_url( 'https://www.youtube.com/watch?v=' . $v['id'] ); ?>" target="_blank" rel="noopener noreferrer">
+						<span class="tpcn-vg-th"><img src="<?php echo esc_url( 'https://i.ytimg.com/vi/' . $v['id'] . '/mqdefault.jpg' ); ?>" alt="" width="96" height="54" loading="lazy"></span>
+						<span class="tpcn-vg-name"><?php echo esc_html( $v['title'] ); ?></span>
+					</a>
+				<?php endforeach; ?>
+				</div>
+			</nav>
+			<?php endif; ?>
 		</div>
 		<div class="tpcn-field">
 			<label for="tpcn-zip">피그마 zip <em class="tpcn-must">필수</em></label>
