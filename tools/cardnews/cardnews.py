@@ -1967,7 +1967,8 @@ def verify(d, against=None):
 # ① 규칙마다 선택자가 그 주문의 이름표(order.json design, 예: .tp-fmt-shop-grid)로 시작해야 한다 → 다른 글엔 안 닿음
 # ② 주문 번호 표시로 감싸서 붙인다 → 다시 돌리면 그 덩어리만 바뀌고, --remove로 뺄 수 있다
 # ③ 저장한 뒤 라이브를 다시 읽어 대조한다
-# 저장소의 site/additional.css는 클라우드에서 커밋할 수 없으니 다음 로컬 세션에서 라이브와 맞춘다
+# 저장소의 site/additional.css는 클라우드에서 커밋할 수 없으니 다음 로컬 세션에서 `python3 tools/cardnews/css-sync.py --write`로 라이브와 맞춘다
+# (안 맞춘 채 저장소 파일을 통째로 붙여넣으면 이 블록들이 지워진다 — 10/25 사고)
 
 def css_rules(css):
     """CSS → [(선택자 머리, 몸통)]. @media·@supports 안쪽까지 내려간다. 괄호가 어긋나면 ("?", 이유)."""
