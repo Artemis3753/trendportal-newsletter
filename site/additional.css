@@ -486,6 +486,37 @@ main .alignwide > .tp-reports + * { margin-block-start: 0; }
   .tp-interviews .wp-block-post-template > li > .wp-block-post-date { display: block; margin: 0 !important; font-size: 0.6875rem; font-weight: 600; color: rgba(17, 17, 17, 0.6); }
 }
 
+/* Interviews on desktop (11/10): the same frosted glass as the news list, plus the date and view count.
+   Same grey stage and glass card values as the news grid above; phones keep the plain poster cards.
+   The category stays hidden because every card here is an interview */
+@media (min-width: 782px) {
+  .tp-interviews .wp-block-post-template {
+    width: calc(100% + 28px);
+    margin-left: -14px !important;
+    margin-right: -14px !important;
+    padding: 14px !important;
+    border-radius: 26px;
+    background:
+      radial-gradient(40% 30% at 15% 12%, #c9c9cf 0%, transparent 70%),
+      radial-gradient(45% 28% at 90% 45%, #d6d6db 0%, transparent 70%),
+      radial-gradient(40% 30% at 20% 85%, #cfcfd4 0%, transparent 70%),
+      #f2f2f4;
+  }
+  .tp-interviews .wp-block-post-template > li {
+    position: relative;
+    padding: 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.34));
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    backdrop-filter: blur(18px) saturate(160%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.07);
+  }
+  .tp-interviews .wp-block-post-featured-image { margin: 0 0 10px; border-radius: 10px; }
+  .tp-interviews .wp-block-post-title { margin: 0 0 4px !important; font-size: 1rem !important; line-height: 1.4; }
+  .tp-interviews .wp-block-post-template > li > .wp-block-post-date { display: block; margin: 0 !important; font-size: 0.75rem; font-weight: 600; color: rgba(17, 17, 17, 0.6); }
+}
+
 /* ---------- Post page: cover (M1 light grain) ---------- */
 .tp-cover {
   position: relative;
