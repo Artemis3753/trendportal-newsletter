@@ -155,7 +155,7 @@
 			'click',
 			function (e) {
 				if (window.innerWidth >= 720 || sheet || e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; // PC는 막지 않는다 = 기본 링크 이동
-				var li = e.target.closest('.wp-block-post-template.is-layout-grid > li');
+				var li = e.target.closest('.wp-block-post-template.is-layout-grid > li, .tp-interviews .wp-block-post-template > li');
 				if (!li) return;
 				var link = e.target.closest('a');
 				if (link && (!li.contains(link) || link.closest('.wp-block-post-terms'))) return; // 분류 링크는 그대로
