@@ -515,6 +515,11 @@ main .alignwide > .tp-reports + * { margin-block-start: 0; }
   .tp-interviews .wp-block-post-featured-image { margin: 0 0 10px; border-radius: 10px; }
   .tp-interviews .wp-block-post-title { margin: 0 0 4px !important; font-size: 1rem !important; line-height: 1.4; }
   .tp-interviews .wp-block-post-template > li > .wp-block-post-date { display: block; margin: 0 !important; font-size: 0.75rem; font-weight: 600; color: rgba(17, 17, 17, 0.6); }
+  /* The likes badge moves to the bottom-left corner (11/14). The interview posters are narrow here (about 167px) and
+     carry their own "TP INTERVIEW" label at the top centre, which the top-left badge covered. The poster's bottom edge is
+     the emptiest part, so the badge sits there instead. The saves badge (::after) keeps the top-left spot.
+     The extra li makes this beat the "both tags: top 32px" rule further down, which has the same class count */
+  .tp-interviews li.wp-block-post.tag-tplike1000 .wp-block-post-featured-image::before { top: auto; bottom: 8px; }
 }
 
 /* ---------- Post page: cover (M1 light grain) ---------- */
