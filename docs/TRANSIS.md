@@ -15,7 +15,7 @@ Claude makes the judgment calls and the script does the fixed work:
 | What | Decided by |
 |---|---|
 | Whether a thread is an appointment, its type, brand, title, date and time, and which items are unconfirmed or cancelled | Claude |
-| Which mail to read (the last day, or a full scan every 30 days), 60 threads at a time (`transis.py:37-40`) | The script |
+| Which mail to read (the last day, or one first-time full scan when the sheet has no record of one), 60 threads at a time (`transis.py`: `scan_mode`, `BATCH`) | The script |
 | What is due today: 1 day before an upload, 3 days before a draft, shoot or payment, and anything overdue until it is done (`transis.py:36,112-121`) | The script |
 | How the sheet merges a new item: same `key` updates the content, while a date, check mark or deletion made by a person is kept (`Code.gs:147-166`) | The script |
 | The reminder email's HTML, sorting and signed "✓ done" links (`transis.py:144-513`) | The script |

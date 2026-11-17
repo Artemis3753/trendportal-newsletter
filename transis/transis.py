@@ -34,8 +34,6 @@ NAME = {'upload': '업로드', 'draft': '초안·기획안', 'shoot': '방문 �
 # 정산은 처음엔 매일이었는데 먼 입금 예정까지 쌓여 오늘 할 일이 묻혀서(10/14) 3일 전부터, 지나면 입금 확인될 때까지 매일
 # 메모(성현 님이 일정표에서 직접 적은 할 일)는 날짜가 있으면 하루 전부터, 없으면 완료할 때까지 매일
 LEAD = {'upload': 1, 'draft': 3, 'shoot': 3, 'pay': 3, 'memo': 1}
-# 전체 훑기(FULL)를 한 지 이만큼 지나면 다시 전체를 훑는다. 매일은 최근 메일만 읽으니, 한 달에 한 번 빠진 게 없는지 다시 확인
-FULL_EVERY_DAYS = 30
 # 전체 훑기는 한 번 실행에 이만큼씩만 읽는다. 400개를 한 번에 읽으려다 중간에 멈춘 적이 있어서(10/14) 나눠 읽고 이어 간다
 BATCH = 60
 # 메일 머리의 허스키(실제 인형 사진 + 오른쪽 위 ✨를 한 장으로 구운 투명 PNG, Gmail이 겹치기 위치 지정을 지워서).
@@ -514,12 +512,10 @@ def render(items, unclear, t, url, coverage=None):
 
 
 def scan_mode(res):
-    """FULL = 지난 60일 전체 훑기 (처음, 그리고 30일마다), DAILY = 최근 하루 새 메일만 (아침·저녁 두 번 돌아서 한 번 실패해도 겹친다)"""
-    at = res.get('fullScanAt')
-    if not at:
-        return 'FULL'
-    last = dt.datetime.fromisoformat(at).astimezone(SEOUL).date()
-    return 'FULL' if (today() - last).days >= FULL_EVERY_DAYS else 'DAILY'
+    """FULL = 지난 60일 전체 훑기 (시트에 끝낸 기록이 없을 때, 곧 맨 처음 한 번만), DAILY = 최근 하루 새 메일만 (아침·저녁 두 번 돌아서 한 번 실패해도 겹친다).
+    주기적으로 다시 훑지 않는 이유: 새 메일이 온 스레드는 DAILY가 매번 읽어서 놓칠 일이 거의 없는데, 11/13에 주기 FULL이 시작되자
+    메시지가 50개 넘는 스레드가 큐 앞에 걸려 끝나지 않고 하루 세 번 실행이 계속 비싸졌다"""
+    return 'DAILY' if res.get('fullScanAt') else 'FULL'
 
 
 # 낮 동기화(SYNC, 12시)는 최근 하루가 아니라 지난 정리 이후 새 메일만 읽는다(10/17, 비용 절약).
@@ -536,7 +532,7 @@ def cmd_since():
     else:
         start = dt.datetime.fromisoformat(at) - dt.timedelta(minutes=SINCE_OVERLAP_MIN)
         print(f'after:{int(start.timestamp())}')  # Gmail 검색은 초 단위 시각(epoch)을 받는다
-    # 30일마다 하는 전체 훑기는 여러 실행에 나눠 이어 가야 해서 낮 실행도 평소 순서대로 한다
+    # 맨 처음 전체 훑기는 여러 실행에 나눠 이어 가야 해서 낮 실행도 평소 순서대로 한다
     if scan_mode(res) == 'FULL':
         print('scan: FULL (ignore the line above and follow the steps as usual)')
 
