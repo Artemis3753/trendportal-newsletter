@@ -82,7 +82,8 @@ function doGet(e) {
   if (p.api === 'items') {
     if (!checkToken_(p.token)) return json_({ ok: false, error: 'bad token' });
     return json_({ ok: true, updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')),
-                   fullScanAt: getMeta_('fullScanAt'), fullQueue: getQueue_(), items: readItems_() });
+                   fullScanAt: getMeta_('fullScanAt'), fullQueue: getQueue_(), items: readItems_(),
+                   crossCheck: getCrossCheck_() });
   }
   if (p.api === 'calendar') {
     if (!checkToken_(p.token)) return json_({ ok: false, error: 'bad token' });
@@ -128,6 +129,8 @@ function doPost(e) {
     const r = notifyPush_({ message: String(body.message || '').slice(0, 150) });
     return json_({ ok: !!r && r.indexOf('200 ') === 0, push: r });
   }
+  // 캘린더 교차검증 결과(11/19). 트란시스가 메일 vs 캘린더를 맞춰 본 갭 목록을 통째로 바꿔 넣는다. 일정 줄은 건드리지 않는다
+  if (body.action === 'crosscheck') return json_(saveCrossCheck_(body));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -395,7 +398,59 @@ function publicData_() {
     o.cancelled = isCancelled_(it);
     return o;
   });
-  return { updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')), items: items, changes: getChanges_() };
+  return { updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')), items: items, changes: getChanges_(),
+           crossCheck: getCrossCheck_() };
+}
+
+/**
+ * 메일 vs 캘린더 갭(11/19 사용자: "시끄러운 버전으로 다 보여 주고 쓰면서 줄이자").
+ * 짝 맞추기는 사람이 쓴 캘린더 제목을 읽어야 해서 코드가 아니라 트란시스(routine)가 하고, 여기는 저장·전달만 한다.
+ * gaps: [{ k: 'date'(날짜 다름) | 'cal'(캘린더에 없음 = 메일에만) | 'mail'(메일에 없음 = 캘린더에만),
+ *          type, brand, title, no, mailDate, calDate, calTitle, calId, tentative, note }]
+ * misses: 이번에 찾은 '트란시스가 메일에서 놓친 일'. 반복되면 안 돼서 갭과 따로 2주 동안 쌓아 둔다(지시문 고칠 근거)
+ * 입금자명·금액은 받지 않는다(공개 화면으로 나간다)
+ */
+const GAP_KINDS = ['date', 'cal', 'mail'];
+function saveCrossCheck_(body) {
+  const s = v => (v === undefined || v === null ? '' : String(v).trim().slice(0, 200));
+  const ymd = v => (/^\d{4}-\d{2}-\d{2}$/.test(s(v)) ? s(v) : '');
+  const gaps = (Array.isArray(body.gaps) ? body.gaps : []).filter(g => g && GAP_KINDS.indexOf(g.k) >= 0).slice(0, 120).map(g => ({
+    k: g.k, type: s(g.type), brand: s(g.brand), title: s(g.title), no: Number(g.no) || 0,
+    mailDate: ymd(g.mailDate), calDate: ymd(g.calDate), calTitle: s(g.calTitle), calId: s(g.calId),
+    tentative: g.tentative === true, note: s(g.note),
+  }));
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const at = now_();
+    const keep = Date.now() - 14 * 86400000;
+    const misses = getMisses_().filter(m => new Date(m.at).getTime() > keep)
+      .concat((Array.isArray(body.misses) ? body.misses : []).map(m => ({
+        at: at, type: s(m.type), brand: s(m.brand), title: s(m.title), date: ymd(m.date), why: s(m.why) })));
+    setMeta_('crossCheck', JSON.stringify({ checkedAt: at, gaps: gaps }));
+    setMeta_('missLog', JSON.stringify(misses.slice(-40)));
+    return { ok: true, saved: gaps.length, misses: misses.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getCrossCheck_() {
+  try {
+    const c = JSON.parse(getMeta_('crossCheck') || 'null');
+    return { checkedAt: (c && c.checkedAt) || '', gaps: (c && Array.isArray(c.gaps)) ? c.gaps : [], misses: getMisses_() };
+  } catch (err) {
+    return { checkedAt: '', gaps: [], misses: getMisses_() };
+  }
+}
+
+function getMisses_() {
+  try {
+    const m = JSON.parse(getMeta_('missLog') || '[]');
+    return Array.isArray(m) ? m : [];
+  } catch (err) {
+    return [];
+  }
 }
 
 // 최근 바뀐 일정 기록: 메타 시트 'changeLog'에 JSON 목록으로. 정리할 때마다 쌓고, 사흘 넘은 것과 50개 넘는 것은 버린다.

@@ -24,7 +24,7 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
 0. **`SYNC` only.** Run `python3 transis/transis.py since`. It prints one Gmail search operator, such as `after:1792150000` (the sheet's last update minus 30 minutes).
    - If it also prints a line `scan: FULL`, ignore the operator and do steps 1 to 6 as usual.
    - Otherwise search `<operator> -in:drafts` the way step 2a describes (`pageSize` 50, `THREAD_VIEW_METADATA_ONLY`, follow `nextPageToken`) and apply the candidate rule of step 2b.
-   - **If no candidate thread is left, stop here.** Do not run `state` or `run`, and send nothing. Report only, in Korean, `<operator> 이후 새 메일 없음` and how many threads the search returned.
+   - **If no candidate thread is left**, do not run `state` or `run`. Do only step 4b (the calendar changes on its own, even without new mail), send nothing, and report in Korean `<operator> 이후 새 메일 없음`, how many threads the search returned, and the step 4b counts.
    - Otherwise do steps 1 to 6. In step 2a, use these candidates in place of the `newer_than:1d` search.
 
 1. Run `python3 transis/transis.py state`. The first line says the scan mode, `FULL` or `DAILY`. In `FULL` mode the next line is about the **full queue** (see step 2). The rest lists the items already in the sheet, one per line (no, key, type, brand, title, date, time, tentative, done, removed, source). An empty date means the date is still open (일정 미정). Use the list to keep keys stable and to notice date changes.
@@ -91,6 +91,25 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
 
 4. Run `python3 transis/transis.py run /tmp/transis/extracted.json`. It sends the items to the sheet, reads the sheet back (with the done marks 성현 made), picks what to remind, and writes `/tmp/transis/subject.txt`, `email.html` and `email.txt`. It also writes the evening check, `evening_subject.txt`, `evening.html` and `evening.txt`: the work dated today that is still not marked done (listed in `evening_left_today`), or a thank-you mail when that list is empty. If it prints `POST errors`, fix those items and run it once more.
 
+4b. **Cross-check with the Google Calendar (every mode).** 예진, who works with 성현, keeps the TrendPortal Google Calendar by hand from mail, phone calls, KakaoTalk and every other channel, and puts only **confirmed** work on it. Treat the calendar as the more accurate source. The sheet stays mail-only: never put a date into the sheet that the mail does not give.
+
+   a. Run `python3 transis/transis.py crosscheck`. It prints the calendar events (from a week ago to the window end, `date | title | id`), the sheet items dated today to the window end or undated (memo and `fixed-` rows are left out), and the previous gaps with their notes.
+   b. **Pair** each calendar event with the sheet item for the same work. Calendar titles are short and hand-written: the tag gives the type (`[up]` upload; `[초안]`, `[기획안]`, `[전달]` draft; `[촬영]`, `[행사]` shoot; `[입금]`, `[정산]` pay; no tag = `etc`), and the brand may be spelled differently (29cm = 29CM, 코이카 = KOICA, 지마켓 = G마켓; a product name can stand for the client, so use the sheet's `source` subjects from `state` when you are unsure). One event pairs with one item. Done items pair too. **Compare dates only**: most calendar events sit at 12:00 by default, so times mean nothing.
+   c. **Gaps.** List a gap only when at least one side's date is today or later.
+      - `date`: paired, but the dates differ, including a sheet date `""` (일정 미정) against a calendar date.
+      - `cal` (캘린더에 없음): a dated sheet item with no calendar event, tentative ones included. When it is a second row for work another row already pairs with, say so in `note`, for example `271번과 같은 일로 보임(중복 줄)` or `캘린더는 12/1(271번) — 옛 날짜 줄로 보임`.
+      - `mail` (메일에 없음): a calendar event with no sheet item, untagged events included. If the sheet has that work only as a cancelled (removed) item, note `메일상 취소됨`.
+      - Undated sheet items with no event are not gaps.
+   d. **Check the mail for every `mail` and `date` gap**, because the calendar is the confirmed schedule. If a previous gap has the same `k`, `no`, `calId`, `calDate` and `mailDate`, copy its note and skip the check (unless the note is `아직 메일 확인 전`). Otherwise search Gmail (`<brand> newer_than:90d -in:drafts`, metadata only) and read the matching threads the way step 2c says. Then:
+      - **The mail gives the calendar's date** (agreed or clearly requested): Transis missed it. **This must not happen again.** Send the corrected or new item now: write `/tmp/transis/extracted2.json` in the step 3 format (same `scan`, `read_threads` = the threads you read for this, `coverage` with those counts) and run `python3 transis/transis.py run /tmp/transis/extracted2.json`. The gap is then closed (do not list it). Add a `misses` entry whose `why` is one concrete Korean sentence on why it was missed, for example `날짜가 첨부 이미지 안에만 있었음`, `키워드가 없어 후보 검색에 안 걸림`, `날짜를 바꾼 답장을 안 읽음`.
+      - **The mail has no such date, or an older one**: the date was settled outside mail. Note `메일엔 날짜 없음 · 메일 밖에서 정해진 듯` or `메일엔 11/27 · 메일 밖에서 바뀐 듯`, and leave the sheet as it is.
+      - **No related thread**: note `관련 메일 없음`.
+      - Check at most 15 gaps in one run; give the rest the note `아직 메일 확인 전` so the next run checks them.
+   e. `cal` gaps need no mail check (the mail is where the item came from); add only the duplicate or old-date note when it applies.
+   f. Write `/tmp/transis/gaps.json` and run `python3 transis/transis.py gaps /tmp/transis/gaps.json` (Bash timeout 600000 ms). It replaces the whole gap list on the schedule page's `메일 vs 캘린더` section, so list every gap, also the old ones that are still open:
+      `{"gaps": [{"k": "date"|"cal"|"mail", "no": <sheet no, 0 for mail>, "type": "...", "brand": "...", "title": "<sheet title; for mail, the calendar title>", "mailDate": "YYYY-MM-DD" or "", "calDate": "YYYY-MM-DD" or "", "calTitle": "...", "calId": "...", "tentative": true|false, "note": "<short Korean>"}], "misses": [{"type": "...", "brand": "...", "title": "...", "date": "YYYY-MM-DD", "why": "..."}]}`
+      The page is public: never put a payer name or an amount in a note.
+
 5. Send the email with the script (Bash timeout 600000 ms). Do not open, read or rewrite the HTML files; the script sends them as they are.
    - `DRAFT`: `python3 transis/transis.py send morning --preview` (a preview to 지환 only).
    - `SEND`: `python3 transis/transis.py send morning`.
@@ -99,4 +118,4 @@ The schedule sheet's web app sometimes stays slow or returns 404/500 for a few m
 
    Send at most one email per run. If the send command fails, wait 5 minutes and run it once more; that is safe, because the sender account drops a second copy of the same email on the same day. If `push evening` fails, also wait 5 minutes and run it once more, but only once: a second notification is not dropped.
 
-6. Finish with a short report **in Korean** (the person who reads the run log reads Korean; keep thread ids, keys, numbers and command output as they are): the scan mode, how many threads you scanned and read, the script's `full_queue_left`, each extracted item (number if known, type, brand, date, time; no payer or amount), the unclear list, the script's `due_today` list (in `SYNC` and `REFRESH` mode, `evening_left_today` instead), and what the send or push command printed, if it ran.
+6. Finish with a short report **in Korean** (the person who reads the run log reads Korean; keep thread ids, keys, numbers and command output as they are): the scan mode, how many threads you scanned and read, the script's `full_queue_left`, each extracted item (number if known, type, brand, date, time; no payer or amount), the unclear list, the script's `due_today` list (in `SYNC` and `REFRESH` mode, `evening_left_today` instead), the step 4b counts (`date`, `cal`, `mail` gaps, how many you checked in the mail this run) and every miss with its `why`, and what the send or push command printed, if it ran.

@@ -10,6 +10,8 @@
     python3 transis/transis.py send morning|evening [--preview]   # 그 메일 파일을 발신함 웹앱으로 보내기 (--preview는 지환 님에게만)
     python3 transis/transis.py push evening          # 밤 확인을 폰 알림으로 (남은 오늘 일 건수 + 첫 항목, 없으면 따봉)
     python3 transis/transis.py calendar              # 구글 캘린더 일정 목록 (교차검증용, 시트 웹앱이 읽어 줌)
+    python3 transis/transis.py crosscheck            # 메일 vs 캘린더 맞춰 보기 재료 (캘린더·시트·지난 갭)
+    python3 transis/transis.py gaps gaps.json        # 맞춰 본 갭·놓친 일을 시트에 저장 (일정표 화면의 '메일 vs 캘린더' 칸)
 
 환경 변수 TRANSIS_URL(웹앱 주소), TRANSIS_TOKEN(비밀 열쇠)이 필요하고, send는 MAILER_URL·MAILER_TOKEN(발신함)도 쓴다. 모두 출력하지 않는다.
 표준 라이브러리만 쓴다(클라우드 환경에 따로 설치할 게 없게).
@@ -658,17 +660,56 @@ def cmd_queue(path):
     print(f"queue saved: {len(res.get('fullQueue') or [])} threads" if res.get('ok') else f"queue failed: {res}")
 
 
-def cmd_calendar():
-    """구글 캘린더 교차검증(11/19): 시트 웹앱이 읽어 온 캘린더 일정을 한 줄에 하나씩 찍는다"""
-    q = urllib.parse.urlencode({'api': 'calendar', 'token': env('TRANSIS_TOKEN')})
-    res = urlopen_json(env('TRANSIS_URL') + '?' + q)
+def cal_get(start=None):
+    q = {'api': 'calendar', 'token': env('TRANSIS_TOKEN')}
+    if start:
+        q['from'] = start
+    res = urlopen_json(env('TRANSIS_URL') + '?' + urllib.parse.urlencode(q))
     if not res.get('ok'):
         sys.exit('calendar read failed: ' + str(res.get('error')))
+    return res
+
+
+def cmd_calendar():
+    """구글 캘린더 교차검증(11/19): 시트 웹앱이 읽어 온 캘린더 일정을 한 줄에 하나씩 찍는다"""
+    res = cal_get()
     print(f"calendar: {res.get('calendar')}  ({res.get('from')} ~ {res.get('to')}, {len(res['events'])} events)")
     print('date | time | endDate | title | id')
     for ev in res['events']:
         print(' | '.join(str(ev.get(k) or '') for k in ('date', 'time', 'endDate', 'title', 'id')))
     print('other calendars: ' + ', '.join(c['name'] + ('' if c['owned'] else '(구독)') for c in res.get('calendars', [])))
+
+
+def cmd_crosscheck():
+    """메일 vs 캘린더 맞춰 보기 재료(11/19): 오늘부터 캘린더 일정 + 시트 일정 + 지난번 갭(판단 다시 쓰기용).
+    메모·고정 일정(주간 총정리)은 메일에서 온 일이 아니라서 뺀다. 금액·입금자명은 찍지 않는다"""
+    t = today().isoformat()
+    # 캘린더는 1주 전부터 읽는다: 시트엔 오늘(11/19)인데 캘린더엔 어제(11/18)로 옮겨진 일도 짝을 찾으려고.
+    # 갭으로 적는 건 어느 한쪽 날짜가 오늘 이후인 것만 (지나간 일끼리의 차이는 이제 쓸모가 없다)
+    cal, res = cal_get((today() - dt.timedelta(days=7)).isoformat()), api_get()
+    end = cal.get('to') or ''
+    print(f"today: {t}   calendar window: {cal.get('from')} ~ {end}  (sheet items after {end} are outside the window: skip them)")
+    print(f"CALENDAR ({len(cal['events'])}) date | title | id")
+    for ev in cal['events']:
+        print(f"{ev['date']} | {ev['title']} | {ev['id']}")
+    rows = [x for x in res['items'] if x.get('type') != 'memo' and not str(x.get('key', '')).startswith('fixed-')
+            and (not x.get('date') or t <= x['date'] <= end)]
+    print(f"SHEET ({len(rows)}: dated today ~ window end, or undated) no | type | brand | title | date | tentative | done | removed(cancelled)")
+    for x in rows:
+        print(' | '.join(str(x.get(k) or '') for k in ('no', 'type', 'brand', 'title', 'date', 'tentative', 'done', 'removed')))
+    cc = res.get('crossCheck') or {}
+    gaps = cc.get('gaps') or []
+    print(f"PREVIOUS GAPS ({len(gaps)}, checked {cc.get('checkedAt') or 'never'}) k | no | mailDate | calDate | calId | note")
+    for g in gaps:
+        print(' | '.join(str(g.get(k) or '') for k in ('k', 'no', 'mailDate', 'calDate', 'calId', 'note')))
+
+
+def cmd_gaps(path):
+    """맞춰 본 결과를 시트에 저장한다: {"gaps": [...], "misses": [...]} (형식은 PROMPT.md 4b)"""
+    with open(path, encoding='utf-8') as f:
+        body = json.load(f)
+    res = api_post({'action': 'crosscheck', 'gaps': body.get('gaps', []), 'misses': body.get('misses', [])})
+    print(f"crosscheck saved: {res.get('saved')} gaps, miss log {res.get('misses')}" if res.get('ok') else f"crosscheck failed: {res}")
 
 
 if __name__ == '__main__':
@@ -684,6 +725,10 @@ if __name__ == '__main__':
         cmd_send(sys.argv[2], preview='--preview' in sys.argv[3:])
     elif len(sys.argv) >= 2 and sys.argv[1] == 'calendar':
         cmd_calendar()
+    elif len(sys.argv) >= 2 and sys.argv[1] == 'crosscheck':
+        cmd_crosscheck()
+    elif len(sys.argv) >= 3 and sys.argv[1] == 'gaps':
+        cmd_gaps(sys.argv[2])
     elif sys.argv[1:3] == ['push', 'evening']:
         cmd_push_evening()
     else:
