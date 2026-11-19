@@ -181,7 +181,10 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .tbd, .tbd-date { padding: 0 4px; border-radius: 4px; background: var(--today); color: var(--ink); font-weight: 700; }
 .tbd-date { background: var(--tbd-date); white-space: nowrap; }
 /* 날짜 확인 필요(일정 미정) 칸: 날짜 순 목록과 섞이지 않게 따로, 완료 칸 위에 */
-.tbd-list .note { margin: -6px 0 12px; font-size: 12.5px; color: var(--muted); }
+.pay-tbd { margin-top: 12px; }
+.pay-tbd summary { cursor: pointer; font-size: 13px; font-weight: 700; margin: 0 2px 8px; }
+.pay-tbd summary small { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.tbd-list .note, .pay-list .note { margin: -6px 0 12px; font-size: 12.5px; color: var(--muted); }
 
 /* 달력: 7칸, 날마다 그날 일의 색 점, 누르면 아래에 그날 목록 */
 .cal-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -319,6 +322,13 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     <li class="chip t-tentative">점선 칸 · 확답 전</li>
   </ul>
 
+  <section class="panel xc" aria-labelledby="xc-h" id="xc-panel" hidden>
+    <h2 id="xc-h">메일 vs 캘린더 <small id="xc-sub"></small></h2>
+    <p class="note">예진 님 구글 캘린더(확정 일정)를 기준으로 날짜만 비교해요. 갭마다 트란시스가 메일을 다시 찾아본 결과를 아래 작은 글씨로 적어요.</p>
+    <div class="xc-miss" id="xc-miss" hidden></div>
+    <div id="xc-groups"></div>
+  </section>
+
   <div class="cols">
     <section class="panel" aria-labelledby="todo-h">
       <h2 id="todo-h">다가오는 일 <small id="todo-count"></small></h2>
@@ -349,11 +359,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     </section>
   </div>
 
-  <section class="panel xc" aria-labelledby="xc-h" id="xc-panel" hidden>
-    <h2 id="xc-h">메일 vs 캘린더 <small id="xc-sub"></small></h2>
-    <p class="note">예진 님 구글 캘린더(확정 일정)를 기준으로 날짜만 비교해요. 갭마다 트란시스가 메일을 다시 찾아본 결과를 아래 작은 글씨로 적어요.</p>
-    <div class="xc-miss" id="xc-miss" hidden></div>
-    <div id="xc-groups"></div>
+  <section class="panel pay-list" aria-labelledby="pay-h" id="pay-panel" hidden>
+    <h2 id="pay-h">정산 확인 <small id="pay-count"></small></h2>
+    <p class="note">정산은 통장을 봐야 끝난 걸 알 수 있어서 자동으로 완료되지 않아요. 입금을 확인했으면 동그라미를 눌러 주세요.</p>
+    <ul class="todo" id="pay"></ul>
+    <details class="pay-tbd" id="pay-tbd-box" hidden><summary></summary><ul class="todo" id="pay-tbd"></ul></details>
   </section>
 
   <section class="panel tbd-list" aria-labelledby="tbd-h" id="tbd-panel" hidden>
@@ -494,9 +504,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
         `<p class="ch-at">${esc(hm(g.at))} 정리</p><ul>${g.list.map(li).join('')}</ul>`).join('');
     }
     // 날짜가 아직 안 정해진 일정은 '날짜 확인 필요' 칸으로 따로 뺀다 (날짜 없는 메모는 다가오는 일 맨 위에 그대로)
-    const tbd = open.filter(i => !i.date && i.type !== 'memo');
+    // 11/19: 정산은 '정산 확인' 칸으로 모은다(다른 일은 3일 지나면 자동 완료되지만 정산은 사람이 통장을 확인해야 해서)
+    const pays = open.filter(i => i.type === 'pay');
+    const tbd = open.filter(i => !i.date && i.type !== 'memo' && i.type !== 'pay');
     // 오늘 할 일은 달력 아래 그날 목록(처음엔 오늘)에 이미 나와서 다가오는 일에서는 뺀다 (10/14 사용자)
-    const rest = open.filter(i => (i.date || i.type === 'memo') && !(i.date && diff(i.date) === 0));
+    const rest = open.filter(i => i.type !== 'pay' && (i.date || i.type === 'memo') && !(i.date && diff(i.date) === 0));
     // 날짜 순 목록을 며칠 남았는지로 끊어서 묶음 제목을 단다
     const shortMd = ymd => { const [, m, d] = ymd.split('-').map(Number); return `${m}/${d} (${DOW[new Date(toUTC(ymd)).getUTCDay()]})`; };
     const groups = [
@@ -514,6 +526,21 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
       : '<li class="empty">내일부터는 남은 일이 없어요. 오늘 할 일은 달력 아래에 있어요.</li>';
     $('todo-count').textContent = `${rest.length}건`;
     renderCrossCheck(data.crossCheck);
+    const payGroups = [
+      ['입금 날짜 지남', '통장 확인', i => i.date && diff(i.date) < 0, 'late'],
+      ['입금 예정', '', i => i.date && diff(i.date) >= 0],
+    ];
+    $('pay-panel').hidden = !pays.length;
+    $('pay').innerHTML = payGroups.map(([name, sub, test, cls]) => {
+      const list = pays.filter(test);
+      return list.length ? `<li class="group-h${cls ? ' ' + cls : ''}">${name}<small>${sub ? sub + ' · ' : ''}${list.length}건</small></li>` + list.map(row).join('') : '';
+    }).join('');
+    // 날짜 미정 정산은 50건이 넘어서(11/19) 접어 두고 개수만 보인다. 펼친 상태는 다시 그려도 유지된다(같은 details를 쓰므로)
+    const payTbd = pays.filter(i => !i.date);
+    $('pay-tbd-box').hidden = !payTbd.length;
+    $('pay-tbd-box').querySelector('summary').innerHTML = `날짜 미정<small>${payTbd.length}건 · 눌러서 보기</small>`;
+    $('pay-tbd').innerHTML = payTbd.map(row).join('');
+    $('pay-count').textContent = `${pays.length}건`;
     $('tbd-panel').hidden = !tbd.length;
     $('tbd').innerHTML = tbd.map(row).join('');
     $('tbd-count').textContent = `${tbd.length}건`;
@@ -574,7 +601,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
     const byDate = (a, b) => (a.calDate || a.mailDate || '9').localeCompare(b.calDate || b.mailDate || '9');
     $('xc-groups').innerHTML = gaps.length ? GROUPS.map(([k, name, hint]) => {
       const list = gaps.filter(g => g.k === k).sort(byDate);
-      return list.length ? `<details open><summary>${name}<small>${hint ? hint + ' · ' : ''}${list.length}건</small></summary>`
+      return list.length ? `<details${k === 'date' ? ' open' : ''}><summary>${name}<small>${hint ? hint + ' · ' : ''}${list.length}건</small></summary>`
         + `<div class="xc-head"><span></span><span>메일</span><span>캘린더</span></div><ul>${list.map(li).join('')}</ul></details>` : '';
     }).join('') : '<p class="empty">갭이 없어요. 메일과 캘린더가 같아요.</p>';
     // 트란시스가 메일에서 놓쳤던 일: 반복되면 안 되는 실패라 최근 7일 치를 맨 위에 빨간 테두리로

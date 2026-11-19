@@ -17,7 +17,7 @@ const SHEET = 'items';
 const META = 'meta';
 // key = 원본 메일 스레드 id. 같은 메일에서 뽑은 일정이 두 번 들어가지 않게 하는 이름표
 // 새 칸은 맨 뒤에만 붙인다 (이미 쌓인 시트의 칸 순서가 어긋나지 않게)
-const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt', 'doneBy', 'removed', 'tentative', 'manual', 'mailDate', 'mailTime'];
+const FIELDS = ['no', 'key', 'type', 'brand', 'title', 'date', 'time', 'done', 'doneAt', 'source', 'payer', 'amount', 'updatedAt', 'doneBy', 'removed', 'tentative', 'manual', 'mailDate', 'mailTime', 'keepOpen'];
 // tentative = 확답 전: 날짜는 제안됐지만 한쪽이 아직 확정하지 않은 일정. 빈 칸(옛 줄)은 확정으로 읽는다
 // manual = 성현 님이 일정표에서 날짜·시각을 직접 바꾼 일. mailDate·mailTime = 그때 트란시스가 메일에서 읽었던 날짜·시각.
 // 트란시스가 같은 메일을 다시 읽어도 메일이 여전히 그 옛 날짜를 말하면 손으로 바꾼 날짜를 지키고,
@@ -27,6 +27,11 @@ const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done', '
 // 취소된 일은 완료 칸에 줄 그은 채 남고, 휴지통을 누르면 이름표만 '지움'으로 바뀌어 화면에서 사라진다
 const CANCELLED = '트란시스(취소)';
 const CANCELLED_GONE = '트란시스(취소·지움)';
+// 11/19 자동 완료: 완료 버튼이 거의 안 눌려서(한 달 쓰고 최근 2주 1건) 날짜가 3일 지난 일은 저절로 완료로 옮긴다.
+// 정산은 빼고 따로 '정산 확인' 칸에 둔다(돈은 통장을 봐야 끝난 걸 안다). 사람이 누른 완료와 구별되게 doneBy에 이름표를 단다.
+// keepOpen = 자동 완료된 일을 성현 님이 다시 할 일로 되돌린 표시. 그 일은 다시 자동 완료하지 않는다
+const AUTO_DONE = '자동(3일 지남)';
+const AUTO_DONE_DAYS = 3;
 const TYPES = ['upload', 'draft', 'shoot', 'pay'];
 // 메모: 성현 님이 일정표에서 직접 적는 할 일. 트란시스는 보내지도 바꾸지도 않는다(key가 'memo-'로 시작)
 const MEMO = 'memo';
@@ -130,7 +135,7 @@ function doPost(e) {
     return json_({ ok: !!r && r.indexOf('200 ') === 0, push: r });
   }
   // 캘린더 교차검증 결과(11/19). 트란시스가 메일 vs 캘린더를 맞춰 본 갭 목록을 통째로 바꿔 넣는다. 일정 줄은 건드리지 않는다
-  if (body.action === 'crosscheck') return json_(saveCrossCheck_(body));
+  if (body.action === 'crosscheck') return json_(Object.assign(saveCrossCheck_(body), { autoDone: runAutoDone_() }));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -164,6 +169,10 @@ function doPost(e) {
           old.mailDate = '';
           old.mailTime = '';
         }
+        // 자동 완료된 일인데 메일에 새 날짜(아직 3일 안 지난)가 오면 끝난 게 아니었던 것 → 다시 할 일로
+        if (old.done && old.doneBy === AUTO_DONE && old.date && old.date > offsetDate_(-AUTO_DONE_DAYS)) {
+          old.done = false; old.doneAt = ''; old.doneBy = '';
+        }
         if (raw.done === true && !old.done) { old.done = true; old.doneAt = now_(); }
         if (raw.cancelled === true && !old.done && !old.removed) { old.removed = true; old.doneBy = CANCELLED; old.doneAt = now_(); }
         old.updatedAt = now_();
@@ -185,6 +194,7 @@ function doPost(e) {
       }
     });
     if (changes.length) addChanges_(changes);
+    autoDone_(items);
 
     writeItems_(items);
     setMeta_('updatedAt', body.updatedAt || now_());
@@ -211,6 +221,7 @@ function doPost(e) {
 /** 일정표의 ✓ 버튼. by = 누른 사람 이름(그 기기에 기억해 둔 것). 화면은 결과를 받아 다시 그린다 */
 function markDone(no, done, by) {
   return editItem_(no, it => {
+    if (done !== true && it.doneBy === AUTO_DONE) it.keepOpen = true;
     it.done = done === true;
     it.doneAt = it.done ? now_() : '';
     it.doneBy = it.done ? String(by || '').trim().slice(0, 20) : '';
@@ -270,6 +281,7 @@ function setWhen(no, date, time) {
     }
     it.date = d;
     it.time = d ? tm : '';
+    it.keepOpen = false;
     it.manual = fromMail && !(it.date === it.mailDate && it.time === it.mailTime);
     if (!it.manual) { it.mailDate = ''; it.mailTime = ''; }
     it.updatedAt = now_();
@@ -535,6 +547,34 @@ function getChanges_() {
   }
 }
 
+/** 정산이 아닌 열린 일 중 날짜가 AUTO_DONE_DAYS일 이상 지난 것을 완료로 바꾼다. 바꾼 개수를 돌려준다 */
+function autoDone_(items) {
+  const cutoff = offsetDate_(-AUTO_DONE_DAYS);
+  let n = 0;
+  items.forEach(it => {
+    if (it.type === 'pay' || it.done || it.removed || it.keepOpen || !it.date || it.date > cutoff) return;
+    it.done = true;
+    it.doneAt = now_();
+    it.doneBy = AUTO_DONE;
+    n++;
+  });
+  return n;
+}
+
+/** 트란시스가 일정을 보내지 않는 실행(새 메일 없음 → 교차검증만)에서도 자동 완료가 돌게 따로 부른다 */
+function runAutoDone_() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const items = readItems_();
+    const n = autoDone_(items);
+    if (n) writeItems_(items);
+    return n;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /** 앞으로 FIXED_DAYS 안에 고정 일정이 빠진 날이 있으면 items에 새 줄로 넣는다 */
 function addFixed_(items) {
   const keys = {};
@@ -570,6 +610,7 @@ function readItems_() {
     o.removed = isTrue_(o.removed);
     o.tentative = isTrue_(o.tentative);
     o.manual = isTrue_(o.manual);
+    o.keepOpen = isTrue_(o.keepOpen);
     return o;
   });
 }
@@ -582,7 +623,7 @@ function writeItems_(items) {
   if (!items.length) return;
   items.sort((a, b) => a.no - b.no);
   const rows = items.map(it => FIELDS.map(f => {
-    if (f === 'done' || f === 'removed' || f === 'tentative' || f === 'manual') return it[f] ? 'true' : 'false';
+    if (f === 'done' || f === 'removed' || f === 'tentative' || f === 'manual' || f === 'keepOpen') return it[f] ? 'true' : 'false';
     return it[f] === undefined || it[f] === null ? '' : String(it[f]);
   }));
   sh.getRange(2, 1, rows.length, FIELDS.length).setNumberFormat('@').setValues(rows);
