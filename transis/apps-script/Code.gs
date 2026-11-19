@@ -33,9 +33,9 @@ const CANCELLED_GONE = '트란시스(취소·지움)';
 // keepOpen = 자동 완료된 일을 성현 님이 다시 할 일로 되돌린 표시. 그 일은 다시 자동 완료하지 않는다
 const AUTO_DONE = '자동(날짜 지남)';
 const AUTO_DONE_DAYS = 1;
-// 정산도 입금일이 한 달(30일) 지나면 입금된 것으로 보고 자동 완료(11/19 사용자). 날짜 미정 정산은 그대로 둔다
-const AUTO_PAY = '자동(입금일 한 달 지남)';
-const AUTO_PAY_DAYS = 30;
+// 정산도 입금일이 석 달(90일) 지나면 입금된 것으로 보고 자동 완료(11/19 사용자, 처음 한 달에서 석 달로). 날짜 미정 정산은 그대로 둔다
+const AUTO_PAY = '자동(입금일 석 달 지남)';
+const AUTO_PAY_DAYS = 90;
 // 종류별 자동 완료 기준 날짜: 이 날짜 이하면 완료로 옮긴다
 const autoCutoff_ = type => offsetDate_(-(type === 'pay' ? AUTO_PAY_DAYS : AUTO_DONE_DAYS));
 // 3일 규칙 시절 이름표가 붙은 줄도 자동 완료로 알아본다
@@ -558,7 +558,7 @@ function getChanges_() {
   }
 }
 
-/** 열린 일 중 날짜가 지난 것을 완료로 바꾼다: 정산은 입금일 30일 지남, 나머지는 어제까지. 바꾼 개수를 돌려준다 */
+/** 열린 일 중 날짜가 지난 것을 완료로 바꾼다: 정산은 입금일 90일 지남, 나머지는 어제까지. 바꾼 개수를 돌려준다 */
 function autoDone_(items) {
   const cutoff = { pay: autoCutoff_('pay'), other: autoCutoff_('') };
   let n = 0;
