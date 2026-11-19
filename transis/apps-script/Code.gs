@@ -29,10 +29,15 @@ const CANCELLED = '트란시스(취소)';
 const CANCELLED_GONE = '트란시스(취소·지움)';
 // 11/19 자동 완료: 완료 버튼이 거의 안 눌려서(한 달 쓰고 최근 2주 1건) 날짜가 지난 일은 저절로 완료로 옮긴다.
 // 처음엔 3일 여유를 뒀다가 같은 날 사용자 결정으로 '그날 자정이 지나면'으로 바꿨다(AUTO_DONE_DAYS = 1 → 어제까지).
-// 정산은 빼고 따로 '정산 확인' 칸에 둔다(돈은 통장을 봐야 끝난 걸 안다). 사람이 누른 완료와 구별되게 doneBy에 이름표를 단다.
+// 정산은 따로 '정산 확인' 칸에 두고 더 길게 기다린다(돈은 통장을 봐야 끝난 걸 안다). 사람이 누른 완료와 구별되게 doneBy에 이름표를 단다.
 // keepOpen = 자동 완료된 일을 성현 님이 다시 할 일로 되돌린 표시. 그 일은 다시 자동 완료하지 않는다
 const AUTO_DONE = '자동(날짜 지남)';
 const AUTO_DONE_DAYS = 1;
+// 정산도 입금일이 한 달(30일) 지나면 입금된 것으로 보고 자동 완료(11/19 사용자). 날짜 미정 정산은 그대로 둔다
+const AUTO_PAY = '자동(입금일 한 달 지남)';
+const AUTO_PAY_DAYS = 30;
+// 종류별 자동 완료 기준 날짜: 이 날짜 이하면 완료로 옮긴다
+const autoCutoff_ = type => offsetDate_(-(type === 'pay' ? AUTO_PAY_DAYS : AUTO_DONE_DAYS));
 // 3일 규칙 시절 이름표가 붙은 줄도 자동 완료로 알아본다
 const isAutoDone_ = it => String(it.doneBy || '').indexOf('자동(') === 0;
 const TYPES = ['upload', 'draft', 'shoot', 'pay'];
@@ -175,7 +180,7 @@ function doPost(e) {
           old.mailTime = '';
         }
         // 자동 완료된 일인데 메일에 새 날짜(오늘 이후)가 오면 끝난 게 아니었던 것 → 다시 할 일로
-        if (old.done && isAutoDone_(old) && old.date && old.date > offsetDate_(-AUTO_DONE_DAYS)) {
+        if (old.done && isAutoDone_(old) && old.date && old.date > autoCutoff_(old.type)) {
           old.done = false; old.doneAt = ''; old.doneBy = '';
         }
         if (raw.done === true && !old.done) { old.done = true; old.doneAt = now_(); }
@@ -553,15 +558,15 @@ function getChanges_() {
   }
 }
 
-/** 정산이 아닌 열린 일 중 날짜가 AUTO_DONE_DAYS일 이상 지난 것(= 어제까지)을 완료로 바꾼다. 바꾼 개수를 돌려준다 */
+/** 열린 일 중 날짜가 지난 것을 완료로 바꾼다: 정산은 입금일 30일 지남, 나머지는 어제까지. 바꾼 개수를 돌려준다 */
 function autoDone_(items) {
-  const cutoff = offsetDate_(-AUTO_DONE_DAYS);
+  const cutoff = { pay: autoCutoff_('pay'), other: autoCutoff_('') };
   let n = 0;
   items.forEach(it => {
-    if (it.type === 'pay' || it.done || it.removed || it.keepOpen || !it.date || it.date > cutoff) return;
+    if (it.done || it.removed || it.keepOpen || !it.date || it.date > cutoff[it.type === 'pay' ? 'pay' : 'other']) return;
     it.done = true;
     it.doneAt = now_();
-    it.doneBy = AUTO_DONE;
+    it.doneBy = it.type === 'pay' ? AUTO_PAY : AUTO_DONE;
     n++;
   });
   return n;
