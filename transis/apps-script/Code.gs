@@ -1,10 +1,11 @@
 /**
  * 트란시스 일정표 — 구글 시트(일정 저장소) + Apps Script 웹앱
  *
- * 세 가지 길로 쓰인다.
+ * 네 가지 길로 쓰인다.
  *  1. 일정표 화면(공개 링크): doGet → Index.html. 성현 님이 ✓를 누르면 markDone()으로 바로 시트에 저장
  *  2. 트란시스가 일정 보내기: doPost(JSON + 비밀 토큰) → 시트에 추가·갱신
  *  3. 트란시스가 현재 상태 읽기: doGet?api=items&token=... → 완료 여부까지 담긴 전체 목록
+ *  4. 트란시스가 구글 캘린더 읽기: doGet?api=calendar&token=... → 교차검증용 캘린더 일정(11/19)
  *
  * 날짜(date)가 빈 일정 = '일정 미정'. 메일에 일정은 있는데 날짜가 아직 안 정해진 것도 빠뜨리지 않고 남기기 위해서다.
  * 삭제는 행을 지우지 않고 removed 표시만 한다. 행을 지우면 다음 날 트란시스가 같은 메일을 읽고 다시 넣어 버리기 때문.
@@ -82,6 +83,10 @@ function doGet(e) {
     if (!checkToken_(p.token)) return json_({ ok: false, error: 'bad token' });
     return json_({ ok: true, updatedAt: getMeta_('updatedAt'), sample: isTrue_(getMeta_('sample')),
                    fullScanAt: getMeta_('fullScanAt'), fullQueue: getQueue_(), items: readItems_() });
+  }
+  if (p.api === 'calendar') {
+    if (!checkToken_(p.token)) return json_({ ok: false, error: 'bad token' });
+    return json_(Object.assign({ ok: true }, calendarEvents_(p.from, p.to)));
   }
   if (p.a === 'done' || p.a === 'undo') return mailLink_(p);
   const t = HtmlService.createTemplateFromFile('Index');
@@ -427,6 +432,43 @@ function notifyPush_(payload) {
 /** 편집기에서 한 번 실행: 바깥 주소 호출 권한을 허락받고, 등록된 폰에 시험 알림을 보낸다 */
 function testPush() {
   Logger.log(notifyPush_({ test: true }) || 'PUSH_URL·PUSH_KEY 스크립트 속성이 비어 있어요');
+}
+
+/**
+ * 11/19 캘린더 교차검증: 예진 님이 정리하는 트렌드포털 구글 캘린더의 일정을 읽어 트란시스에 넘긴다.
+ * 웹앱은 배포한 계정(= 캘린더 계정)으로 돌아서 공유 설정 없이 읽힌다. 읽기만 하고 캘린더는 절대 바꾸지 않는다.
+ * 어느 캘린더인지는 스크립트 속성 CAL_ID(비우면 기본 캘린더). 처음엔 calendars 목록을 보고 고른다.
+ * from·to = YYYY-MM-DD (기본: 7일 전 ~ 60일 뒤). 하루 종일 일정은 time이 ''.
+ */
+function calendarEvents_(from, to) {
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const start = new Date((re.test(from) ? from : offsetDate_(-7)) + 'T00:00:00+09:00');
+  const end = new Date((re.test(to) ? to : offsetDate_(60)) + 'T23:59:59+09:00');
+  const id = PropertiesService.getScriptProperties().getProperty('CAL_ID');
+  const cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
+  if (!cal) return { ok: false, error: 'calendar not found (CAL_ID)' };
+  const fmt = (d, f) => Utilities.formatDate(d, TZ, f);
+  const events = cal.getEvents(start, end).map(ev => {
+    const allDay = ev.isAllDayEvent();
+    const s = allDay ? ev.getAllDayStartDate() : ev.getStartTime();
+    // 하루 종일 일정의 끝 날짜는 '다음 날 0시'로 오므로 하루 빼서 마지막 날로 맞춘다
+    const e = allDay ? new Date(ev.getAllDayEndDate().getTime() - 86400000) : ev.getEndTime();
+    return { id: ev.getId(), title: ev.getTitle(), date: fmt(s, 'yyyy-MM-dd'), time: allDay ? '' : fmt(s, 'HH:mm'),
+             endDate: fmt(e, 'yyyy-MM-dd'), desc: String(ev.getDescription() || '').slice(0, 300) };
+  });
+  return {
+    calendar: cal.getName(), from: fmt(start, 'yyyy-MM-dd'), to: fmt(end, 'yyyy-MM-dd'), events: events,
+    // 다른 캘린더에 정리돼 있을 수도 있어서, 이 계정에 보이는 캘린더 이름도 같이 돌려준다(CAL_ID 고를 때)
+    calendars: CalendarApp.getAllCalendars().map(c => ({ id: c.getId(), name: c.getName(), owned: c.isOwnedByMe() })),
+  };
+}
+
+/** 편집기에서 한 번 실행: 캘린더 읽기 권한을 허락받고, 보이는 캘린더와 앞으로 일정 개수를 로그에 찍는다 */
+function testCalendar() {
+  const r = calendarEvents_();
+  if (r.ok === false) return Logger.log(r.error);
+  Logger.log('읽은 캘린더: ' + r.calendar + ' / 일정 ' + r.events.length + '개 (' + r.from + ' ~ ' + r.to + ')');
+  r.calendars.forEach(c => Logger.log((c.owned ? '[내 것] ' : '[구독] ') + c.name));
 }
 
 function getChanges_() {

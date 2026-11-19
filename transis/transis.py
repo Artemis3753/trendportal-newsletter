@@ -9,6 +9,7 @@
     python3 transis/transis.py run extracted.json    # 시트에 보내기 → 다시 읽기 → 고르기 → /tmp/transis/에 메일 파일
     python3 transis/transis.py send morning|evening [--preview]   # 그 메일 파일을 발신함 웹앱으로 보내기 (--preview는 지환 님에게만)
     python3 transis/transis.py push evening          # 밤 확인을 폰 알림으로 (남은 오늘 일 건수 + 첫 항목, 없으면 따봉)
+    python3 transis/transis.py calendar              # 구글 캘린더 일정 목록 (교차검증용, 시트 웹앱이 읽어 줌)
 
 환경 변수 TRANSIS_URL(웹앱 주소), TRANSIS_TOKEN(비밀 열쇠)이 필요하고, send는 MAILER_URL·MAILER_TOKEN(발신함)도 쓴다. 모두 출력하지 않는다.
 표준 라이브러리만 쓴다(클라우드 환경에 따로 설치할 게 없게).
@@ -657,6 +658,19 @@ def cmd_queue(path):
     print(f"queue saved: {len(res.get('fullQueue') or [])} threads" if res.get('ok') else f"queue failed: {res}")
 
 
+def cmd_calendar():
+    """구글 캘린더 교차검증(11/19): 시트 웹앱이 읽어 온 캘린더 일정을 한 줄에 하나씩 찍는다"""
+    q = urllib.parse.urlencode({'api': 'calendar', 'token': env('TRANSIS_TOKEN')})
+    res = urlopen_json(env('TRANSIS_URL') + '?' + q)
+    if not res.get('ok'):
+        sys.exit('calendar read failed: ' + str(res.get('error')))
+    print(f"calendar: {res.get('calendar')}  ({res.get('from')} ~ {res.get('to')}, {len(res['events'])} events)")
+    print('date | time | endDate | title | id')
+    for ev in res['events']:
+        print(' | '.join(str(ev.get(k) or '') for k in ('date', 'time', 'endDate', 'title', 'id')))
+    print('other calendars: ' + ', '.join(c['name'] + ('' if c['owned'] else '(구독)') for c in res.get('calendars', [])))
+
+
 if __name__ == '__main__':
     if len(sys.argv) >= 2 and sys.argv[1] == 'state':
         cmd_state()
@@ -668,6 +682,8 @@ if __name__ == '__main__':
         cmd_run(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == 'send' and sys.argv[2] in MAIL_FILES:
         cmd_send(sys.argv[2], preview='--preview' in sys.argv[3:])
+    elif len(sys.argv) >= 2 and sys.argv[1] == 'calendar':
+        cmd_calendar()
     elif sys.argv[1:3] == ['push', 'evening']:
         cmd_push_evening()
     else:
