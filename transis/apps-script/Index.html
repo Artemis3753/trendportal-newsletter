@@ -324,7 +324,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 
   <section class="panel xc" aria-labelledby="xc-h" id="xc-panel" hidden>
     <h2 id="xc-h">메일 vs 캘린더 <small id="xc-sub"></small></h2>
-    <p class="note">예진 님 구글 캘린더(확정 일정)를 기준으로 날짜만 비교해요. 갭마다 트란시스가 메일을 다시 찾아본 결과를 아래 작은 글씨로 적어요.</p>
+    <p class="note">구글 캘린더를 기준으로 날짜만 비교해요. 갭마다 트란시스가 메일을 다시 찾아본 결과를 아래 작은 글씨로 적어요.</p>
     <div class="xc-miss" id="xc-miss" hidden></div>
     <div id="xc-groups"></div>
   </section>
@@ -597,11 +597,12 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
         + cell(g.calDate, false, '없음')
         + (subs.length ? `<span class="sub">${subs.join(' · ')}</span>` : '') + '</li>';
     };
-    const GROUPS = [['date', '날짜 다름'], ['cal', '캘린더에 없음', '메일에만 있는 일'], ['mail', '메일에 없음', '캘린더에만 있는 일']];
+    // 순서·펼침(11/19 사용자): 날짜 다름·메일에 없음은 펼쳐 두고, 캘린더에 없음(확답 전·중복 줄이 많음)은 접어서 맨 뒤로
+    const GROUPS = [['date', '날짜 다름', '', true], ['mail', '메일에 없음', '캘린더에만 있는 일', true], ['cal', '캘린더에 없음', '메일에만 있는 일', false]];
     const byDate = (a, b) => (a.calDate || a.mailDate || '9').localeCompare(b.calDate || b.mailDate || '9');
-    $('xc-groups').innerHTML = gaps.length ? GROUPS.map(([k, name, hint]) => {
+    $('xc-groups').innerHTML = gaps.length ? GROUPS.map(([k, name, hint, open]) => {
       const list = gaps.filter(g => g.k === k).sort(byDate);
-      return list.length ? `<details${k === 'date' ? ' open' : ''}><summary>${name}<small>${hint ? hint + ' · ' : ''}${list.length}건</small></summary>`
+      return list.length ? `<details${open ? ' open' : ''}><summary>${name}<small>${hint ? hint + ' · ' : ''}${list.length}건</small></summary>`
         + `<div class="xc-head"><span></span><span>메일</span><span>캘린더</span></div><ul>${list.map(li).join('')}</ul></details>` : '';
     }).join('') : '<p class="empty">갭이 없어요. 메일과 캘린더가 같아요.</p>';
     // 트란시스가 메일에서 놓쳤던 일: 반복되면 안 되는 실패라 최근 7일 치를 맨 위에 빨간 테두리로
