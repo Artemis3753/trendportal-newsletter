@@ -27,11 +27,14 @@ const PUBLIC_FIELDS = ['no', 'type', 'brand', 'title', 'date', 'time', 'done', '
 // 취소된 일은 완료 칸에 줄 그은 채 남고, 휴지통을 누르면 이름표만 '지움'으로 바뀌어 화면에서 사라진다
 const CANCELLED = '트란시스(취소)';
 const CANCELLED_GONE = '트란시스(취소·지움)';
-// 11/19 자동 완료: 완료 버튼이 거의 안 눌려서(한 달 쓰고 최근 2주 1건) 날짜가 3일 지난 일은 저절로 완료로 옮긴다.
+// 11/19 자동 완료: 완료 버튼이 거의 안 눌려서(한 달 쓰고 최근 2주 1건) 날짜가 지난 일은 저절로 완료로 옮긴다.
+// 처음엔 3일 여유를 뒀다가 같은 날 사용자 결정으로 '그날 자정이 지나면'으로 바꿨다(AUTO_DONE_DAYS = 1 → 어제까지).
 // 정산은 빼고 따로 '정산 확인' 칸에 둔다(돈은 통장을 봐야 끝난 걸 안다). 사람이 누른 완료와 구별되게 doneBy에 이름표를 단다.
 // keepOpen = 자동 완료된 일을 성현 님이 다시 할 일로 되돌린 표시. 그 일은 다시 자동 완료하지 않는다
-const AUTO_DONE = '자동(3일 지남)';
-const AUTO_DONE_DAYS = 3;
+const AUTO_DONE = '자동(날짜 지남)';
+const AUTO_DONE_DAYS = 1;
+// 3일 규칙 시절 이름표가 붙은 줄도 자동 완료로 알아본다
+const isAutoDone_ = it => String(it.doneBy || '').indexOf('자동(') === 0;
 const TYPES = ['upload', 'draft', 'shoot', 'pay'];
 // 메모: 성현 님이 일정표에서 직접 적는 할 일. 트란시스는 보내지도 바꾸지도 않는다(key가 'memo-'로 시작)
 const MEMO = 'memo';
@@ -95,6 +98,8 @@ function doGet(e) {
     return json_(Object.assign({ ok: true }, calendarEvents_(p.from, p.to)));
   }
   if (p.a === 'done' || p.a === 'undo') return mailLink_(p);
+  // 자정이 지난 뒤 routine 첫 실행(09:05) 전에 열어도 어제 일이 남아 보이지 않게, 화면을 열 때도 자동 완료를 돌린다(바꿀 게 없으면 쓰지 않음)
+  runAutoDone_();
   const t = HtmlService.createTemplateFromFile('Index');
   // </script> 같은 글자가 들어와도 스크립트가 끊기지 않게 '<'를 바꿔서 넣는다
   t.dataJson = JSON.stringify(publicData_()).replace(/</g, '\\u003c');
@@ -169,8 +174,8 @@ function doPost(e) {
           old.mailDate = '';
           old.mailTime = '';
         }
-        // 자동 완료된 일인데 메일에 새 날짜(아직 3일 안 지난)가 오면 끝난 게 아니었던 것 → 다시 할 일로
-        if (old.done && old.doneBy === AUTO_DONE && old.date && old.date > offsetDate_(-AUTO_DONE_DAYS)) {
+        // 자동 완료된 일인데 메일에 새 날짜(오늘 이후)가 오면 끝난 게 아니었던 것 → 다시 할 일로
+        if (old.done && isAutoDone_(old) && old.date && old.date > offsetDate_(-AUTO_DONE_DAYS)) {
           old.done = false; old.doneAt = ''; old.doneBy = '';
         }
         if (raw.done === true && !old.done) { old.done = true; old.doneAt = now_(); }
@@ -221,7 +226,7 @@ function doPost(e) {
 /** 일정표의 ✓ 버튼. by = 누른 사람 이름(그 기기에 기억해 둔 것). 화면은 결과를 받아 다시 그린다 */
 function markDone(no, done, by) {
   return editItem_(no, it => {
-    if (done !== true && it.doneBy === AUTO_DONE) it.keepOpen = true;
+    if (done !== true && isAutoDone_(it)) it.keepOpen = true;
     it.done = done === true;
     it.doneAt = it.done ? now_() : '';
     it.doneBy = it.done ? String(by || '').trim().slice(0, 20) : '';
@@ -397,6 +402,7 @@ function esc_(s) {
 
 /** 화면을 다시 열거나 돌아왔을 때 최신 상태를 받아 간다 */
 function getPublicData() {
+  runAutoDone_();
   return publicData_();
 }
 
@@ -547,7 +553,7 @@ function getChanges_() {
   }
 }
 
-/** 정산이 아닌 열린 일 중 날짜가 AUTO_DONE_DAYS일 이상 지난 것을 완료로 바꾼다. 바꾼 개수를 돌려준다 */
+/** 정산이 아닌 열린 일 중 날짜가 AUTO_DONE_DAYS일 이상 지난 것(= 어제까지)을 완료로 바꾼다. 바꾼 개수를 돌려준다 */
 function autoDone_(items) {
   const cutoff = offsetDate_(-AUTO_DONE_DAYS);
   let n = 0;

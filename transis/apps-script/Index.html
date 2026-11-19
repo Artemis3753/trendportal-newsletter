@@ -504,7 +504,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
         `<p class="ch-at">${esc(hm(g.at))} 정리</p><ul>${g.list.map(li).join('')}</ul>`).join('');
     }
     // 날짜가 아직 안 정해진 일정은 '날짜 확인 필요' 칸으로 따로 뺀다 (날짜 없는 메모는 다가오는 일 맨 위에 그대로)
-    // 11/19: 정산은 '정산 확인' 칸으로 모은다(다른 일은 3일 지나면 자동 완료되지만 정산은 사람이 통장을 확인해야 해서)
+    // 11/19: 정산은 '정산 확인' 칸으로 모은다(다른 일은 날짜가 지나면 자정에 자동 완료되지만 정산은 사람이 통장을 확인해야 해서)
     const pays = open.filter(i => i.type === 'pay');
     const tbd = open.filter(i => !i.date && i.type !== 'memo' && i.type !== 'pay');
     // 오늘 할 일은 달력 아래 그날 목록(처음엔 오늘)에 이미 나와서 다가오는 일에서는 뺀다 (10/14 사용자)
